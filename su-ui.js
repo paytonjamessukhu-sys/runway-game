@@ -242,7 +242,8 @@ function renderPlan(){
   var pend=S.plan.filter(function(it){ return it.aid==='build'&&it.values; }).map(function(it){ var f=CAT.featureByKey(G,it.values.fk); return f?'<div class="bq pend"><div class="bq-t"><b>'+esc(f.name)+'</b><span class="xs muted">when you run</span></div><span class="xs muted">Starts this month. About '+CAT.eta(G,f.scope).toFixed(1)+' months of work.</span></div>':''; }).join('');
   bq=bq+pend;
   var ideas=CAT.coach(G).filter(function(c){ return !S.plan.some(function(it){ return it.aid===c.aid && JSON.stringify(it.values)===JSON.stringify(c.values); }); }).slice(0,3);
-  S.ideas=ideas; renderCoach();
+  Object.keys(S.used||{}).forEach(function(aid){ if(S.used[aid]>=2&&!S.plan.some(function(it){ return it.aid===aid&&it.repeat; })&&!(S.pinTold&&S.pinTold[aid])){ var a=CAT.actions[aid]; ideas.unshift({aid:aid,values:CAT.defaults(G,aid,{}),repeat:true,label:'Pin: '+a.title,why:'You keep doing this every month. Pin it and it repeats by itself'+(SU.count(G,'mgr')>0?', free with your manager.':'.')}); } });
+  S.ideas=ideas.slice(0,4); renderCoach();
   var lbl=tm===3?'Run next quarter':'Run '+SU.MONTHS[G.month-1];
   el.innerHTML='<div class="plan-h"><h2>'+(tm===3?'This quarter':SU.dateStr(G))+'</h2><span class="muted sm">Your plan</span><div class="focus"><span class="k">Focus</span><div class="dots" title="You can only give real attention to so much each period">'+dots+'</div><b>'+Math.round(used*2)/2+'/'+total+'</b></div></div>'+
     '<div class="plan-body"><div class="plan-list">'+(items||'<span class="hint">Nothing planned yet. Pick moves from the menus, or just run the month.</span>')+'</div>'+
@@ -259,7 +260,7 @@ function renderCoach(){
   if(G.over){ el.innerHTML=''; return; }
   if(!c){ el.innerHTML='<span class="k">Next</span><span class="cm">'+(S.plan.length?'Looks good. Press Run.':'Nothing urgent. Run the month, or pick a move.')+'</span>'; el.classList.toggle('calm',true); return; }
   el.classList.toggle('calm',false);
-  el.innerHTML='<span class="k">Next move</span><div class="cm"><b>'+esc(c.label)+'</b><span class="cw">'+esc(c.why)+'</span></div><button class="btn sm primary" data-act="coach-add" data-i="0">Add</button>';
+  el.innerHTML='<span class="k">Next move</span><div class="cm"><b>'+esc(c.label)+'</b><span class="cw">'+esc(c.why)+'</span></div><button class="btn sm primary" data-act="coach-add" data-i="0">'+(c.tab?esc(c.go||'Open'):(c.repeat?'Pin':'Add'))+'</button>';
 }
 
 /* ------------------------------------------------------------ run a month */
@@ -277,6 +278,7 @@ UI.run=function(){
   var pc=planToCommit(); var backup=SU.clone(G), rec=null; S.seenIid=G.iid;
   try{ rec=SU.commit(G,'',null,{clauses:pc.clauses,claims:pc.claims||undefined,promises:pc.promises.length?pc.promises:undefined}); }
   catch(e){ console.error(e); G=backup; UI.toast('Something went wrong with that month. Nothing happened.'); return; }
+  S.used=S.used||{}; S.plan.forEach(function(it){ if(!it.repeat&&CAT.actions[it.aid]&&CAT.actions[it.aid].repeat) S.used[it.aid]=(S.used[it.aid]||0)+1; });
   S.receipt=rec; S.plan=S.plan.filter(function(it){ return it.repeat; });
   /* the office reacts while the numbers tick */
   S.busy=true; var dur=Math.round(2600/S.auto.speed); if(isPhone()) setSheet(false);
@@ -433,7 +435,7 @@ function onClick(e){
     case 'clear-plan': S.plan=[]; renderPlan(); break;
     case 'unplan': var u=+t.getAttribute('data-uid'); S.plan=S.plan.filter(function(x){ return x.uid!==u; }); renderPlan(); break;
     case 'pin': var u2=+t.getAttribute('data-uid'); S.plan.forEach(function(x){ if(x.uid===u2) x.repeat=!x.repeat; }); renderPlan(); UI.toast('Repeats every month until you remove it.',1800); break;
-    case 'coach-add': var c=S.ideas&&S.ideas[+t.getAttribute('data-i')]; if(c) UI.addItem({aid:c.aid,values:JSON.parse(JSON.stringify(c.values))}); break;
+    case 'coach-add': var c=S.ideas&&S.ideas[+t.getAttribute('data-i')]; if(c){ if(c.tab){ UI.setTab(c.tab); } else { if(c.repeat){ S.pinTold=S.pinTold||{}; S.pinTold[c.aid]=1; } UI.addItem({aid:c.aid,values:JSON.parse(JSON.stringify(c.values)),repeat:!!c.repeat}); } } break;
     case 'labels': S.labels=(S.labels===false); Iso.setLabels(S.labels!==false); t.textContent='Labels: '+(S.labels!==false?'on':'off'); break;
     case 'golvl': UI.setTab('goals'); break;
     case 'tab': { var nt=t.getAttribute('data-tab'); if(isPhone()&&S.sheet&&S.tab===nt&&!S.drawer){ setSheet(false); } else { S.tab=nt; S.drawer=null; setSheet(true); } UI.renderTabs(); break; }

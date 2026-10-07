@@ -356,6 +356,16 @@ CAT.coach=function(G){
   if(runway<9 && f.burn>0 && !G.round && G.rounds.length===0 && G.t>5) add('raise',{stage:'preseed'},'Start raising','Raising takes months. Start before you are desperate.');
   if(G.founder.sanity<45) add('self',{kind:'weekend'},'Take the weekend off','Your sanity is '+R(G.founder.sanity)+'. At zero you burn out.');
   if(G.lastStand) add('layoff',{pct:25},'Lay off 25%','Payroll Friday. You need cash now.');
-  var seen={}; return out.filter(function(c){ var k=c.aid+JSON.stringify(c.values); if(seen[k]) return false; seen[k]=1; return true; }).slice(0,5);
+  /* growing a company: hire, delegate, spend on the office */
+  var hc=SU.headcount(G), sp=SU.Shop&&SU.Shop.space(G);
+  function addTab(tab,label,why,go){ out.push({tab:tab,label:label,why:why,go:go||'Open'}); }
+  if(G.t>0 && G.team.length===0 && mrr>=2000 && runway>=8 && !G.reqs.length) add('hire',{role:'eng'},'Hire your first engineer','You do everything alone. An engineer adds build speed every month.');
+  if(G.arch==='smb' && SU.custCount(G)>=20 && SU.count(G,'sdr')===0 && !G.reqs.length && runway>=8 && G.team.length>=1) add('hire',{role:'sdr'},'Hire an SDR','Outreach on autopilot: about 1,200 prospects a month, every month.');
+  if(SU.custCount(G)>=250 && SU.count(G,'cs')===0 && !G.reqs.length) add('hire',{role:'cs'},'Hire customer success','You are past 250 customers. Support is getting stretched and churn will climb.');
+  if(G.team.length>=3 && SU.count(G,'mgr')===0 && G.t>=6 && !G.reqs.length && runway>=8) add('hire',{role:'mgr'},'Hire a manager','+1 focus every month, and your pinned moves run free.');
+  if(SU.Shop && hc>SU.Shop.seats(G)) addTab('shop','Move to a bigger office','You have more people than seats. Morale and speed are dropping.','Shop');
+  else if(SU.Shop && hc>=2 && G.cash>15000 && !(G.shop&&G.shop.espresso) && runway>=10) addTab('shop','Buy an espresso machine','$1,200 and your team gets happier every month. It shows up in the office.','Shop');
+  if(G.team.length>=2 && G.morale<50) addTab('shop','Spend on the office','Morale is '+R(G.morale)+'. Perks and upgrades lift it, and it shows up in the room.','Shop');
+  var seen={}; return out.filter(function(c){ var k=(c.aid||c.tab)+JSON.stringify(c.values||''); if(seen[k]) return false; seen[k]=1; return true; }).slice(0,5);
 };
 })();
