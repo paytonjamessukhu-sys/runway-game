@@ -63,7 +63,7 @@ function pInbox(g){
 /* ------------------------------------------------------------ CLIENTS */
 function pCustomers(g){
   var S0=SU.seg(g), band=SU.pmfBand(g), churn=g.stat.churnRate||0;
-  var label=g.arch==='consumer'?'Subscribers':(g.arch==='market'?'Both sides':'Customers');
+  var label=g.arch==='consumer'?'Subscribers':(g.arch==='market'?'Both sides':(g.arch==='venue'?'Regulars':'Customers'));
   var h='<div class="strip">'+stat(label,SU.fmtNum(SU.custCount(g)),'+'+Math.round(g.stat.newLast||0)+' / -'+Math.round(g.stat.churnLast||0)+' last month')+stat('Churn / month',pctS(churn,1),churn>0.08?'Too high':churn>0.04?'Watch it':'Healthy',churn>0.08?'bad':'')+stat('Product fit',band.lo+'-'+band.hi,'of 100')+'</div>';
   h+='<div class="sec"><div class="row" style="justify-content:space-between"><b class="sm">How well you know them</b><span class="mono xs">'+Math.round(g.insight)+' / 100</span></div>'+bar(g.insight,'')+'</div>';
   var real=g.needs.filter(function(n){ return n.real&&n.revealed; }), herr=g.needs.filter(function(n){ return n.herring&&n.revealed; }), hidden=g.needs.filter(function(n){ return n.real&&!n.revealed; }).length;
@@ -86,17 +86,17 @@ function pricingCard(g){
   if(mk) hint='Providers tolerate about '+Math.round(S0.takeTol*100)+'%. Above that they start to leave.';
   else if(g.insight>=15){ var cc=g.wtpMed*(1+g.pmfOff*g.wtpBand*0.5); hint='Customers hint at '+fm(cc*(1-g.wtpBand))+' to '+fm(cc*(1+g.wtpBand))+' a month.'; }
   else hint='You do not know what they will pay yet. Interview more customers.';
-  var now=mk?Math.round(c.take*100)+'% cut':fm(c.price)+' / mo';
+  var now=mk?Math.round(c.take*100)+'% cut':fm(c.price)+(g.arch==='venue'?' per guest':' / mo');
   var queued=q?'<div class="pq">Queued: '+esc(mk?q.values.take+'% cut':fm(q.values.price)+' / mo')+' <button class="pb" data-act="unplan" data-uid="'+q.uid+'" title="Remove">'+UI.icon('x')+'</button></div>':'';
   var btns;
   if(mk) btns=[-2,-1,1,2].map(function(d){ return '<button class="btn sm" data-act="price-quick" data-d="'+d+'">'+(d>0?'+':'')+d+' pts</button>'; }).join('');
   else btns=[-0.2,-0.1,0.1,0.2].map(function(m){ return '<button class="btn sm" data-act="price-quick" data-m="'+m+'">'+(m>0?'+':'')+Math.round(m*100)+'%</button>'; }).join('');
   var extra='';
-  if(!mk){
+  if(!mk&&g.arch!=='venue'){
     extra+='<button class="btn sm'+(c.annual?' ghost':'')+'" data-act="price-opt" data-o="annual"'+(c.annual?' disabled':'')+'>'+(c.annual?'Annual plans: on':'Offer annual plans')+'</button>';
     if(g.arch==='consumer') extra+='<button class="btn sm ghost" data-act="price-opt" data-o="'+(c.model==='freemium'?'paid':'freemium')+'">'+(c.model==='freemium'?'Free tier on: switch to paywall':'Paywall on: add a free tier')+'</button>';
   }
-  return '<div class="sec pricing"><div class="row" style="justify-content:space-between;align-items:flex-end"><div><div class="k">'+(mk?'Your cut':'Price')+'</div><div class="pbig mono">'+now+'</div></div><button class="btn sm ghost" data-act="open-act" data-aid="price">More options</button></div>'+
+  return '<div class="sec pricing"><div class="row" style="justify-content:space-between;align-items:flex-end"><div><div class="k">'+(mk?'Your cut':(g.arch==='venue'?'Average tab':'Price'))+'</div><div class="pbig mono">'+now+'</div></div><button class="btn sm ghost" data-act="open-act" data-aid="price">More options</button></div>'+
     '<div class="xs muted">'+esc(hint)+'</div><div class="row" style="gap:5px">'+btns+'</div>'+(extra?'<div class="row" style="gap:5px">'+extra+'</div>':'')+queued+'</div>';
 }
 
@@ -163,7 +163,7 @@ function featureTile(f,g){
   return '<button class="tile'+(dead?' no':'')+(f.kind==='asked'&&!dead?' star':'')+(f.built?' done':'')+'" data-act="feat" data-key="'+esc(f.key)+'"><span class="tt">'+esc(f.name)+'</span><span class="tf">'+f.scope+' pts</span><span class="tb2">'+esc(f.kind==='plat'||f.improve?f.text:(f.kind==='asked'?'Raises product fit.':f.kind==='core'?'Nothing sells without it.':f.kind==='nopay'?'Only adds clutter.':'Might matter. Might not.'))+'</span>'+tag+'</button>';
 }
 function pProduct(g){
-  var V=SU.velocity(g), h='<div class="strip">'+stat('Build speed',V.toFixed(1),'points a month')+stat('Quality',Math.round(g.Q),'of 100')+stat('Tech debt',Math.round(g.D),g.D>50?'Dangerous':g.D>30?'Watch it':'Fine',g.D>50?'bad':'')+'</div>';
+  var V=SU.velocity(g), h='<div class="strip">'+stat(SU.T(g,'buildSpeed','Build speed'),V.toFixed(1),SU.T(g,'buildSpeedSub','points a month'))+stat(SU.T(g,'quality','Quality'),Math.round(g.Q),'of 100')+stat(SU.T(g,'debt','Tech debt'),Math.round(g.D),g.D>50?SU.T(g,'debtBad','Dangerous'):g.D>30?SU.T(g,'debtWatch','Watch it'):SU.T(g,'debtOk','Fine'),g.D>50?'bad':'')+'</div>';
   h+=pricingCard(g);
   var st=sub('product',[['features','Features'],['roadmap','Roadmap']],'features'); h+=st.html;
   if(st.cur==='features'){
@@ -172,7 +172,7 @@ function pProduct(g){
   } else {
     h+='<div class="sec"><h4>Building now <span class="muted xs">'+g.queue.length+' of 6</span></h4>'+(g.queue.length?'<div class="rmap">'+g.queue.map(function(q){ var pc=q.scope?q.progress/q.scope*100:0; return '<div class="rm-i"><div class="top2"><b>'+esc(q.name)+'</b><span class="mono xs">'+q.progress.toFixed(1)+' / '+q.scope+'</span></div>'+bar(pc,'')+'</div>'; }).join('')+'</div>':empty('Nothing in the queue. Pick a feature.'))+'</div>';
     h+='<div class="sec"><h4>Shipped</h4>'+(g.shipped.length?'<div class="row">'+g.shipped.slice(-12).map(function(s){ return '<span class="chip static '+(s.good!==0||s.plat?'ok':'')+'" title="'+esc(s.name)+'">'+esc(s.name)+'</span>'; }).join('')+'</div>':empty('Nothing shipped yet.'))+'</div>';
-    h+=tiles(g.flavor==='ai'?['train','optimize','redteam','refactor','compliance','pivot']:['refactor','compliance','pivot']);
+    h+=tiles(g.flavor==='ai'?['train','optimize','redteam','refactor','compliance','pivot']:(g.arch==='venue'?['menu','renovate','hours','refactor','pivot']:['refactor','compliance','pivot']));
   }
   return h;
 }
@@ -187,7 +187,7 @@ function pSales(g){
   h+=pricingCard(g);
   (function(){ var act=g.rivals.filter(function(r){ return r.active&&r.presence>0; }).sort(function(a,b){ return b.presence-a.presence; }); var top=act[0]; h+='<div class="sec compcard"><div class="row" style="justify-content:space-between;align-items:center"><div><div class="k">Competition</div><div class="sm">'+(top?'<b>'+esc(top.name)+'</b> is your biggest rival ('+act.length+' in all). They take '+Math.round((1-SU.compF(g))*100)+'% of demand.':'No rivals chasing you right now.')+'</div></div><button class="btn sm" data-act="view" data-id="rivals">See rivals</button></div></div>'; })();
   h+='<div class="sec"><h4>Marketing running now</h4>'+(ch.length?'<div class="rows">'+ch.join('')+'</div>':empty('Nothing. Try outreach, ads, content or a launch.'))+'</div>';
-  h+=tiles(['outbound','market','launch','rival']);
+  h+=tiles(g.arch==='venue'?['night','happyhour','market','rival']:['outbound','market','launch','rival']);
   return h;
 }
 
@@ -250,7 +250,7 @@ function pShop(g){
   h+='<div class="sec"><h4>Your space <span class="pill">'+esc(sp.name)+'</span></h4><div class="row" style="justify-content:space-between"><span class="sm">'+SU.headcount(g)+' of '+sp.seats+' seats used</span><span class="xs muted">rent '+fm(sp.rent)+'/mo</span></div>'+bar(SU.headcount(g)/sp.seats*100,over?'bad':(SU.headcount(g)/sp.seats>0.8?'warn':'good'))+(over?'<div class="xs" style="color:var(--bad)">Cramped: morale and speed are dropping.</div>':'')+'<div class="rows">';
   SU.SPACE_ORDER.forEach(function(id,i){ if(id===g.space) return; var s=SU.SPACES[id], c=SU.Shop.canMove(g,id); h+='<div class="rw"><div class="rm"><b>'+esc(SU.spaceName(g,id))+'</b><div class="rs">'+s.seats+' seats &middot; rent '+fm(s.rent)+'/mo'+(i>idx?' &middot; deposit '+fm(s.deposit):'')+'</div></div><button class="btn sm '+(i>idx?'primary':'ghost')+'" data-act="move" data-id="'+id+'"'+(c.ok?'':' disabled title="'+esc(c.why)+'"')+'>'+(i>idx?'Move in':'Move down')+'</button></div>'; });
   h+='</div></div><div class="sec"><h4>Upgrades <span class="muted xs">they show up in the office</span></h4><div class="tilegrid">';
-  SU.UPGRADES.forEach(function(u){ var owned=SU.Shop.has(g,u.id), c=SU.Shop.canBuy(g,u.id);
+  SU.upgradesFor(g).forEach(function(u){ var owned=SU.Shop.has(g,u.id), c=SU.Shop.canBuy(g,u.id);
     h+='<button class="tile'+(owned?' done':(c.ok?'':' no'))+'" data-act="buy" data-id="'+u.id+'"><span class="tt">'+esc(u.name)+'</span><span class="tf">'+(owned?'owned':fm(u.cost))+'</span>'+(u.needs?'<span class="tag plat" style="position:absolute;right:8px;bottom:6px">Level 2</span>':'')+'<span class="tb2">'+esc(owned?u.text:(c.ok||c.why.indexOf('Need ')!==0&&c.why.indexOf('Needs ')!==0?u.text:c.why))+'</span></button>'; });
   return h+'</div></div>';
 }
@@ -452,7 +452,7 @@ UI.onInput=function(e){ if(e.target.id==='wf') wfUpdate(); };
 UI.onAct=function(a,t,e){
   var g=G();
   switch(a){
-    case 'health-fix': { var hl=CAT.health(g)[+t.getAttribute('data-i')], fxs=hl&&hl.fix[+t.getAttribute('data-j')]; if(fxs&&UI.addItem({aid:fxs.aid,values:JSON.parse(JSON.stringify(fxs.values))})) UI.toast('Added to your plan.',1400); break; }
+    case 'health-fix': { var hl=CAT.health(g)[+t.getAttribute('data-i')], fxs=hl&&hl.fix[+t.getAttribute('data-j')]; if(fxs&&fxs.quick){ UI.openShortlist(fxs.quick.role,fxs.quick.level); } else if(fxs&&UI.addItem({aid:fxs.aid,values:JSON.parse(JSON.stringify(fxs.values))})) UI.toast('Added to your plan.',1400); break; }
     case 'price-quick': { var pv=CAT.defaults(g,'price',{}); if(g.arch==='market'){ var d=+t.getAttribute('data-d'); pv.take=Math.max(3,Math.min(40,Math.round(g.cust.take*100)+d)); } else { var m=+t.getAttribute('data-m'), p0=g.cust.price, st=priceStep(p0), np=Math.max(1,Math.round(p0*(1+m)/st)*st); if(Math.abs(np-p0)<0.005) np=Math.max(1,p0+(m>0?st:-st)); pv.price=np; } var okp=CAT.validate(g,'price',pv); if(!okp.ok){ UI.toast(okp.why); return; } if(UI.addItem({aid:'price',values:pv})){ UI.renderPane(); UI.toast('Price change added to your plan.',1500); } break; }
     case 'price-opt': { var po=CAT.defaults(g,'price',{}), o=t.getAttribute('data-o'); if(o==='annual') po.annual=true; else po.model=o; var oks=CAT.validate(g,'price',po); if(!oks.ok){ UI.toast(oks.why); return; } if(UI.addItem({aid:'price',values:po})){ UI.renderPane(); UI.toast('Added to your plan.',1500); } break; }
     case 'open-act': { var aid=t.getAttribute('data-aid'); var v=CAT.defaults(g,aid,{}); var ok=CAT.validate(g,aid,v); if(!ok.ok){ UI.toast(ok.why); return; } S.cfg[aid]=v; S.drawer={type:'act',aid:aid}; renderDrawer(); break; }

@@ -26,7 +26,7 @@ CAT.actionsIn=function(gid){ return CAT.order.filter(function(id){ return CAT.ac
 CAT.features=function(G){
   var list=[];
   var has=function(re){ return G.shipped.some(function(s){ return re.test(s.name); })||G.queue.some(function(q){ return re.test(q.name); }); };
-  if(!has(/mvp/i)) list.push({key:'mvp',name:'MVP',scope:8,kind:'core',feat:'mvp',text:'The first version. Nothing else matters until it exists.'});
+  if(!has(/mvp/i)) list.push({key:'mvp',name:G.arch==='venue'?'Open the doors':'MVP',scope:8,kind:'core',feat:'mvp',text:G.arch==='venue'?'You cannot sell a drink until the doors are open.':'The first version. Nothing else matters until it exists.'});
   G.needs.forEach(function(n){
     var lvl=G.shipped.filter(function(s){ return s.tags&&s.tags.indexOf(n.id)>=0; }).length, built=lvl>0, queued=G.queue.some(function(q){ return q.tags&&q.tags.indexOf(n.id)>=0; });
     var scope=/integration|sso|mobile|api|analytic|report|platform|marketplace/.test(n.name.toLowerCase())?20:10;
@@ -34,7 +34,7 @@ CAT.features=function(G){
     list.push({key:'need:'+n.id,name:cap(n.name)+(lvl>0?' v'+(lvl+1):''),baseName:cap(n.name),lvl:lvl,maxed:lvl>=3,scope:scope,kind:kind,feat:n.name+' '+n.kw[0],needId:n.id,built:built,queued:queued,improve:lvl>0&&lvl<3,
       text:lvl>0?'Improve it: customers want it better. More of the need gets covered.':kind==='asked'?'Customers told you they need this. It raises product fit.':kind==='nopay'?'People ask for it, but they will not pay for it. It only adds clutter.':'You have not heard anyone ask for this. It might matter. It might be a decoy.'});
   });
-  SU.PLAT_ORDER.forEach(function(id){ var p=SU.PLAT[id]; if(G.act<p.minAct) return; if(p.biz&&p.biz!==G.biz) return; if(id==='mobile' && G.arch==='smb' && G.act<2) return;
+  SU.PLAT_ORDER.forEach(function(id){ var p=SU.PLAT[id]; if(G.act<p.minAct) return; if(p.biz&&p.biz!==G.biz) return; if(G.arch==='venue'&&!p.biz&&id!=='dashboard') return; if(id==='mobile' && G.arch==='smb' && G.act<2) return;
     list.push({key:'plat:'+id,name:p.name,scope:p.scope,kind:'plat',plat:id,text:p.effect,feat:p.name,built:!!(G.feat&&G.feat[id]),queued:G.queue.some(function(q){ return q.plat===id; })}); });
   list.forEach(function(f){ if(f.key==='mvp'){ f.built=false; f.queued=false; } });
   return list;
@@ -88,6 +88,7 @@ def({id:'price',group:'sales',title:'Set your price',blurb:'Too high and nobody 
   ctl:function(G,v){
     if(G.arch==='market') return [{k:'take',label:'Your cut of every order',kind:'step',min:3,max:40,step:1,def:Math.round(G.cust.take*100),fmt:'pct',quick:[-3,-1,1,3],quickAbs:true}];
     var p=G.cust.price, st=p<10?0.5:p<30?1:p<100?5:p<500?10:50;
+    if(G.arch==='venue') return [{k:'price',label:'Average tab per guest',kind:'step',min:4,max:200,step:p<20?1:5,def:p,fmt:'price',quick:[-0.1,-0.05,0.05,0.1]}];
     var c=[{k:'price',label:'Price per month',kind:'step',min:1,max:5000,step:st,def:p,fmt:'price',quick:[-0.2,-0.1,0.1,0.2]},{k:'annual',label:'Offer annual plans (customers stay longer)',kind:'toggle',def:!!G.cust.annual}];
     if(G.arch==='consumer') c.push({k:'model',label:'Free users or paywall',kind:'choice',opts:[opt('keep','Keep as is'),opt('freemium','Free tier'),opt('paid','Paywall')],def:'keep'});
     c.push({k:'grand',label:'Grandfather existing customers',kind:'toggle',def:false});
@@ -146,6 +147,25 @@ def({id:'rival',group:'sales',title:'Deal with a competitor',blurb:'Coffee, a pr
   preview:function(G,v){ if(v.act==='buyout'){ var rv=G.rivals.filter(function(x){ return x.id===v.rival; })[0]||G.rivals.filter(function(x){ return x.active; })[0], bc=SU.buyoutCheck(G,rv); var out=['Price: '+SU.fmtMoney(bc.price||0)+'. You keep their customers, they leave the market, buzz goes up.']; out.push(bc.ok?'You can afford it and keep 4 months of burn.':'Warning: '+bc.why); return out; }
     return {coffee:['Respect goes up and you may learn how much cash they have left.'],undercut:['Both of you lose margin. Do this only if you can win.'],poach:['Posts a senior account exec job. They will remember.'],sue:['Costs $40K. Wins about 30% of the time, and only against copycats.']}[v.act]; }});
 
+/* ------------------------------------------------------------ bar */
+function barOk(G){ return G.arch==='venue'?{ok:true}:{ok:false,why:'Only bars and restaurants do this.'}; }
+def({id:'night',group:'sales',title:'Host a night',blurb:'Trivia, a band, a DJ or a game-day special. A busy night is the cheapest advertising you have.',ok:barOk,
+  ctl:function(){ return [{k:'kind',label:'What kind of night',kind:'cards',opts:[opt('trivia','Trivia night','$500, steady crowd'),opt('band','Live band','$1,500, a bigger crowd'),opt('dj','DJ night','$2,500, the biggest crowd, noise complaints'),opt('game','Game-day special','$800, great for sports bars')],def:'trivia'}]; },
+  make:function(G,v){ return mk(G,'night',{kind:v.kind},'Host '+v.kind); },
+  preview:function(G,v){ var n=SU.NIGHTS[v.kind]; var out=['Costs '+fm(n.cost)+'. About '+Math.round(n.pct*100)+'% more guests this month, and buzz +'+n.hype+'.']; var S=SU.seg(G); out.push(S.aff.events>=0.8?'Your crowd loves events.':S.aff.events<0.5?'Your crowd is not really an events crowd.':'A decent fit for your crowd.'); if(v.kind==='dj') out.push('Warning: the neighbors might complain about the noise.'); return out; }});
+def({id:'happyhour',group:'sales',title:'Happy hour',blurb:'Cheaper drinks early. More people through the door, smaller tabs.',ok:barOk,
+  ctl:function(G){ return [{k:'on',label:'Happy hour',kind:'cards',opts:[opt(true,'Start it','+18% guests, tabs -18%'),opt(false,'End it','back to full prices')],def:!(G.cust&&G.cust.hh)}]; },
+  make:function(G,v){ return mk(G,'happyhour',{on:v.on===true||v.on==='true'},v.on?'Happy hour on':'Happy hour off'); },
+  preview:function(G,v){ return v.on?['About 18% more guests and every tab 18% smaller. Good when the room is empty. Bad when you are already full.']:['Back to full-price tabs.']; }});
+def({id:'menu',group:'product',title:'Refresh the menu',blurb:'New drinks and bites. Better quality, slightly better tabs.',ok:barOk,
+  ctl:function(){ return []; }, make:function(G){ return mk(G,'menu',{},'Refresh the menu'); }, preview:function(){ return ['Costs $2,500.','Quality +6, tabs up 3%, and a bit less waste.']; }});
+def({id:'hours',group:'product',title:'Change your hours',blurb:'More nights mean more revenue, and more tired people.',ok:barOk,
+  ctl:function(G){ return [{k:'nights',label:'Nights a week',kind:'cards',opts:[3,4,5,6,7].map(function(n){ return opt(n,String(n),n>5?'late license helps':n<5?'quiet but easy':'standard'); }),def:(G.cust&&G.cust.nights)||5}]; },
+  make:function(G,v){ return mk(G,'hours',{nights:+v.nights},'Open '+v.nights+' nights'); },
+  preview:function(G,v){ var out=['More nights is more revenue only if people actually come.']; if(+v.nights>5) out.push('Nights past 5 cost about $900 each in overtime'+(G.feat&&G.feat.late?'.':', and only do half as well without a late-night license.')); if(+v.nights<5) out.push('Fewer nights saves overtime and keeps your team fresh.'); return out; }});
+def({id:'renovate',group:'product',title:'Renovate the room',blurb:'Paint, fixtures, a new bar top. The room feels new again.',ok:barOk,
+  ctl:function(){ return []; }, make:function(G){ return mk(G,'renovate',{},'Renovate'); }, preview:function(G){ return ['Costs $12,000.','Quality +8, wear down 12, buzz +3. Wear is '+Math.round(G.D)+' now; a high number fails health inspections.']; }});
+
 /* ------------------------------------------------------------ AI company */
 def({id:'train',group:'product',title:'Train a model',blurb:'Spend on compute to make the model better. It decays every month, so you will do this again.',
   ok:function(G){ return G.flavor==='ai'?{ok:true}:{ok:false,why:'Only AI companies train models.'}; },
@@ -163,7 +183,7 @@ def({id:'redteam',group:'product',title:'Red-team the model',blurb:'Pay people t
 
 /* ------------------------------------------------------------ TEAM */
 var ROLE_BLURB={ml:'Makes every training run stronger.',mgr:'Handles the small stuff.',eng:'Builds the product faster.',design:'Makes it nicer, helps every engineer.',pm:'Keeps the roadmap sane.',sdr:'Sends outreach all month, every month.',ae:'Closes the deals your outreach finds.',cs:'Keeps customers happy and subscribed.',mkt:'Makes your marketing spend work harder.',cos:'Gives you more focus each month.',vp:'Runs a whole department.'};
-CAT.hireRoles=function(G){ var roles=['eng','design','pm','mgr','sdr','ae','cs','mkt']; if(G.flavor==='ai') roles.splice(1,0,'ml'); if(G.act>=3) roles.push('cos','vp'); return roles; };
+CAT.hireRoles=function(G){ var bz=SU.BIZ_ROLES[G.biz]; if(bz&&bz.list) return bz.list.slice(); var roles=['eng','design','pm','mgr','sdr','ae','cs','mkt']; if(G.flavor==='ai') roles.splice(1,0,'ml'); if(G.act>=3) roles.push('cos','vp'); return roles; };
 def({id:'hire',group:'team',title:'Post a job (advanced)',blurb:'Choose pay, equity and a recruiter. Takes 2 to 4 months. The Hire buttons are faster.',
   ok:function(G){ return G.reqs.length<8?{ok:true}:{ok:false,why:'You already have 8 open roles.'}; },
   ctl:function(G,v){
@@ -336,15 +356,17 @@ CAT.health=function(G){
   if(mrr>0||n>0){ var gs=gm>=0.1?'good':(gm>=0.03?'warn':'bad'); add('growth','Growth',(gm>=0?'+':'')+Math.round(gm*100)+'% a month',gs,'How fast revenue is growing, averaged over 3 months. Above 10% a month is excellent. Under 3% means you are stalling.',
     gs==='good'?[]:[(G.arch==='consumer'?fx('market',{channel:'social',budget:500},'Pay creators $500 a month'):fx('outbound',{ch:'email',n:300},'Cold-email 300 prospects'))]); }
   /* churn */
-  if(n>0){ var cs=churn>0.08?'bad':(churn>0.04?'warn':'good'); add('churn','Churn',(Math.round(churn*1000)/10)+'% a month',cs,'Out of every 100 customers, how many cancel each month. Above 5% is a leaky bucket: you must sell just to stand still.',
+  if(n>0){ var cs=churn>0.08?'bad':(churn>0.04?'warn':'good'); add('churn',G.arch==='venue'?'Regulars leaving':'Churn',(Math.round(churn*1000)/10)+'% a month',cs,'Out of every 100 customers, how many cancel each month. Above 5% is a leaky bucket: you must sell just to stand still.',
     cs==='good'?[]:[fx('build',{fk:'plat:onboarding',care:1},'Build guided onboarding'),fx('hire',{role:'cs'},'Hire customer success')]); }
   /* support load */
-  if(n>0){ var cap=300+150*SU.count(G,'cs'), ld=n/cap, ss=ld>1?'bad':(ld>0.75?'warn':'good'); add('support','Support load',SU.fmtNum(n)+' of '+cap,ss,'You handle about 300 customers yourself and each customer success hire adds 150. Over the limit, churn jumps 20%.',
+  if(n>0 && G.arch!=='venue'){ var cap=300+150*SU.count(G,'cs'), ld=n/cap, ss=ld>1?'bad':(ld>0.75?'warn':'good'); add('support','Support load',SU.fmtNum(n)+' of '+cap,ss,'You handle about 300 customers yourself and each customer success hire adds 150. Over the limit, churn jumps 20%.',
     ss==='good'?[]:[fx('hire',{role:'cs'},'Hire customer success')]); }
   if(G.flavor==='ai'){ var qs=G.Q<30?'bad':(G.Q<50?'warn':'good'); add('model','Model quality',Math.round(G.Q)+' of 100',qs,'How good your model is next to the frontier. It decays about 1.4% every month, because rivals keep improving. Train a new model to bring it back.',qs==='good'?[]:[fx('train',{size:'medium'},'Train a medium model')]);
     var gmv=Math.max(0,(G.arch==='smb'?0.78:0.88)-0.18+0.25*(G.ai.eff||0)-0.012*(G.ai.size||0)); var gms=gmv<0.5?'bad':(gmv<0.62?'warn':'good'); add('margin','Gross margin',Math.round(gmv*100)+'%',gms,'Every answer costs real compute. Software companies keep 80% of each dollar; AI companies often keep far less. Bigger models cost more to serve.',gms==='good'?[]:[fx('optimize',{},'Optimize serving costs')]); }
   /* competition */
   var sh=Math.round((1-SU.compF(G))*100); if(sh>0||G.rivals.some(function(r){ return r.active&&r.presence>0; })){ var cps=sh>=50?'bad':(sh>=35?'warn':'good'); add('rivals','Competition',sh+'% of demand',cps,'How much of your market rivals are taking. Beat them on product quality, buzz or price. Tap See rivals on the Sales tab to size them up.',cps==='good'?[]:[fx('rival',{act:'coffee'},'Have coffee with a rival')]); }
+  if(G.arch==='venue'){ var rt=G.cust.rating, rs3=rt<2.8?'bad':(rt<3.5?'warn':'good'); add('rating','Rating',rt.toFixed(1)+' of 5',rs3,'What guests think of you. It drives who walks in. Good drinks, quick service and a clean room lift it. Turning guests away drags it down.',rs3==='good'?[]:[fx('menu',{},'Refresh the menu'),fx('renovate',{},'Renovate the room')]);
+    var busy=G.cust.dem?Math.round(100*(G.cust.covers||0)/Math.max(1,G.cust.cap||1)):0, bs2=(G.cust.lost||0)>=8?'bad':((G.cust.lost||0)>=3?'warn':'good'); add('busy','Busy nights',(G.cust.covers||0)+' guests a night',bs2,'Guests served on a normal night, against what your room and staff can handle (about '+(G.cust.cap||0)+'). '+((G.cust.lost||0)>0?'You turn away about '+G.cust.lost+' a night.':'Nobody is being turned away.'),bs2==='good'?[]:(SU.venueCaps(G).seatLimited?[fx('price',{price:Math.round(G.cust.price*1.12*2)/2},'Raise your tab 12%')]:[{quick:{role:'eng',level:'mid'},label:'Hire a bartender'}])); }
   /* team energy */
   if(G.team.length){ var es=avgEn<35?'bad':(avgEn<55?'warn':'good'); add('energy','Team energy',Math.round(avgEn)+' of 100',es,'How rested your team is. Crunch, a crowded office and low morale drain it. Tired people build slower and quit sooner.',
     es==='good'?[]:[fx('allhands',{},'Hold an all-hands'),fx('offsite',{},'Team offsite')]); }
@@ -361,7 +383,7 @@ CAT.coach=function(G){
   var out=[], f=SU.fin(G), seg=SU.seg(G), w=seg.words[0], runway=f.runway, mrr=G.mrr||0;
   function add(aid,values,label,why){ out.push({aid:aid,values:CAT.defaults(G,aid,values),label:label,why:why}); }
   var inPlan=function(aid){ return false; };
-  if(G.t===0){ add('talk',{n:8},'Interview 8 customers','Learn what they pay for before you spend months building.'); add('build',{fk:'mvp',care:1},'Build the MVP','Nothing sells until something exists.'); return out; }
+  if(G.t===0){ add('talk',{n:8},'Interview 8 customers','Learn what they pay for before you spend months building.'); add('build',{fk:'mvp',care:1},G.arch==='venue'?'Open the doors':'Build the MVP',G.arch==='venue'?'You cannot sell a drink until the doors are open.':'Nothing sells until something exists.'); return out; }
   if(G.insight<35) add('talk',{n:8},'Interview 8 customers','You still know little about what customers pay for. Insight '+R(G.insight)+' of 100.');
   var need=G.needs.filter(function(n){ return n.real&&n.revealed&&n.cov<0.3&&!G.queue.some(function(q){ return q.tags&&q.tags.indexOf(n.id)>=0; }); })[0];
   if(need) add('build',{fk:'need:'+need.id,care:1},'Build '+need.name,'Customers told you they need this. It raises product fit.');
@@ -375,6 +397,18 @@ CAT.coach=function(G){
   if(runway<9 && f.burn>0 && !G.round && G.rounds.length===0 && G.t>5) add('raise',{stage:'preseed'},'Start raising','Raising takes months. Start before you are desperate.');
   if(G.founder.sanity<45) add('self',{kind:'weekend'},'Take the weekend off','Your sanity is '+R(G.founder.sanity)+'. At zero you burn out.');
   if(G.lastStand) add('layoff',{pct:25},'Lay off 25%','Payroll Friday. You need cash now.');
+  /* bars live on busy nights, a good rating and a clean room */
+  if(G.arch==='venue' && G.shipped.length){
+    var cc=G.cust, bcap=30+40*SU.count(G,'eng')+26*SU.count(G,'cs')+10*SU.count(G,'mgr');
+    var vcs=SU.venueCaps(G);
+    if((cc.lost||0)>=6 && !vcs.seatLimited && !G.cands.length && f.runway>=4) addQ('eng','mid','Hire a bartender','You turned away about '+cc.lost+' guests a night, and your staff is the limit. Every one of them was a sale.');
+    if((cc.lost||0)>=6 && vcs.seatLimited){ var nxt=SU.SPACE_ORDER[SU.SPACE_ORDER.indexOf(G.space||'garage')+1]; if(nxt){ var mv=SU.Shop.canMove(G,nxt); if(mv.ok && G.cash>SU.spaceInfo(G,nxt).deposit+3*SU.spaceInfo(G,nxt).rent) addTab('shop','Move to '+SU.spaceName(G,nxt),'You turn away about '+cc.lost+' guests a night because the room is full. Hiring more staff will not help: you need more space.','Shop'); } }
+    if((cc.lost||0)>=8 && !G.flags.tabRaisedAt || (cc.lost||0)>=8 && G.mi-(G.flags.tabRaisedAt||0)>=3) add('price',{price:Math.round(cc.price*1.12*2)/2},'Raise your tab 12%','You turn away '+cc.lost+' guests a night. When the room is full, a higher price costs you almost nothing.');
+    if(cc.rating<3.0) add('menu',{},'Refresh the menu','Your rating is '+cc.rating.toFixed(1)+'. Better drinks and bites pull it up.');
+    if(G.D>40) add('refactor',{pts:3},'Deep clean and repairs','The room is getting grubby (wear '+R(G.D)+'). Inspectors notice, and so do guests.');
+    var spendB=G.orders.ads+G.orders.content+G.orders.social+G.orders.events+G.orders.referral;
+    if((cc.covers||0)<0.6*(cc.cap||1) && spendB===0 && G.cash>3000) add('night',{kind:'trivia'},'Host a trivia night','Your room has space on slow nights. A busy night is the cheapest advertising you have.');
+  }
   /* AI companies live and die by model quality */
   if(G.flavor==='ai'){
     if(G.Q<50 && G.cash>=120000+3*Math.max(0,f.burn)) add('train',{size:'medium'},'Train a medium model','Your model has decayed to '+R(G.Q)+'. Rivals keep improving, so you must keep training.');

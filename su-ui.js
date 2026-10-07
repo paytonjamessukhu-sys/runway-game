@@ -184,7 +184,7 @@ function delta(a,b,money){ var d=a-b; if(Math.abs(d)<0.5) return ''; return (d>0
 function renderHeader(over){
   var rw=runwayInfo(), f=rw.f, rec=G.last, b=rec&&rec.before;
   var cash=over?over.cash:G.cash, mrr=over?over.mrr:(G.mrr||0), cust=over?over.cust:SU.custCount(G);
-  var arch=G.arch, custLabel=arch==='consumer'?'Subscribers':(arch==='market'?'Both sides':'Customers');
+  var arch=G.arch, custLabel=arch==='consumer'?'Subscribers':(arch==='market'?'Both sides':(arch==='venue'?'Regulars':'Customers'));
   var band=SU.pmfBand(G);
   var dashes=''; for(var i=0;i<24;i++) dashes+='<span class="dash'+(i<Math.round(rw.mo)?' on':'')+'"></span>';
   var act=SU.ACTS[G.act-1];
@@ -339,6 +339,7 @@ UI.renderTabs=function(){
   var urgent=G.inbox.filter(function(i){ return i.open&&(i.kind==='crisis'||i.kind==='signal'||i.action||(i.kind==='opp'&&i.t>=G.t-1)); }).length;
   var tabs=TABS.filter(function(t){ return t[0]!=='dash'||(G.feat&&G.feat.dashboard); });
   if(!tabs.some(function(t){ return t[0]===S.tab; })) S.tab='customers';
+  var lab={customers:SU.T(G,'tabCustomers',null),product:SU.T(G,'tabProduct',null),sales:SU.T(G,'tabSales',null)}; tabs=tabs.map(function(t){ return [t[0],lab[t[0]]||t[1],t[2]]; });
   $('#tabs').innerHTML=tabs.map(function(t){ return '<button class="tb'+(S.tab===t[0]?' on':'')+'" role="tab" aria-selected="'+(S.tab===t[0])+'" data-act="tab" data-tab="'+t[0]+'" title="'+t[1]+'">'+UI.icon(t[2])+'<span>'+t[1]+'</span>'+(t[0]==='inbox'&&urgent?'<span class="badge">'+urgent+'</span>':'')+'</button>'; }).join('');
   UI.renderPane();
 };

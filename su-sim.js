@@ -23,7 +23,7 @@ function count(G,role){ var n=0; G.team.forEach(function(e){ if(e.role===role) n
 SU.count = count;
 SU.growthMo = function(G){ var h=G.mrrHist, n=h.length; if(n<4) return 0; var a=h[n-4], b=h[n-1]; if(a<=0) return b>0?0.3:0; return Math.pow(Math.max(b,1)/a,1/3)-1; };
 SU.arr = function(G){ return (G.mrr||0)*12; };
-SU.custCount = function(G){ var c=G.cust; return G.arch==='smb'?c.n : G.arch==='consumer'?c.payers : Math.round(c.S+c.D); };
+SU.custCount = function(G){ var c=G.cust; return G.arch==='smb'?c.n : G.arch==='consumer'?c.payers : G.arch==='venue'?Math.round(c.regulars) : Math.round(c.S+c.D); };
 
 /* ------------------------------------------------------------ new game */
 function rollNeeds(G){
@@ -64,14 +64,16 @@ SU.newGame = function(o){
   G.trust={cust:50,inv:50+((bg.flags&&bg.flags.warmIntro)?5:0),emp:60,press:50};
   G.orders={ads:0,content:0,social:0,events:0,referral:0,ua:0,culture:{remote:false,hybrid:false,office:false,fourday:false,crunch:0,perks:false,pto:false},therapy:false};
   rollNeeds(G);
+  SU.setBiz(G.biz);
   G.wtpMed = S.wtp*clamp(Math.exp(0.25*SU.randn(G,'market')),0.62,1.5);
   G.wtpBand = 0.5; G.pmfOff=(SU.rnd(G,'market')-0.5)*1.2; G.tam=0.35+0.6*SU.rnd(G,'market'); G.viral=clamp(Math.exp(0.5*SU.randn(G,'market')),0.55,2.4);
   if(G.arch==='smb') G.cust={n:0,price:S.defaultPrice,annual:false,freemium:false,free:0,pipe:0,shock:0};
   else if(G.arch==='consumer') G.cust={mau:150,payers:0,price:S.defaultPrice,model:'freemium',annual:false,installsLast:0,rev12:[],shock:0};
+  else if(G.arch==='venue') G.cust={regulars:0,price:S.defaultPrice,rating:3.4,nights:5,hh:false,boost:0,covers:0,dem:0,cap:0,lost:0,shock:0};
   else G.cust={S:6,D:30,take:S.takeDefault,aov:S.aov,orders:0,gmv:0,subD:0,subS:0,shock:0};
   /* rivals */
   var ids=['krellix','mirrormint','slowoak'];
-  ids.forEach(function(id){ var r=SU.rivalById(id); G.rivals.push({id:id,name:r.name,boss:r.boss,persona:r.persona,cash:r.cash,burn:r.burn,Q:r.Q,price:r.price,hype:r.hype,ethics:r.ethics,growth:r.growth,presence:id==='krellix'?0.4:id==='mirrormint'?0.0:0.2,active:id!=='mirrormint',respect:0,grudge:0,mem:[],raised:0}); });
+  ids.forEach(function(id){ var r=SU.rivalById(id,G.biz); G.rivals.push({id:id,name:r.name,boss:r.boss,persona:r.persona,cash:r.cash,burn:r.burn,Q:r.Q,price:r.price,hype:r.hype,ethics:r.ethics,growth:r.growth,presence:id==='krellix'?0.4:id==='mirrormint'?0.0:0.2,active:id!=='mirrormint',respect:0,grudge:0,mem:[],raised:0}); });
   SU.Money.initCap(G, o.split||0.5);
   G.pmf=SU.pmfStar(G);
   G.mrrHist=[0]; G.burnHist=[];
@@ -144,6 +146,14 @@ SU.empVel=function(G,e){ var ramp=Math.min(1,(G.mi-e.joinMi)/SU.ROLES.eng.ramp[e
 SU.attrRisk3=function(G,e){ var tenure=G.mi-e.joinMi; var tm=e.trait&&SU.TRAITS[e.trait].attr||1; var p=0.018*attritionF(G.morale)*tm*(tenure===12?2:1)*(tenure<3?0.3:1)*(e.loyalty<45?1.5:1)*(SU.energyOf(e)<25?1.5:1); p=clamp(p,0,0.95); return 1-Math.pow(1-p,3); };
 /* does this job help in this game right now? used by the hire screen and the roles guide */
 SU.roleFit=function(G,role){
+  if(G.biz==='bar'){
+    var c=G.cust, vc0=SU.venueCaps(G), staffCap=vc0.staff, short=(c.dem||0)>staffCap && !vc0.seatLimited;
+    if(role==='eng') return short?{state:'ok',why:'You turn away about '+Math.round((c.dem||0)-staffCap)+' guests on a busy night because staff is the limit. Another bartender pays for himself.'}:{state:(c.dem||0)>vc0.cap&&vc0.seatLimited?'no':'maybe',why:(c.dem||0)>vc0.cap&&vc0.seatLimited?'Your room is full, not your staff. More bartenders would not serve one more guest. You need a bigger room.':'Your staff can handle your busiest nights for now.'};
+    if(role==='cs') return short?{state:'ok',why:'The floor is stretched on busy nights.'}:{state:'maybe',why:'Your floor is covered for now.'};
+    if(role==='design') return G.feat&&G.feat.kitchen?{state:'ok',why:'You have a kitchen: a chef lifts every tab.'}:{state:'no',why:'You have no kitchen yet, so a chef would have nothing to cook on. Build the Kitchen upgrade first.'};
+    if(role==='mkt'){ var sp=G.orders.ads+G.orders.content+G.orders.social+G.orders.events+G.orders.referral; return sp>0?{state:'ok',why:'You spend on marketing: a promoter makes it work harder.'}:{state:'maybe',why:'You are not spending on marketing or events yet.'}; }
+    if(role==='mgr') return {state:'ok',why:'An extra move every month, and your pinned moves run free.'};
+  }
   var spend=G.orders.ads+G.orders.content+G.orders.social+G.orders.events+G.orders.ua+G.orders.referral;
   if(role==='design'||role==='pm'){ return count(G,'eng')>0 ? {state:'ok',why:'You have engineers to multiply.'} : {state:'no',why:'You have no engineers yet, so there is nothing to multiply. Hire an engineer first.'}; }
   if(role==='ae') return G.arch==='smb' ? {state:'ok',why:'You sell to businesses, so closers matter.'} : {state:'no',why:'Account execs only close business deals. Your product is not sold that way, so they would do nothing.'};
@@ -180,6 +190,7 @@ SU.staffStep=function(G){
   });
 };
 SU.velocity = function(G){
+  if(G.arch==='venue'){ var fs=G.founder.skills; return 3.2+0.35*(fs.s+fs.t)/2+1.2*Math.min(2,count(G,'mgr'))+0.8*Math.min(2,count(G,'design')); }
   var E=0, moraleF=0.55+0.6*G.morale/100, debtF=1-G.D/200, flags=G.founder.bg.flags||{};
   SU._vshare={}; G.team.forEach(function(e){ if(e.role!=='eng') return; var c=SU.empVel(G,e); SU._vshare[e.id]=c; E+=c; });
   var fb=0.35*G.founder.skills.t*(1+(flags.buildBonus||0))*(flags.buildMult||1); E+=fb;
@@ -268,9 +279,9 @@ function expenses(G,E,rev){
   if(G.arch==='smb') infra+=2*c.n+0.4*(c.free||0); else if(G.arch==='consumer') infra+=0.03*c.mau; else infra+=0.02*c.gmv;
   var o=G.orders, mk=o.ads+o.content+o.social+o.events+o.referral+o.ua;
   var outCost=(G.pend&&G.pend.outbound||[]).reduce(function(a,x){ return a+0.05*x.n; },0)+count(G,'sdr')*1200*0.05;
-  var cogs=0, gm=G.arch==='smb'?0.78:G.arch==='consumer'?0.88:0.97; if(G.flavor==='ai'){ gm=Math.max(0.35,gm-0.18+0.25*(G.ai.eff||0)-0.012*(G.ai.size||0)); infra+=1500+250*(G.ai.size||0); } cogs=rev*(1-gm);
-  var fixed=G.fixed*(1+0.25*Math.max(0,G.act-1))+(G.act>=2?60*Math.max(0,heads-3):0)+(SU.Shop?SU.Shop.rent(G):0);
-  var other=(o.therapy?400:0)+(o.culture.perks?150*heads:0);
+  var cogs=0, gm=G.arch==='smb'?0.78:G.arch==='consumer'?0.88:G.arch==='venue'?(0.72+0.015*featN(G,'pos')+0.01*Math.min(1,(G.flags.menuQ||0))-((G.flags.supplierUp||0)>G.mi?0.02:0)):0.97; if(G.arch==='venue'){ infra=500+0.012*rev; } if(G.flavor==='ai'){ gm=Math.max(0.35,gm-0.18+0.25*(G.ai.eff||0)-0.012*(G.ai.size||0)); infra+=1500+250*(G.ai.size||0); } cogs=rev*(1-gm);
+  var fixed=G.fixed*(1+0.25*Math.max(0,G.act-1))+(G.act>=2?60*Math.max(0,heads-3):0)+(SU.Shop?SU.Shop.rent(G)*(G.rentMult||1):0);
+  var other=(o.therapy?400:0)+(o.culture.perks?150*heads:0)+(G.arch==='venue'?(0.012*rev+(Math.max(0,(G.cust.nights||5)-5))*900):0);
   var rbf=(G.loans.rbf&&G.loans.rbf.left>0)?Math.min(G.loans.rbf.left,0.06*rev):0;
   var debt=(G.loans.debt&&G.loans.debt.bal>0)?G.loans.debt.bal*0.11/12:0;
   var owed=G.owed||0;
@@ -373,6 +384,42 @@ function demandConsumer(G,E,S){
   G.stat.newLast=newPayers; G.stat.churnLast=lost; G.stat.churnRate=before?lost/before:0; G.stat.installs=installs;
   return {revenue:revenue};
 }
+SU.venueCaps=function(G){ var sp=SU.Shop.space(G); var seat=(sp.guests||30)*(2.2+0.3*featN(G,'pos'))*(1+0.2*featN(G,'patio')); var staff=30+40*count(G,'eng')+26*count(G,'cs')+10*count(G,'mgr'); return {seat:seat,staff:staff,cap:Math.min(seat,staff),seatLimited:seat<=staff}; };
+function demandVenue(G,E,S){
+  var c=G.cust, sp=SU.Shop.space(G), guests=sp.guests||30;
+  var open=G.shipped.length>0, Sh=SU.Shop;
+  var T0=S.traffic*(0.7+0.6*G.tam)*(1+Sh.sum(G,'traffic'));                    /* walk-by guests on a normal night */
+  var fit=0.45+1.1*(G.pmf/100);                         /* how well the room matches the neighborhood */
+  var rf=Math.pow(Math.max(0.3,c.rating)/3.5,2.2);      /* your rating */
+  var bf=1+G.hype/70;                                    /* buzz */
+  var pf=priceF(G);                                       /* your prices against what locals will pay */
+  var chef=Math.min(2,count(G,'design')), hh=c.hh?1:0;
+  var tabMul=(1+0.04*chef)*(1+0.08*featN(G,'kitchen'))*(1+Sh.sum(G,'tab'))*(hh?0.82:1);
+  var prom=0; G.team.forEach(function(e){ if(e.role==='mkt'&&prom<3) prom+=(e.skill||1)*SU.energyF(e)*SU.rampPct(G,e); });
+  var spend=G.orders.ads*0.9+G.orders.social*1.2+G.orders.content*0.7+G.orders.events*1.0+G.orders.referral*0.8;
+  var mk=1+(0.15+0.6*SU.chanFit(G))*Math.min(1.5,spend/1500)*(1+0.15*prom);
+  var boost=1+(c.boost||0)*(1+0.2*featN(G,'sound')); c.boost=0;
+  var nights=c.nights||5, nightsEff=nights<=5?nights:5+(nights-5)*(featN(G,'late')?1:0.45);
+  var dem=open? (T0*fit*rf*bf*mk+c.regulars*0.1)*Math.min(1.6,pf)*(hh?1.18:1)*boost*SU.compF(G) : 0;
+  var vc=SU.venueCaps(G), seatCap=vc.seat, staffCap=vc.staff, cap=vc.cap;
+  var served=Math.min(dem,cap), lost=Math.max(0,dem-cap);
+  var covers=served*nightsEff*4.3;
+  var revenue=covers*c.price*tabMul;
+  /* rating moves toward what guests actually experienced */
+  var service=dem>0?Math.min(1,cap/dem):1, quality=clamp(G.Q/100,0,1), clean=1-clamp(G.D/120,0,0.6);
+  var target=clamp(1.6+2.0*(0.45*quality+0.35*service+0.2*clean)+0.4*(fit-0.9)+0.1*chef+Sh.sum(G,'rating'),1.5,4.9);
+  if(open) c.rating=clamp(c.rating+0.3*(target-c.rating),1,5);
+  /* new regulars come from first-time guests who liked it; regulars leave if it slips */
+  var newVisitors=open?T0*nightsEff*4.3*0.25*bf*mk:0, conv=clamp(0.05*rf*fit,0,0.3);
+  var newR=SU.poisson(G,newVisitors*conv,'market');
+  var churnP=clamp(0.09*lerp(1.6,0.6,G.pmf/100)*(1-0.2*featN(G,'loyalty'))*(1+Sh.sum(G,'churn'))*(1+0.3*G.incidents)+(c.shock||0)+(c.rating<2.6?0.08:0),0.02,0.6); c.shock=0;
+  var before=c.regulars, lostR=SU.binom(G,Math.round(before),churnP,'market');
+  c.regulars=Math.max(0,before+newR-lostR);
+  c.covers=Math.round(served); c.dem=Math.round(dem); c.cap=Math.round(cap); c.lost=Math.round(lost);
+  G.stat.newLast=newR; G.stat.churnLast=lostR; G.stat.churnRate=before?lostR/before:0; G.stat.match=fit; G.stat.nightly=Math.round(served); G.stat.turnedAway=Math.round(lost);
+  if(revenue>=10000 && !G.flags.rev10k){ G.flags.rev10k=true; SU.journal(G,'First $10K month.','milestone',true); }
+  return {revenue:revenue};
+}
 function demandMarket(G,E,S){
   var c=G.cust, cf=convF(G), cmp=SU.compF(G);
   var newD=0, newS=0;
@@ -456,7 +503,7 @@ function rivalStep(G,E){
 /* ------------------------------------------------------------ act progress */
 SU.updateAct = function(G){
   var arr=SU.arr(G), act=G.act;
-  var scale=G.arch==='smb'? G.cust.n>=10 : G.arch==='consumer'? G.cust.mau>=500 : G.cust.gmv>=5000;
+  var scale=G.arch==='smb'? G.cust.n>=10 : G.arch==='consumer'? G.cust.mau>=500 : G.arch==='venue'? G.cust.regulars>=40 : G.cust.gmv>=5000;
   if(act===1 && (scale || G.rounds.length>0 || G.t>=10)) act=2;
   if(act===2 && ((G.pmf>=60 && G.mrr>=40000) || G.rounds.some(function(r){ return r.stage==='A'||r.stage==='B'||r.stage==='C'; }))) act=3;
   if(act===3 && (arr>=15e6 || SU.headcount(G)>=120)) act=4;
@@ -481,7 +528,7 @@ SU.step = function(G){
   /* PMF drifts toward target (takes 2-3 months) */
   var star=SU.pmfStar(G); G.pmf+=0.4*(star-G.pmf); G.pmf=clamp(G.pmf,0,100);
   /* demand */
-  var d = G.arch==='smb'? demandSMB(G,E,S) : G.arch==='consumer'? demandConsumer(G,E,S) : demandMarket(G,E,S);
+  var d = G.arch==='smb'? demandSMB(G,E,S) : G.arch==='consumer'? demandConsumer(G,E,S) : G.arch==='venue'? demandVenue(G,E,S) : demandMarket(G,E,S);
   var rev=d.revenue; G.mrrPrev=G.mrr; G.mrr=rev; G.mrrHist.push(rev); if(G.mrrHist.length>60) G.mrrHist.shift();
   if(rev>0) SU.drv(G,'cash',rev,'Revenue');
   /* rivals */
@@ -536,7 +583,7 @@ SU.advance = function(G,months){ var out={shipped:[],filled:[]}; for(var i=0;i<m
 /* valuation (paper EV) */
 SU.valuation = function(G){
   var E=SU.era(G), arr=SU.arr(G), g=SU.growthMo(G), yoy=Math.pow(1+clamp(g,-0.2,0.5),12)-1;
-  var gm=G.arch==='smb'?0.78:G.arch==='consumer'?0.72:0.5, gmAdj=gm>=0.75?1:gm>=0.6?0.75:0.45;
+  var gm=G.arch==='smb'?0.78:G.arch==='consumer'?0.72:G.arch==='venue'?0.55:0.5, gmAdj=gm>=0.75?1:gm>=0.6?0.75:0.45;
   var nrr=clamp(1-(G.stat.churnRate||0.04)*12*0.5+0.1,0.8,1.3);
   var ev=arr*E.mult*clamp(0.35+0.65*yoy,0.35,2.3)*gmAdj*nrr;
   return Math.max(ev, 0);

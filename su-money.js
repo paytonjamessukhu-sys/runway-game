@@ -165,6 +165,7 @@ M.eligible=function(G,stage,ask,opts){
   opts=opts||{}; var t=G.year+(G.month-1)/12;
   return SU.INVESTORS.filter(function(i){
     if(i.stages.indexOf(stage)<0) return false; if(t<i.from||t>i.to) return false;
+    if(G.arch==='venue'){ if(!i.venue) return false; } else if(i.venue==='only') return false;
     if(i.id==='kiln' && stage!=='preseed') return false;
     if(ask<i.check[0]*0.4||ask>i.check[1]*2.5) return false;
     if(opts.bridge && !(G.rounds.some(function(r){ return r.leads && r.leads.indexOf(i.id)>=0; }))) return false;
@@ -428,6 +429,7 @@ M.makeOffer=function(G){
   if(threat) types.push({buyer:'Gargantua Systems',mult:SU.lerp(1.3,1.6,SU.rnd(G,'events')),kind:'incumbent'});
   if(G.mrr>0 && SU.fin(G).burn<0) types.push({buyer:'a private equity firm',mult:SU.lerp(0.8,1.0,SU.rnd(G,'events')),kind:'pe'});
   var eng=SU.count(G,'eng')+1; var acq={buyer:'a big company that likes your team',mult:0,kind:'acquihire',price:Math.round(eng*SU.lerp(1e6,2e6,SU.rnd(G,'events'))/1e4)*1e4};
+  if(G.arch==='venue'){ acq={buyer:'a local restaurant group that wants your room',mult:0,kind:'strategic',price:Math.round(Math.max(120e3,(G.mrr||0)*SU.lerp(5,8,SU.rnd(G,'events')))/1e4)*1e4}; types=types.filter(function(x){ return x.kind!=='incumbent'; }); }
   types.push(acq);
   var t=SU.pick(G,types,'events'); var price=t.price||Math.round(ev*t.mult/1e5)*1e5;
   if(!t.price && price<5e5) { t=acq; price=acq.price; }

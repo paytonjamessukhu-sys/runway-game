@@ -40,6 +40,7 @@ A.build=function(G,cl,ctx,r){
   if(p.plat && G.feat && G.feat[p.plat]){ note(r,'You already shipped that.'); r.status='warn'; return; }
   if(p.plat && G.queue.some(function(q){ return q.plat===p.plat; })){ note(r,'That is already in the queue.'); r.status='warn'; return; }
   var tags=SU.featureTags(G,p.feature);
+  if(G.arch==='venue'){ var bc=p.scope*700; if(G.cash<bc){ note(r,'You need '+fm(bc-G.cash)+' more to build that.'); r.status='warn'; return; } spend(G,bc,'Build-out: '+(p.name||p.feature)); note(r,'Paid '+fm(bc)+' for the build-out.'); }
   var f={id:'f'+(++G.fid),name:p.name||p.feature,scope:p.scope,progress:0,care:p.care,tags:p.plat?[]:tags,born:G.t,plat:p.plat||null,lvl:p.lvl||1};
   G.queue.push(f);
   var V=Math.max(0.1,SU.velocity(G)); var months=(G.queue.reduce(function(a,x){ return a+x.scope-x.progress; },0))/V;
@@ -64,7 +65,7 @@ A.compliance=function(G,cl,ctx,r){
   why(r,'Finance and healthcare buyers want proof. It also lowers breach risk.');
 };
 A.price=function(G,cl,ctx,r){
-  var p=cl.params, c=G.cust, S=seg(G), old=(G.arch==='market')?c.take:c.price; G.flags.priceTried=true;
+  var p=cl.params, c=G.cust, S=seg(G), old=(G.arch==='market')?c.take:c.price; G.flags.priceTried=true; if(G.arch==='venue') G.flags.tabRaisedAt=G.mi;
   if(G.arch==='market'){
     var tk=p.take||(p.pctChange? c.take*(1+p.pctChange) : null) || (p.amount&&p.amount<1? p.amount : null);
     if(!tk){ note(r,'Tell me the take rate you want, for example "take 12%".'); r.status='warn'; return; }
@@ -301,6 +302,18 @@ A.redteam=function(G,cl,ctx,r){
   if(G.flavor!=='ai'){ note(r,'Only AI companies red-team models.'); r.status='warn'; return; }
   spend(G,20000,'Red team'); G.flags.redteamUntil=G.mi+8; G.trust.cust=clamp(G.trust.cust+4,0,100); G.reg=Math.max(0,(G.reg||0)-4); note(r,'A red team broke the model on purpose and you fixed what they found. Fewer incidents for the next 8 months. Trust +4.');
 };
+SU.NIGHTS={trivia:{name:'trivia night',cost:500,pct:0.10,hype:3},band:{name:'live band',cost:1500,pct:0.22,hype:6},dj:{name:'DJ night',cost:2500,pct:0.35,hype:9},game:{name:'game-day special',cost:800,pct:0.15,hype:4}};
+A.night=function(G,cl,ctx,r){
+  if(G.arch!=='venue'){ note(r,'Only venues host nights.'); r.status='warn'; return; }
+  var n=SU.NIGHTS[cl.params.kind]||SU.NIGHTS.trivia; if(G.cash<n.cost){ note(r,'You need '+fm(n.cost-G.cash)+' more.'); r.status='warn'; return; }
+  spend(G,n.cost,'Hosted a '+n.name); G.cust.boost=(G.cust.boost||0)+n.pct*ctx.eff; G.hype=clamp(G.hype+n.hype*ctx.eff,0,100);
+  var risk=cl.params.kind==='dj'&&!(G.flags.noisewarn&&G.flags.noisewarn>G.mi-3)&&SU.chance(G,0.18,'events'); if(risk){ G.flags.noisewarn=G.mi; G.incidents+=1; G.trust.cust=clamp(G.trust.cust-3,0,100); note(r,'The neighbors complained about the noise.'); }
+  note(r,'Hosted a '+n.name+' for '+fm(n.cost)+'. About '+Math.round(n.pct*100)+'% more guests this month. Buzz +'+n.hype+'.');
+};
+A.happyhour=function(G,cl,ctx,r){ if(G.arch!=='venue'){ note(r,'Only venues run happy hours.'); r.status='warn'; return; } G.cust.hh=!!cl.params.on; note(r,cl.params.on?'Happy hour is on: about 18% more guests, but every tab is about 18% smaller.':'Happy hour is over. Full-price tabs again.'); };
+A.menu=function(G,cl,ctx,r){ if(G.arch!=='venue'){ note(r,'Only venues have menus.'); r.status='warn'; return; } if(G.cash<2500){ note(r,'You need '+fm(2500-G.cash)+' more.'); r.status='warn'; return; } spend(G,2500,'New menu'); G.Q=Math.min(100,G.Q+6*ctx.eff); G.flags.menuQ=1; G.cust.price=Math.round(G.cust.price*1.03*100)/100; note(r,'A fresh menu for '+fm(2500)+'. Quality +6, tabs up 3%, and you waste a little less.'); };
+A.hours=function(G,cl,ctx,r){ if(G.arch!=='venue'){ note(r,'Only venues keep hours.'); r.status='warn'; return; } var n=Math.max(3,Math.min(7,cl.params.nights||5)); G.cust.nights=n; note(r,'Now open '+n+' nights a week.'+(n>5&&!(G.feat&&G.feat.late)?' Without a late-night license, nights 6 and 7 only do about half as well.':'')+(n>5?' Extra nights cost about $900 each in overtime.':'')); };
+A.renovate=function(G,cl,ctx,r){ if(G.arch!=='venue'){ note(r,'Only venues renovate.'); r.status='warn'; return; } if(G.cash<12000){ note(r,'You need '+fm(12000-G.cash)+' more.'); r.status='warn'; return; } spend(G,12000,'Renovation'); G.Q=Math.min(100,G.Q+8*ctx.eff); G.D=Math.max(0,G.D-12); G.hype=clamp(G.hype+3,0,100); note(r,'The room is fresh: quality +8, wear down 12, buzz +3. It cost '+fm(12000)+'.'); };
 A.rival=function(G,cl,ctx,r){
   var p=cl.params; var rv=G.rivals.filter(function(x){ return x.id===p.rival; })[0] || G.rivals.filter(function(x){ return x.active; })[0];
   if(!rv){ note(r,'No rival to deal with.'); r.status='warn'; return; }

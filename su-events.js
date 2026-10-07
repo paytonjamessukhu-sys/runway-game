@@ -6,7 +6,8 @@ var Ev = (SU.Events = {});
 var DEFS = SU.EV = {};
 var LIST = SU.EVLIST = [];
 
-function def(o){ DEFS[o.id]=o; LIST.push(o); }
+var VENUE_NO={scalingWall:1,priceWar:1,copycat:1,gargantua:1,rugpull:1,whale:1,viral:1,featureStorm:1,forumFront:1,techpulse:1,chirp3am:1,ev_dark:1,ev_data:1,tourist:1,covenant:1,ledger:1,aihalluc:1,tokencut:1};
+function def(o){ if(VENUE_NO[o.id]){ var c0=o.cond; o.cond=function(G){ if(G.arch==='venue') return false; return c0.apply(this,arguments); }; } DEFS[o.id]=o; LIST.push(o); }
 function P(G,id){ if(id==='co') return G.co; for(var i=0;i<G.team.length;i++) if(G.team[i].id===id) return G.team[i]; return null; }
 function first(n){ return n? n.split(' ')[0] : 'them'; }
 function didMap(cl){ var m={}; cl.forEach(function(c){ (m[c.lever]=m[c.lever]||[]).push(c); }); return m; }
@@ -107,6 +108,38 @@ def({id:'featureStorm',cat:'product',sev:1,minAct:2,w:1.2,cd:99,tension:-5,
   levers:['talk','build'],
   resolve:function(G,c,did){ G.flags.stormDone=true; var n=G.needs.filter(function(x){ return x.id===c.nid; })[0]; if(did.talk){ if(n) n.revealed=true; G.insight=clamp(G.insight+8,0,100); return {good:true,note:'Interviews showed they ask for it but do not pay for it. A teaching moment.'}; } if(did.build){ G.bloat+=3; return {note:'You built what loud users asked for. It did not move retention.'}; } return {}; },
   ignore:function(G){ G.flags.stormDone=true; fx(G,{morale:-1}); return {note:'The tickets piled up. Support is grumpy.'}; }});
+def({id:'inspection',cat:'product',sev:1,minAct:1,w:1.0,cd:10,tension:6,
+  cond:function(G){ return G.arch==='venue' && G.shipped.length>0 && G.mi>=4 && G.D>=15; },bind:function(){ return {}; },
+  title:function(){ return 'The health inspector is at the door'; },
+  body:function(G){ return 'A clipboard, a thermometer and a long look at the back of house. Wear and grime is '+Math.round(G.D)+' right now.'; },
+  chips:function(){ return [{label:'Scrub like crazy',text:'pay down tech debt'}]; },
+  levers:['refactor'],
+  resolve:function(G,c,did){ if(did.refactor){ G.D=Math.max(0,G.D-10); fx(G,{trust:{cust:2}}); return {good:true,note:'You scrubbed everything in an hour. They found nothing. Wear down 10.'}; } return {}; },
+  ignore:function(G){ if(G.D<30){ return {good:true,note:'They checked everything, nodded and left. Clean enough.'}; } var fine=Math.round(900+G.D*40); G.cash-=fine; SU.drv(G,'cash',-fine,'Health violation'); G.cust.rating=Math.max(1,G.cust.rating-0.25); fx(G,{trust:{cust:-4}}); return {note:'A violation posted on the door and a '+fm(fine)+' fine. The rating dipped.'}; }});
+def({id:'goodreview',cat:'market',sev:0,minAct:1,w:0.9,cd:12,tension:-8,
+  cond:function(G){ return G.arch==='venue' && G.shipped.length>0 && G.cust.rating>=3.4 && G.mi>=3; },bind:function(){ return {}; },
+  title:function(){ return 'A local food blogger raved about you'; },
+  body:function(){ return 'Four thousand followers just read that your place is the best kept secret in the neighborhood. The secret is out.'; },
+  chips:function(){ return [{label:'Lean into it',text:'spend $1000 on social media this month'}]; },
+  levers:['market'],
+  resolve:function(G,c,did){ var gain=Math.round(8+G.cust.regulars*0.1); G.cust.regulars+=gain; G.hype=clamp(G.hype+(did.market?12:8),0,100); return {good:true,note:'+'+gain+' regulars and a line out the door on Friday.'+(did.market?' You doubled down on social while it was hot.':'')}; },
+  ignore:function(G){ G.hype=clamp(G.hype+6,0,100); G.cust.regulars+=4; return {good:true,note:'A few extra faces, and a little more buzz.'}; }});
+def({id:'rentHike',cat:'money',sev:1,minAct:1,w:0.8,cd:99,tension:8,
+  cond:function(G){ return G.arch==='venue' && G.mi>=8 && !G.flags.rentHike; },bind:function(){ return {}; },
+  title:function(){ return 'The landlord is raising your rent'; },
+  body:function(G){ return 'Twelve percent, starting next month. That is about '+fm(Math.round(SU.Shop.rent(G)*0.12))+' a month you did not plan for.'; },
+  chips:function(){ return [{label:'Raise prices a little',text:'raise prices 3%'}]; },
+  levers:['price'],
+  resolve:function(G,c,did){ G.flags.rentHike=true; G.rentMult=1.12; if(did.price) return {good:true,note:'You passed some of it on. Regulars grumbled, and then paid.'}; return {note:'Rent is up 12% for good. Your margin took the hit.'}; },
+  ignore:function(G){ G.flags.rentHike=true; G.rentMult=1.12; return {note:'Rent is up 12% for good. Your margin took the hit.'}; }});
+def({id:'supplier',cat:'money',sev:1,minAct:1,w:0.8,cd:99,tension:4,
+  cond:function(G){ return G.arch==='venue' && G.mi>=6 && !G.flags.supplierUp; },bind:function(){ return {}; },
+  title:function(){ return 'Your supplier raised prices'; },
+  body:function(){ return 'Liquor, produce and glassware all cost more. Your pour cost just went up about 2 points for half a year.'; },
+  chips:function(){ return [{label:'Raise prices 4%',text:'raise prices 4%'}]; },
+  levers:['price'],
+  resolve:function(G,c,did){ G.flags.supplierUp=G.mi+6; if(did.price) return {good:true,note:'You raised prices 4% and mostly kept your margin.'}; return {note:'Pour cost is up about 2 points for six months.'}; },
+  ignore:function(G){ G.flags.supplierUp=G.mi+6; return {note:'Pour cost is up about 2 points for six months.'}; }});
 def({id:'aihalluc',cat:'product',sev:2,minAct:1,w:1.1,cd:7,tension:10,
   cond:function(G){ return G.flavor==='ai' && G.mi>=5 && SU.custCount(G)>=3 && !(G.flags.redteamUntil>G.mi) && !(G.feat&&G.feat.guardrails&&SU.chance(G,0.6,'events')); },bind:function(){ return {}; },
   title:function(){ return 'Your model told a customer something false'; },
@@ -360,7 +393,7 @@ function offers(G,rec){
   if(G.offer){ G.offer.left--; if(G.offer.left<0){ SU.inbox(G,{kind:'info',title:'The offer expired',body:G.offer.buyer+' moved on.'}); G.offer=null; } return; }
   if(G.banker){ G.banker--; if(G.banker<=0){ G.banker=0; DEFS.offer.fire(G); return; } }
   if(G.act>=3 && SU.chance(G,SU.turnMonths(G)*(0.1+0.2*G.hype/100+(G.rivals.some(function(r){ return r.id==='gargantua'&&r.active; })?0.3:0))/3,'events')) DEFS.offer.fire(G);
-  else if(G.act>=2 && SU.fin(G).runway<4 && SU.fin(G).burn>0 && SU.headcount(G)>=4 && SU.chance(G,0.12,'events')){ var o=M.makeOffer(G); o.kind='acquihire'; o.buyer='a big company that wants your team'; o.price=Math.round((SU.count(G,'eng')+1)*1.4e6/1e4)*1e4; o.struct='cash, with 2-year retention packages'; G.offer=o; SU.inbox(G,{kind:'opp',title:'ACQUI-HIRE OFFER',body:fm(o.price)+' for the team. It is not a great price, but it is a soft landing.',action:{type:'offer'}}); }
+  else if(G.act>=2 && SU.fin(G).runway<4 && SU.fin(G).burn>0 && SU.headcount(G)>=4 && SU.chance(G,0.12,'events')){ var o=M.makeOffer(G); o.kind=(G.arch==='venue'?'strategic':'acquihire'); o.buyer=(G.arch==='venue'?'a local restaurant group that wants your room':'a big company that wants your team'); o.price=Math.round((SU.count(G,'eng')+1)*1.4e6/1e4)*1e4; o.struct='cash, with 2-year retention packages'; G.offer=o; SU.inbox(G,{kind:'opp',title:'ACQUI-HIRE OFFER',body:fm(o.price)+' for the team. It is not a great price, but it is a soft landing.',action:{type:'offer'}}); }
 }
 function ipoStep(G,rec){
   if(!G.ipo||!G.ipo.open) return;

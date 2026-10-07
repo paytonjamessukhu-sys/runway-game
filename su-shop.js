@@ -12,7 +12,16 @@ SU.SPACES = {
 };
 SU.SPACE_ORDER=['garage','studio','office','hq'];
 SU.SPACE_NAMES={ai:{garage:'The Garage (one GPU)',studio:'The Lab Loft',office:'The Research Floor',hq:'The AI Campus'}};
-SU.spaceName=function(G,id){ var a=SU.SPACE_NAMES[G&&G.biz]; return (a&&a[id])||SU.SPACES[id].name; };
+SU.SPACE_DATA={
+  bar:{
+    garage:{name:'The Hole in the Wall',seats:5,guests:24,rent:3200,deposit:8000,blurb:'Twenty-four guests, a short bar, and a landlord who answers on Sundays.'},
+    studio:{name:'The Neighborhood Bar',seats:8,guests:40,rent:7200,deposit:20000,blurb:'Forty guests, a proper back bar, a few tables and room for a band.'},
+    office:{name:'The Gastropub',seats:14,guests:66,rent:15500,deposit:55000,blurb:'Sixty-six guests, a real kitchen line and a private room.'},
+    hq:{name:'The Flagship',seats:30,guests:110,rent:32000,deposit:130000,blurb:'A hundred and ten guests, a stage, a rooftop and your name over the door.'}
+  }
+};
+SU.spaceName=function(G,id){ var d=SU.SPACE_DATA[G&&G.biz]; if(d&&d[id]) return d[id].name; var a=SU.SPACE_NAMES[G&&G.biz]; return (a&&a[id])||SU.SPACES[id].name; };
+SU.spaceInfo=function(G,id){ var sp=SU.SPACES[id], d=SU.SPACE_DATA[G&&G.biz]; var o={}; for(var k in sp) o[k]=sp[k]; if(d&&d[id]){ for(var k2 in d[id]) o[k2]=d[id][k2]; } else o.name=SU.spaceName(G,id); return o; };
 
 /* ------------------------------------------------------------ upgrades (visible in the office) */
 SU.UPGRADES = [
@@ -33,46 +42,62 @@ SU.UPGRADES = [
   {id:'gameroom',name:'Game room',cost:8000,min:'office',needs:'lounge',fx:{morale:4},text:'Morale +4. Ping pong is now a meeting.',blurb:'Level 2 of the Lounge.'},
   {id:'rooftop',name:'Rooftop terrace',cost:30000,min:'hq',needs:'lounge',fx:{morale:5,sanity:1},text:'Morale +5 and sanity +1 every month.',blurb:'Sunset standups.'}
 ];
-SU.upgrade=function(id){ return SU.UPGRADES.filter(function(u){ return u.id===id; })[0]; };
+SU.UPGRADES_BIZ={
+  bar:[
+    {id:'jukebox',name:'Jukebox',cost:1800,min:'garage',fx:{traffic:0.04,rating:0.05},text:'More walk-ins and a slightly better rating.',blurb:'Real vinyl, a glowing front, and a $1 song.'},
+    {id:'lights',name:'Warm lighting',cost:1200,min:'garage',fx:{rating:0.1},text:'Guests rate the room higher.',blurb:'Everyone looks better at 2700 Kelvin.'},
+    {id:'sign',name:'Neon sign',cost:1500,min:'garage',fx:{hypeFloor:8,traffic:0.03},text:'Buzz never falls below 8 and more people stop in.',blurb:'Your name, glowing over the door.'},
+    {id:'pool',name:'Pool table',cost:3200,min:'studio',fx:{traffic:0.05,churn:-0.1},text:'More walk-ins, and regulars stay longer.',blurb:'Quarters on the rail. Nobody leaves mid-game.'},
+    {id:'tvs',name:'Big screens',cost:2800,min:'garage',fx:{traffic:0.08},text:'A lot more walk-ins on game nights.',blurb:'Every seat has a view.'},
+    {id:'booths',name:'Booths and good stools',cost:3500,min:'studio',fx:{rating:0.12,tab:0.03},text:'Better rating and guests stay and spend longer.',blurb:'Nobody lingers on a bad stool.'},
+    {id:'cat',name:'Bar cat',cost:300,min:'garage',fx:{rating:0.05,hypeFloor:5},text:'A small bump to buzz and rating.',blurb:'Whiskey owns the place. He does no work.'},
+    {id:'stage',name:'Small stage',cost:6500,min:'studio',fx:{traffic:0.06,tab:0.02},text:'More walk-ins and a bigger tab on live nights.',blurb:'A riser, two lights and a mic that works about half the time.'},
+    {id:'heaters',name:'Patio heaters',cost:2600,min:'studio',needs:'patio',fx:{traffic:0.05},text:'The patio works in the cold, so more walk-ins.',blurb:'Level 2 of the patio.'},
+    {id:'vip',name:'Private room',cost:12000,min:'office',fx:{tab:0.05,rating:0.06},text:'Bigger tabs from groups, and a better rating.',blurb:'Birthdays, rehearsal dinners, one very quiet board meeting.'}
+  ]
+};
+SU.upgradesFor=function(G){ return (G&&SU.UPGRADES_BIZ[G.biz])||SU.UPGRADES; };
+SU.upgrade=function(id,G){ var all=SU.UPGRADES.concat(SU.UPGRADES_BIZ.bar); var pool=G?SU.upgradesFor(G):all; return pool.filter(function(u){ return u.id===id; })[0]||all.filter(function(u){ return u.id===id; })[0]; };
 
 SU.Shop = {
   has:function(G,id){ return !!(G.shop && G.shop[id]); },
-  owned:function(G){ return SU.UPGRADES.filter(function(u){ return G.shop && G.shop[u.id]; }); },
+  owned:function(G){ return SU.upgradesFor(G).filter(function(u){ return G.shop && G.shop[u.id]; }); },
+  sum:function(G,k){ var s=0; SU.Shop.owned(G).forEach(function(u){ s+=u.fx[k]||0; }); return s; },
   morale:function(G){ var s=0; SU.Shop.owned(G).forEach(function(u){ s+=u.fx.morale||0; }); return s; },
   vel:function(G){ var s=0; SU.Shop.owned(G).forEach(function(u){ s+=u.fx.vel||0; }); return 1+s; },
   sanity:function(G){ var s=0; SU.Shop.owned(G).forEach(function(u){ s+=u.fx.sanity||0; }); return s; },
   hypeFloor:function(G){ var s=0; SU.Shop.owned(G).forEach(function(u){ s=Math.max(s,u.fx.hypeFloor||0); }); return s; },
   incident:function(G){ var s=1; SU.Shop.owned(G).forEach(function(u){ if(u.fx.incident) s*=u.fx.incident; }); return s; },
-  space:function(G){ var sp=SU.SPACES[G.space||'garage']; var o={}; for(var k in sp) o[k]=sp[k]; o.name=SU.spaceName(G,sp.id); return o; },
+  space:function(G){ return SU.spaceInfo(G,G.space||'garage'); },
   rent:function(G){ return SU.Shop.space(G).rent; },
   seats:function(G){ return SU.Shop.space(G).seats; },
   over:function(G){ return Math.max(0,SU.headcount(G)-SU.Shop.seats(G)); },
   crampedMorale:function(G){ return Math.min(12,1.5*SU.Shop.over(G)); },
   crampedVel:function(G){ return clamp(1-0.04*SU.Shop.over(G),0.6,1); },
   canBuy:function(G,id){
-    var u=SU.UPGRADES.filter(function(x){ return x.id===id; })[0]; if(!u) return {ok:false,why:'Unknown item.'};
+    var u=SU.upgradesFor(G).filter(function(x){ return x.id===id; })[0]; if(!u) return {ok:false,why:'Unknown item.'};
     if(G.shop&&G.shop[id]) return {ok:false,why:'You already have it.'};
-    if(u.needs && !(G.shop&&G.shop[u.needs])) return {ok:false,why:'Needs '+SU.upgrade(u.needs).name+' first.'};
+    if(u.needs && !(G.shop&&G.shop[u.needs])) return {ok:false,why:'Needs '+((SU.upgrade(u.needs,G)||{}).name||u.needs)+' first.'};
     if(SU.SPACE_ORDER.indexOf(G.space||'garage')<SU.SPACE_ORDER.indexOf(u.min)) return {ok:false,why:'Needs '+SU.SPACES[u.min].name+' or bigger.'};
     if(G.cash<u.cost) return {ok:false,why:'Need '+fm(u.cost-G.cash)+' more.'};
     return {ok:true};
   },
   buy:function(G,id){
-    var c=SU.Shop.canBuy(G,id); if(!c.ok) return c; var u=SU.UPGRADES.filter(function(x){ return x.id===id; })[0];
+    var c=SU.Shop.canBuy(G,id); if(!c.ok) return c; var u=SU.upgradesFor(G).filter(function(x){ return x.id===id; })[0];
     G.cash-=u.cost; G.shop=G.shop||{}; G.shop[id]=G.t+1; SU.drv(G,'cash',-u.cost,u.name);
     if(u.fx.morale) G.morale=clamp(G.morale+u.fx.morale,0,100); if(id==='sign') G.hype=clamp(G.hype+3,0,100); if(id==='dog') G.morale=clamp(G.morale+2,0,100);
     SU.journal(G,'Bought: '+u.name+' ('+fm(u.cost)+').','shop',false);
     return {ok:true,msg:u.name+' is in. '+u.text};
   },
   canMove:function(G,to){
-    var sp=SU.SPACES[to]; if(!sp||to===G.space) return {ok:false,why:'You are already here.'};
+    var sp=SU.SPACES[to]&&SU.spaceInfo(G,to); if(!sp||to===G.space) return {ok:false,why:'You are already here.'};
     var up=SU.SPACE_ORDER.indexOf(to)>SU.SPACE_ORDER.indexOf(G.space||'garage');
     if(up && G.cash<sp.deposit) return {ok:false,why:'Need '+fm(sp.deposit-G.cash)+' more for the deposit.',up:up};
     if(!up && SU.headcount(G)>sp.seats) return {ok:false,why:'Too many people for '+sp.seats+' seats.',up:up};
     return {ok:true,up:up};
   },
   move:function(G,to){
-    var c=SU.Shop.canMove(G,to); if(!c.ok) return c; var sp=SU.SPACES[to];
+    var c=SU.Shop.canMove(G,to); if(!c.ok) return c; var sp=SU.spaceInfo(G,to);
     if(c.up){ G.cash-=sp.deposit; SU.drv(G,'cash',-sp.deposit,'Office deposit'); G.morale=clamp(G.morale+6,0,100); G.hype=clamp(G.hype+4,0,100); }
     else { G.morale=clamp(G.morale-5,0,100); G.hype=clamp(G.hype-3,0,100); }
     G.space=to; SU.journal(G,(c.up?'Moved into ':'Moved down to ')+sp.name+'.','shop',c.up);
@@ -81,21 +106,22 @@ SU.Shop = {
 };
 
 /* ------------------------------------------------------------ company level: a title that grows as the company does (shows in the HUD, trophies appear in the office) */
+function lvScale(G){ return G.arch==='venue'?0.35:1; }
 SU.LEVELS = [
   {n:1,title:'Napkin sketch',hint:'Just an idea.',test:function(G){ return true; }},
   {n:2,title:'Prototype',hint:'Ship your first product.',test:function(G){ return G.shipped.length>=1; }},
   {n:3,title:'First dollars',hint:'Land your first paying customer.',test:function(G){ return SU.custCount(G)>=1 && (G.mrr||0)>0; }},
   {n:4,title:'Real team',hint:'Grow to 3 people.',test:function(G){ return SU.headcount(G)>=3; }},
   {n:5,title:'Funded',hint:'Raise your first round.',test:function(G){ return G.rounds.length>=1; }},
-  {n:6,title:'Gaining ground',hint:'Reach $25K a month.',test:function(G){ return (G.mrr||0)>=25000; }},
-  {n:7,title:'Scale-up',hint:'12 people and $100K a month.',test:function(G){ return SU.headcount(G)>=12 && (G.mrr||0)>=100000; }},
-  {n:8,title:'Big leagues',hint:'Two rounds raised and $500K a month.',test:function(G){ return G.rounds.length>=2 && (G.mrr||0)>=500000; }},
-  {n:9,title:'Market leader',hint:'Reach $2M a month.',test:function(G){ return (G.mrr||0)>=2e6; }},
-  {n:10,title:'Unicorn',hint:'Reach $8M a month.',test:function(G){ return (G.mrr||0)>=8e6; }}
+  {n:6,title:'Gaining ground',hint:'Reach $25K a month.',test:function(G){ return (G.mrr||0)>=25000*lvScale(G); }},
+  {n:7,title:'Scale-up',hint:'12 people and $100K a month.',test:function(G){ return SU.headcount(G)>=(G.arch==='venue'?8:12) && (G.mrr||0)>=100000*lvScale(G); }},
+  {n:8,title:'Big leagues',hint:'Two rounds raised and $500K a month.',test:function(G){ return G.rounds.length>=2 && (G.mrr||0)>=500000*lvScale(G); }},
+  {n:9,title:'Market leader',hint:'Reach $2M a month.',test:function(G){ return (G.mrr||0)>=2e6*lvScale(G); }},
+  {n:10,title:'Unicorn',hint:'Reach $8M a month.',test:function(G){ return (G.mrr||0)>=8e6*lvScale(G); }}
 ];
 SU.Level = {
   calc:function(G){ var n=1; SU.LEVELS.forEach(function(l){ if(l.test(G)) n=Math.max(n,l.n); }); n=Math.max(n,G.lvl||1); return n; },
-  info:function(G){ var n=SU.Level.calc(G); return {n:n,cur:SU.LEVELS[n-1],next:SU.LEVELS[n]||null}; },
+  info:function(G){ var n=SU.Level.calc(G); var nx=SU.LEVELS[n]||null; if(nx&&G.arch==='venue'){ var hm={6:25000,7:100000,8:500000,9:2e6,10:8e6}[nx.n]; if(hm){ var cp={}; for(var k in nx) cp[k]=nx[k]; cp.hint=nx.n===7?'8 people and '+SU.fmtMoney(hm*0.35)+' a month.':nx.n===8?'Two rounds raised and '+SU.fmtMoney(hm*0.35)+' a month.':'Reach '+SU.fmtMoney(hm*0.35)+' a month.'; nx=cp; } } return {n:n,cur:SU.LEVELS[n-1],next:nx}; },
   /* returns the new level when it just went up, else 0 */
   check:function(G){ var n=SU.Level.calc(G), was=G.lvl||1; G.lvl=n; return n>was?n:0; }
 };
@@ -111,9 +137,15 @@ SU.PLAT = {
   rag:{biz:'ai',name:'Retrieval over customer data',scope:14,minAct:1,effect:'The model uses the customer\u2019s own documents: model quality +8 and it decays more slowly.',shipped:'The model now answers from the customer\u2019s own data. Quality +8.',onShip:function(G){ G.Q=Math.min(100,G.Q+8); }},
   finetune:{biz:'ai',name:'Customer fine-tuning',scope:20,minAct:2,effect:'Deals close easier: close rate up about 15%.',shipped:'Customers can tune the model to their own work. Close rate is up about 15%.'},
   guardrails:{biz:'ai',name:'Safety guardrails',scope:16,minAct:2,effect:'Fewer incidents and bigger customers say yes.',shipped:'Guardrails catch the worst answers. Incidents are rarer and cautious buyers relax.'},
+  pos:{biz:'bar',name:'POS system',scope:6,minAct:1,effect:'Fewer mistakes and walkouts: costs fall about 1.5 points, and the room turns tables faster.',shipped:'Orders flow to the bar and the kitchen. Fewer mistakes, faster tables.'},
+  kitchen:{biz:'bar',name:'Kitchen',scope:14,minAct:1,effect:'Food brings in a different crowd: average tab up about 8%. A chef makes it better.',shipped:'The kitchen is open. Tabs are up about 8%.'},
+  patio:{biz:'bar',name:'Patio',scope:10,minAct:1,effect:'About 20% more room in nice weather.',shipped:'The patio is open. About 20% more room for guests.'},
+  sound:{biz:'bar',name:'Stage and sound',scope:8,minAct:1,effect:'Hosted nights bring in about 20% more.',shipped:'Live nights sound like live nights now.'},
+  late:{biz:'bar',name:'Late-night license',scope:6,minAct:1,effect:'You can open 6 or 7 nights at full strength.',shipped:'Your late license came through. Open as many nights as you like.'},
+  loyalty:{biz:'bar',name:'Regulars card',scope:6,minAct:1,effect:'Regulars come back: they leave about 20% more slowly.',shipped:'A punch card and a birthday drink. Regulars stay longer.'},
   sso:{name:'Security: SSO and audit logs',scope:20,minAct:2,effect:'Bigger customers say yes. Finance buyers stop hesitating.',shipped:'Security reviews stop being a blocker. Bigger customers are saying yes.'}
 };
-SU.PLAT_ORDER=['dashboard','onboarding','mobile','referrals','integrations','sso','evals','rag','finetune','guardrails'];
+SU.PLAT_ORDER=['dashboard','onboarding','mobile','referrals','integrations','sso','evals','rag','finetune','guardrails','pos','kitchen','patio','sound','late','loyalty'];
 
 /* ------------------------------------------------------------ goals */
 function lvl(cur,max,money){ return {cur:Math.min(cur,max),max:max,money:!!money}; }

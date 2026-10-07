@@ -61,7 +61,7 @@ SU.LEVERS = {
   talk:{name:'Customer talks'}, build:{name:'Build'}, refactor:{name:'Refactor'}, compliance:{name:'Compliance'}, price:{name:'Pricing'}, market:{name:'Marketing'},
   outbound:{name:'Outbound'}, launch:{name:'Launch'}, hire:{name:'Hire'}, fire:{name:'Layoff'}, comp:{name:'Compensation'}, culture:{name:'Culture'},
   fundraise:{name:'Fundraise'}, finance:{name:'Finance'}, pivot:{name:'Pivot'}, ethics:{name:'Shortcut'}, self:{name:'Founder care'}, talkto:{name:'Talk to people'},
-  rival:{name:'Rivals'}, exit:{name:'Exit'}, train:{name:'Train a model'}, optimize:{name:'Optimize serving'}, redteam:{name:'Red team'}
+  rival:{name:'Rivals'}, exit:{name:'Exit'}, train:{name:'Train a model'}, night:{name:'Host a night'}, happyhour:{name:'Happy hour'}, menu:{name:'Menu'}, hours:{name:'Hours'}, renovate:{name:'Renovate'}, optimize:{name:'Optimize serving'}, redteam:{name:'Red team'}
 };
 var PRIORITY = ['ethics','fire','comp','exit','finance','hire','fundraise','price','outbound','launch','market','talk','compliance','refactor','pivot','build','culture','talkto','rival','self'];
 
@@ -303,6 +303,11 @@ SU.focusCost = function(G, cl){
     case 'talkto': f=1; break;
     case 'rival': f=2; break;
     case 'train': f=(p.size==='small'?1:2); break;
+    case 'night': f=1; break;
+    case 'happyhour': f=0.5; break;
+    case 'menu': f=1; break;
+    case 'hours': f=0.5; break;
+    case 'renovate': f=2; break;
     case 'optimize': f=1; break;
     case 'redteam': f=1; break;
     case 'exit': f=(p.act==='shutdown'||p.act==='indie'||p.act==='accept')?0:3; break;
@@ -363,6 +368,11 @@ SU.describe = function(cl){
     case 'self': return 'Founder care: '+p.kind;
     case 'talkto': return 'Talk to '+p.aud;
     case 'rival': return 'Rival: '+p.act;
+    case 'night': return 'Host: '+({trivia:'trivia night',band:'live band',dj:'DJ night',game:'game-day special'}[p.kind]||'a night');
+    case 'happyhour': return p.on?'Start happy hour':'End happy hour';
+    case 'menu': return 'Refresh the menu';
+    case 'hours': return 'Open '+p.nights+' nights a week';
+    case 'renovate': return 'Renovate the room';
     case 'train': return 'Train a '+({small:'small',medium:'medium',large:'large'}[p.size]||'new')+' model';
     case 'optimize': return 'Optimize serving costs';
     case 'redteam': return 'Red-team the model';
