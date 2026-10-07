@@ -22,6 +22,14 @@ function $$(s,e){ return Array.prototype.slice.call((e||document).querySelectorA
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function store(k,v){ try{ if(v===undefined){ return localStorage.getItem('su_ui_'+k); } localStorage.setItem('su_ui_'+k,v); }catch(e){ return null; } }
 UI.$=$; UI.$$=$$; UI.esc=esc; UI.store=store;
+/* career records: best score, runs, and which endings you have seen */
+UI.ENDINGS={bell:'The Bell',sale:'Acquired',acquihire:'Acquihired',indie:'Profitable and free',shutdown:'Closed',fraud:'Fraud',coup:'Replaced as CEO',burnout:'Burned out',decade:'Ten years',zombie:'Zombie company'};
+UI.career=function(){ var c=null; try{ c=JSON.parse(store('career')||'null'); }catch(e){} return c||{runs:0,best:null,endings:{}}; };
+UI.recordRun=function(g){
+  var c=UI.career(), o=g.over; if(!o||g.recorded) return {career:c,newBest:false,newEnding:false};
+  g.recorded=true; c.runs++; var nb=!c.best||o.score>c.best.score; if(nb) c.best={score:o.score,name:g.name,title:o.title}; var ne=!c.endings[o.type]; c.endings[o.type]=(c.endings[o.type]||0)+1;
+  store('career',JSON.stringify(c)); try{ SU.save(g); }catch(e){} return {career:c,newBest:nb,newEnding:ne};
+};
 UI.G=function(){ return G; };
 UI.setG=function(g){ G=g; };
 var ICON={
@@ -93,8 +101,9 @@ function renderSetup(){
   var has=SU.hasSave() && SU.load();
   root.innerHTML='<div class="wiz"><div class="wiz-l"><div><div class="brandbig">RUN<span>WAY</span></div><p class="lead">Start a company. Each month you pick your moves with a few clicks and press Run. Keep the cash alive long enough to win.</p></div>'+
     '<div class="vis"><canvas id="heroCv"></canvas></div><div class="sumline" id="sum"></div>'+
-    '<div class="row">'+(has?'<button class="btn" data-act="continue">Continue: '+esc(has.name)+', '+esc(SU.dateStr(has))+'</button>':'')+'<button class="btn ghost sm" data-act="help">How it works</button><button class="btn ghost sm" data-act="import">Load a save code</button></div></div>'+
+    '<div class="xs muted" id="careerLine"></div><div class="row">'+(has?'<button class="btn" data-act="continue">Continue: '+esc(has.name)+', '+esc(SU.dateStr(has))+'</button>':'')+'<button class="btn ghost sm" data-act="help">How it works</button><button class="btn ghost sm" data-act="import">Load a save code</button></div></div>'+
     '<div class="card wiz-r"><div class="stepper" id="stepper"></div><div class="wiz-b" id="wizb"></div><div class="wiz-f" id="wizf"></div></div></div>';
+  (function(){ var c=UI.career(), n=Object.keys(c.endings).length; var el=$('#careerLine'); if(el&&c.runs) el.textContent='Career: '+c.runs+' run'+(c.runs===1?'':'s')+' \u00b7 best score '+(c.best?c.best.score:0)+' \u00b7 endings found '+n+' of 10'; })();
   renderWiz(); heroSync();
 }
 function ideaCard(i){
