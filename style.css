@@ -433,3 +433,7 @@ input[type=range]{width:100%;accent-color:var(--ink)}
 .sheetbars{gap:5px}
 .strip.stats4{grid-template-columns:repeat(3,minmax(0,1fr))}
 .st .v{font-size:15px}
+
+.rg{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:8px;display:flex;flex-direction:column;gap:3px;background:var(--panel)}
+.rgl{margin:0;padding-left:18px;font-size:12.5px;line-height:1.4}
+.pv.job a{color:#1b3c9c;font-weight:600;font-size:12px}

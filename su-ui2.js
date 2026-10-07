@@ -202,7 +202,7 @@ function pTeam(g){
   var tm=g.team, avg=function(fn){ return tm.length?tm.reduce(function(a,e){ return a+fn(e); },0)/tm.length:0; };
   h+='<div class="strip">'+stat('Build speed',SU.velocity(g).toFixed(1),'points a month')+stat('Avg skill',Math.round(avg(SU.skillRating)),tm.length?SU.RANKS[Math.round(avg(function(e){ return SU.rankOf(e).i; }))].name+' crew':'just you')+stat('Avg energy',Math.round(avg(SU.energyOf)),avg(SU.energyOf)<45?'Burnout risk':'Rested',avg(SU.energyOf)<45?'bad':'')+'</div>';
   h+='<div class="sec"><h4>People</h4><div class="rows">'+cands+list.slice(pg*pageSize,(pg+1)*pageSize).map(function(p){ return '<div class="rw click" data-act="person" data-id="'+p.id+'">'+avatar(p.nm,p.col)+'<div class="rm"><b>'+esc(p.nm)+'</b><div class="rs">'+esc(p.role)+(p.e?' &middot; '+SU.rankOf(p.e).name+' &middot; skill '+SU.skillRating(p.e)+' &middot; energy '+Math.round(SU.energyOf(p.e)):' &middot; '+p.bt)+'</div></div><div style="width:64px">'+good(p.bar)+'</div></div>'; }).join('')+reqs+'</div>'+(pages>1?'<div class="pager"><button class="btn sm ghost" data-act="page" data-k="team" data-d="-1">Prev</button>'+(pg+1)+' / '+pages+'<button class="btn sm ghost" data-act="page" data-k="team" data-d="1">Next</button></div>':'')+'</div>';
-  h+='<div class="tilegrid">'+['hire'].map(tileAction).join('')+'<button class="tile" data-act="view" data-id="policy"><span class="tt">Work policies</span><span class="tf">free</span><span class="tb2">Remote, four-day week, perks, crunch.</span></button>'+['allhands','offsite','raiseAll','layoff'].map(tileAction).join('')+'</div>';
+  h+='<div class="tilegrid">'+['hire'].map(tileAction).join('')+'<button class="tile" data-act="view" data-id="roles"><span class="tt">What does each job do?</span><span class="tf">guide</span><span class="tb2">Exactly what every role does for you, and when to hire it.</span></button><button class="tile" data-act="view" data-id="policy"><span class="tt">Work policies</span><span class="tf">free</span><span class="tb2">Remote, four-day week, perks, crunch.</span></button>'+['allhands','offsite','raiseAll','layoff'].map(tileAction).join('')+'</div>';
   return h;
 }
 
@@ -306,7 +306,7 @@ function drawerAct(aid){
   var f=focusOf(aid,v), budget=SU.focusBudget(g).budget, used=UI.planFocus(), left=Math.max(0,budget-used);
   var afford=(f<=left+1e-9);
   var pv=a.preview?(a.preview(g,v)||[]):[];
-  var h='<div class="dr-h"><button class="btn sm ghost" data-act="back">'+UI.icon('back')+' Back</button><h3>'+esc(title)+'</h3><span class="fc">'+(f?f+' focus':'free')+'</span></div><div class="dr-b"><div class="muted sm">'+esc(a.blurb)+'</div>'+ctls.map(function(c){ return ctlHtml(aid,c,v); }).join('')+(pv.length?'<div class="pv">'+pv.map(function(l){ return '<div class="'+(/^Warning/.test(l)?'wn':'')+'">'+esc(l)+'</div>'; }).join('')+'</div>':'')+'</div>';
+  var h='<div class="dr-h"><button class="btn sm ghost" data-act="back">'+UI.icon('back')+' Back</button><h3>'+esc(title)+'</h3><span class="fc">'+(f?f+' focus':'free')+'</span></div><div class="dr-b"><div class="muted sm">'+esc(a.blurb)+'</div>'+(function(){ var ch=ctls.map(function(c){ return ctlHtml(aid,c,v); }); var pvh=pv.length?'<div class="pv">'+pv.map(function(l){ return '<div class="'+(/^Warning/.test(l)?'wn':'')+'">'+esc(l)+'</div>'; }).join('')+'</div>':''; if(aid==='hire'&&ch.length>1){ ch.splice(1,0,pvh); return ch.join(''); } return ch.join('')+pvh; })()+'</div>';
   var why=!ok.ok?ok.why:(!afford?'You have '+(Math.round(left*2)/2)+' focus left this month.':'');
   h+='<div class="dr-f">'+(why?'<span class="why">'+esc(why)+'</span>':'')+(a.repeat?'<button class="btn" data-act="add-act" data-pin="1"'+((ok.ok&&afford)?'':' disabled')+'>Add and repeat monthly</button>':'')+'<button class="btn primary" data-act="add-act" data-pin="0"'+((ok.ok&&afford)?'':' disabled')+'>Add to plan</button></div>';
   return h;
@@ -322,22 +322,26 @@ function setCfg(aid,k,val){
 /* ------------------------------------------------------------ people: stat sheet */
 function sbar(label,val,cls,right,tip){ return '<div class="sbar" title="'+esc(tip||'')+'"><span class="sl">'+label+'</span><div class="bar '+(cls||'')+'"><i style="width:'+Math.max(0,Math.min(100,Math.round(val)))+'%"></i></div><span class="sv mono">'+(right==null?Math.round(val):right)+'</span></div>'; }
 function cls3(v){ return v<35?'bad':v<60?'warn':'good'; }
+function without(g,e){ var g2=SU.clone(g); g2.team=g2.team.filter(function(x){ return x.id!==e.id; }); return SU.velocity(g)-SU.velocity(g2); }
 function roleEffect(g,e){
-  var r=e.role, sk=SU.skillRating(e), f=e.skill||1;
-  if(r==='eng'){ var vs=SU._vshare||{}; SU.velocity(g); vs=SU._vshare||{}; var tot=0; Object.keys(vs).forEach(function(k){ tot+=vs[k]; }); var mine=vs[e.id]||0; var share=tot>0?mine/tot:0; var pts=SU.velocity(g)*share; return {k:'Build output',v:pts.toFixed(1)+' pts/mo',s:Math.round(share*100)+'% of your team’s building'}; }
-  if(r==='design') return {k:'Team boost',v:'+10%',s:'to every engineer (first 3 designers)'};
-  if(r==='pm') return {k:'Team boost',v:'+5%',s:'to building (first 2 PMs)'};
-  if(r==='ae') return {k:'Closing',v:'x'+f.toFixed(2),s:'on deals, with the other account execs'};
-  if(r==='sdr') return {k:'Outreach',v:'standing',s:'sends outreach every month'};
-  if(r==='cs') return {k:'Keeping customers',v:'x'+f.toFixed(2),s:'helps lower churn'};
-  if(r==='mkt') return {k:'Marketing',v:'x'+f.toFixed(2),s:'makes your spend work harder'};
-  if(r==='cos') return {k:'Focus',v:'+1',s:'extra focus every month'};
-  return {k:'Impact',v:'x'+f.toFixed(2),s:'runs a department'};
+  var r=e.role, f=e.skill||1, ef=SU.energyF(e), rp=SU.rampPct(g,e), idx=g.team.filter(function(x){ return x.role===r; }).indexOf(e), cap={design:3,pm:2,ae:3,mkt:3}[r];
+  var counted=cap?idx<cap:true;
+  if(r==='eng'){ var vs=(SU.velocity(g),SU._vshare||{}); var tot=0; Object.keys(vs).forEach(function(k){ tot+=vs[k]; }); var share=tot>0?(vs[e.id]||0)/tot:0; return {k:'Build output',v:(SU.velocity(g)*share).toFixed(1)+' pts/mo',s:Math.round(share*100)+'% of your building'}; }
+  if(r==='design'||r==='pm'){ var d=without(g,e); return {k:'Speed boost',v:(counted?'+'+d.toFixed(1)+' pts/mo':'none'),s:counted?'added to your engineers':'beyond the first '+cap+' they add nothing'}; }
+  if(r==='ae'){ var fit=SU.roleFit(g,'ae'); return {k:'Close rate',v:(counted&&fit.state==='ok')?'+'+Math.round(12*f*rp)+'%':'none',s:fit.state==='ok'?(counted?'on every deal':'beyond the first 3'):'only helps business products'}; }
+  if(r==='sdr'){ var f2=SU.roleFit(g,'sdr'); return {k:'Outreach',v:f2.state==='ok'?'1,200/mo':'none',s:f2.state==='ok'?'cold contacts, on autopilot':'does nothing for consumer apps'}; }
+  if(r==='cs'){ var capc=300+150*SU.count(g,'cs'); return {k:'Support',v:'+150 customers',s:'team handles '+capc+' of your '+SU.fmtNum(SU.custCount(g))}; }
+  if(r==='mkt'){ var fm2=SU.roleFit(g,'mkt'); return {k:'Marketing boost',v:counted?'+'+Math.round(15*f*ef*rp)+'%':'none',s:fm2.state==='ok'?'on all your marketing channels':'needs marketing spend to matter'}; }
+  if(r==='cos') return {k:'Extra focus',v:'+2',s:'moves every month'};
+  if(r==='vp') return {k:'Team overhead',v:'halved',s:'above 8 people; investors like it'};
+  return {k:'Impact',v:'x'+f.toFixed(2),s:''};
 }
 function personSheet(g,e){
   var rk=SU.rankOf(e), sk=SU.skillRating(e), en=Math.round(SU.energyOf(e)), ramp=Math.round(SU.rampPct(g,e)*100), mk=SU.salaryFor(g,e.role,e.level), pay=Math.round((e.sal/mk-1)*100), risk=Math.round(SU.attrRisk3(g,e)*100), want=SU.wantStatus(g,e), eff=roleEffect(g,e), ten=Math.max(0,Math.round(g.mi-e.joinMi));
   var xpPct=rk.next?(rk.xp-rk.from)/(rk.next.xp-rk.from)*100:100;
   var h='<div class="sec sheetbars">'+sbar('Skill',sk,cls3(sk),sk,'How good they are at the job. It grows with experience.')+sbar('Energy',en,cls3(en),en,'Crunch, crowding and low morale drain it. Perks and rest refill it. Tired people build slower.')+sbar('Loyalty',e.loyalty,cls3(e.loyalty),Math.round(e.loyalty),'Low loyalty means they might leave.')+(ramp<100?sbar('Ramp-up',ramp,'',ramp+'%','New hires take a few months to reach full speed.'):'')+'</div>';
+  var gd=SU.ROLE_GUIDE[e.role], fit=SU.roleFit(g,e.role);
+  h+='<div class="pv job"><div><b>Their job: '+esc(gd.tag)+'.</b></div>'+gd.does.slice(0,2).map(function(x){ return '<div>'+esc(x)+'</div>'; }).join('')+(fit.state==='no'?'<div class="wn">Right now: '+esc(fit.why)+'</div>':'')+'<div><a href="#" data-act="view" data-id="roles" onclick="return false">See every job</a></div></div>';
   h+='<div class="strip stats4"><div class="st"><div class="l">'+esc(eff.k)+'</div><div class="v">'+esc(eff.v)+'</div><div class="s">'+esc(eff.s)+'</div></div><div class="st"><div class="l">Pay vs market</div><div class="v">'+(pay>=0?'+':'')+pay+'%</div><div class="s">'+fm(e.sal)+' a year</div></div><div class="st'+(risk>=20?' bad':'')+'"><div class="l">Might leave</div><div class="v">'+risk+'%</div><div class="s">in the next 3 months</div></div></div>';
   h+='<div class="sec"><div class="row" style="justify-content:space-between"><b class="sm">Rank: '+rk.name+'</b><span class="mono xs">'+(rk.next?rk.xp+' / '+rk.next.xp+' xp to '+rk.next.name:'top rank')+'</span></div>'+bar(xpPct,'')+'<div class="xs muted">Experience grows every month, faster when you ship. Each rank makes them a little more loyal.</div></div>';
   h+='<div class="pv"><div><b>Wants '+esc(SU.WANT_TEXT[e.want]||e.want)+'.</b> <span class="pill '+(want.ok?'good':'warn')+'">'+(want.ok?'happy':'not yet')+'</span></div><div>'+esc(want.why)+'</div></div>';
@@ -361,9 +365,24 @@ function focusSpec(sp){ var f=SU.mkClause(G(),sp.lever,sp.params,sp.text).focus;
 
 /* ------------------------------------------------------------ drawer: views (policies, loans, exit, cap table, spending, story) */
 var EXP_LABEL={payroll:'Payroll',tools:'Tools',infra:'Servers and hosting',marketing:'Marketing and outreach',cogs:'Cost of serving customers',fixed:'Rent, legal, accounting',other:'Perks and care',rbf:'Revenue-based repayment',debt:'Debt interest',owed:'Deferred pay owed'};
+
+function rolesGuide(g){
+  var h='<div class="dr-b"><div class="muted sm">Every job does something specific. Here is exactly what, with your numbers.</div>';
+  var order=['eng','design','pm','sdr','ae','cs','mkt','cos','vp'];
+  order.forEach(function(r){
+    var gd=SU.ROLE_GUIDE[r], R=SU.ROLES[r], fit=SU.roleFit(g,r), n=SU.count(g,r);
+    h+='<div class="rg"><div class="row" style="justify-content:space-between;align-items:baseline"><b>'+esc(R.name)+'</b><span class="pill '+(fit.state==='ok'?'good':fit.state==='no'?'bad':'warn')+'">'+(fit.state==='ok'?'useful now':fit.state==='no'?'no effect now':'not yet')+'</span></div>'+
+      '<div class="sm"><b>'+esc(gd.tag)+'.</b></div><ul class="rgl">'+gd.does.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ul>'+
+      '<div class="xs"><b>Hire when:</b> '+esc(gd.best)+'</div><div class="xs muted"><b>Limits:</b> '+esc(gd.limit)+'</div>'+
+      '<div class="xs muted"><b>Your case:</b> '+esc(fit.why)+'</div>'+
+      '<div class="xs mono muted">Pay '+fm(SU.salaryFor(g,r,'junior'))+' to '+fm(SU.salaryFor(g,r,'senior'))+' &middot; ramp-up '+R.ramp.mid+' months &middot; you have '+n+'</div></div>';
+  });
+  return h+'</div>';
+}
 function drawerView(id){
   var g=G(), h='', title='';
-  if(id==='policy'){
+  if(id==='roles'){ title='What each job does'; h=rolesGuide(g); }
+  else if(id==='policy'){
     title='Work policies'; h='<div class="dr-b"><div class="muted sm">Policies change how people feel and how fast they build. Each change is one move in your plan.</div><div class="rows">'+CAT.policyList(g).map(function(p){ var on=CAT.policyOn(g,p.id); return '<div class="rw"><div class="rm"><b>'+esc(p.name)+'</b></div><span class="pill '+(on?'good':'')+'">'+(on?'on':'off')+'</span><button class="btn sm" data-act="policy" data-kind="'+p.id+'">'+(on?'Turn off':'Turn on')+'</button></div>'; }).join('')+'</div></div>';
   } else if(id==='loans'){
     title='Loans and bridges'; h='<div class="dr-b"><div class="tilegrid">'+['card','deferStaff','deferFounder','bridge','rbf','debt'].map(tileAction).join('')+'</div></div>';
