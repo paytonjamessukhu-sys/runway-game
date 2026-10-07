@@ -217,6 +217,15 @@ SU.makeCandidates=function(G,r){
   });
   return list;
 };
+/* instant hiring: a shortlist right now, no waiting for a job post to fill */
+SU.shortlist=function(G,role,level){
+  level=level||'mid'; G.cands=G.cands||[];
+  var ex=G.cands.filter(function(c){ return c.role===role && c.level===level && c.quick; })[0]; if(ex) return ex;
+  var comp=SU.salaryFor(G,role,level), eq=SU.ROLES[role].eq[level];
+  var list=SU.makeCandidates(G,{role:role,level:level,comp:comp,equity:eq});
+  var c={id:'c'+(++G.rid),reqId:null,role:role,level:level,list:list,t:G.t,exp:G.t+3,agency:false,comp:comp,equity:eq,quick:true};
+  G.cands.push(c); return c;
+};
 SU.pickCandidate=function(G,cid,idx){
   var c=(G.cands||[]).filter(function(x){ return x.id===cid; })[0]; if(!c) return null; var e=c.list[idx]; if(!e) return null;
   var mk=SU.salaryFor(G,e.role,e.level); if(e.sal<mk*0.9) e.loyalty-=10; if(e.sal>mk*1.1) e.loyalty+=8; if(G.hype>50) e.loyalty+=5;

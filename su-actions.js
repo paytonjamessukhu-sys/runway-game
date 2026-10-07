@@ -163,10 +163,11 @@ def({id:'redteam',group:'product',title:'Red-team the model',blurb:'Pay people t
 
 /* ------------------------------------------------------------ TEAM */
 var ROLE_BLURB={ml:'Makes every training run stronger.',mgr:'Handles the small stuff.',eng:'Builds the product faster.',design:'Makes it nicer, helps every engineer.',pm:'Keeps the roadmap sane.',sdr:'Sends outreach all month, every month.',ae:'Closes the deals your outreach finds.',cs:'Keeps customers happy and subscribed.',mkt:'Makes your marketing spend work harder.',cos:'Gives you more focus each month.',vp:'Runs a whole department.'};
-def({id:'hire',group:'team',title:'Hire someone',blurb:'You post a job, then pick from three candidates when they apply.',
+CAT.hireRoles=function(G){ var roles=['eng','design','pm','mgr','sdr','ae','cs','mkt']; if(G.flavor==='ai') roles.splice(1,0,'ml'); if(G.act>=3) roles.push('cos','vp'); return roles; };
+def({id:'hire',group:'team',title:'Post a job (advanced)',blurb:'Choose pay, equity and a recruiter. Takes 2 to 4 months. The Hire buttons are faster.',
   ok:function(G){ return G.reqs.length<8?{ok:true}:{ok:false,why:'You already have 8 open roles.'}; },
   ctl:function(G,v){
-    var roles=['eng','design','pm','mgr','sdr','ae','cs','mkt']; if(G.flavor==='ai') roles.splice(1,0,'ml'); if(G.act>=3) roles.push('cos','vp');
+    var roles=CAT.hireRoles(G);
     var role=(v&&v.role)||'eng';
     return [{k:'role',label:'Who do you need',kind:'cards',opts:roles.map(function(r){ var fit=SU.roleFit(G,r); return opt(r,SU.ROLES[r].name,SU.ROLE_GUIDE[r].tag+(fit.state==='no'?' (no effect for you right now)':'')); }),def:'eng'},
       {k:'level',label:'Experience',kind:'choice',opts:[opt('junior','Junior'),opt('mid','Mid'),opt('senior','Senior')],def:(role==='vp'||role==='cos')?'senior':'mid'},
@@ -343,7 +344,7 @@ CAT.health=function(G){
   if(G.flavor==='ai'){ var qs=G.Q<30?'bad':(G.Q<50?'warn':'good'); add('model','Model quality',Math.round(G.Q)+' of 100',qs,'How good your model is next to the frontier. It decays about 1.4% every month, because rivals keep improving. Train a new model to bring it back.',qs==='good'?[]:[fx('train',{size:'medium'},'Train a medium model')]);
     var gmv=Math.max(0,(G.arch==='smb'?0.78:0.88)-0.18+0.25*(G.ai.eff||0)-0.012*(G.ai.size||0)); var gms=gmv<0.5?'bad':(gmv<0.62?'warn':'good'); add('margin','Gross margin',Math.round(gmv*100)+'%',gms,'Every answer costs real compute. Software companies keep 80% of each dollar; AI companies often keep far less. Bigger models cost more to serve.',gms==='good'?[]:[fx('optimize',{},'Optimize serving costs')]); }
   /* competition */
-  var sh=Math.round((1-SU.compF(G))*100); if(sh>0||G.rivals.some(function(r){ return r.active&&r.presence>0; })){ var cps=sh>=40?'bad':(sh>=20?'warn':'good'); add('rivals','Competition',sh+'% of demand',cps,'How much of your market rivals are taking. Beat them on product quality, buzz or price. Tap See rivals on the Sales tab to size them up.',cps==='good'?[]:[fx('rival',{act:'coffee'},'Have coffee with a rival')]); }
+  var sh=Math.round((1-SU.compF(G))*100); if(sh>0||G.rivals.some(function(r){ return r.active&&r.presence>0; })){ var cps=sh>=50?'bad':(sh>=35?'warn':'good'); add('rivals','Competition',sh+'% of demand',cps,'How much of your market rivals are taking. Beat them on product quality, buzz or price. Tap See rivals on the Sales tab to size them up.',cps==='good'?[]:[fx('rival',{act:'coffee'},'Have coffee with a rival')]); }
   /* team energy */
   if(G.team.length){ var es=avgEn<35?'bad':(avgEn<55?'warn':'good'); add('energy','Team energy',Math.round(avgEn)+' of 100',es,'How rested your team is. Crunch, a crowded office and low morale drain it. Tired people build slower and quit sooner.',
     es==='good'?[]:[fx('allhands',{},'Hold an all-hands'),fx('offsite',{},'Team offsite')]); }
@@ -378,21 +379,22 @@ CAT.coach=function(G){
   if(G.flavor==='ai'){
     if(G.Q<50 && G.cash>=120000+3*Math.max(0,f.burn)) add('train',{size:'medium'},'Train a medium model','Your model has decayed to '+R(G.Q)+'. Rivals keep improving, so you must keep training.');
     else if(G.Q<35 && G.cash>=30000) add('train',{size:'small'},'Train a small model','Quality is '+R(G.Q)+' and cash is tight. A small run is cheap and still helps.');
-    if(SU.count(G,'ml')===0 && (G.ai.runs||0)>=2 && G.cash>500000 && !G.reqs.length) add('hire',{role:'ml',level:'senior'},'Hire an ML researcher','Every training run gets about 25% stronger, and the model decays more slowly.');
+    if(SU.count(G,'ml')===0 && (G.ai.runs||0)>=2 && G.cash>500000 && !G.reqs.length) addQ('ml','senior','Hire an ML researcher','Every training run gets about 25% stronger, and the model decays more slowly.');
     if((G.ai.eff||0)<0.2 && mrr>=3000 && G.cash>=60000) add('optimize',{},'Optimize serving costs','Serving eats a big share of every dollar you earn. This wins some of it back.');
   }
   /* cash on hand and a rival in the way: buy them */
   (function(){ var rvs=G.rivals.filter(function(r){ return r.active&&r.presence>=0.15; }).sort(function(x,y){ return y.presence-x.presence; }); for(var i=0;i<rvs.length;i++){ var bc=SU.buyoutCheck(G,rvs[i]); if(bc.ok){ add('rival',{rival:rvs[i].id,act:'buyout'},'Buy out '+rvs[i].name+' for '+SU.fmtMoney(bc.price),'You can afford to remove a rival and keep their customers.'); break; } } })();
   /* growing a company: hire, delegate, spend on the office */
   var hc=SU.headcount(G), sp=SU.Shop&&SU.Shop.space(G);
+  function addQ(role,level,label,why){ out.push({quick:{role:role,level:level},label:label,why:why}); }
   function addTab(tab,label,why,go){ out.push({tab:tab,label:label,why:why,go:go||'Open'}); }
-  if(G.t>0 && G.team.length===0 && mrr>=2000 && runway>=8 && !G.reqs.length) add('hire',{role:'eng'},'Hire your first engineer','You do everything alone. An engineer adds build speed every month.');
-  if(G.arch==='smb' && SU.custCount(G)>=20 && SU.count(G,'sdr')===0 && !G.reqs.length && runway>=8 && G.team.length>=1) add('hire',{role:'sdr'},'Hire an SDR','Outreach on autopilot: about 1,200 prospects a month, every month.');
-  if(SU.custCount(G)>=250 && SU.count(G,'cs')===0 && !G.reqs.length) add('hire',{role:'cs'},'Hire customer success','You are past 250 customers. Support is getting stretched and churn will climb.');
-  if(G.team.length>=3 && SU.count(G,'mgr')===0 && G.t>=6 && !G.reqs.length && runway>=8) add('hire',{role:'mgr'},'Hire a manager','+1 focus every month, and your pinned moves run free.');
+  if(G.t>0 && G.team.length===0 && mrr>=2000 && runway>=8 && !G.reqs.length) addQ('eng','mid','Hire your first engineer','You do everything alone. An engineer adds build speed every month.');
+  if(G.arch==='smb' && SU.custCount(G)>=20 && SU.count(G,'sdr')===0 && !G.reqs.length && runway>=8 && G.team.length>=1) addQ('sdr','mid','Hire an SDR','Outreach on autopilot: about 1,200 prospects a month, every month.');
+  if(SU.custCount(G)>=250 && SU.count(G,'cs')===0 && !G.reqs.length) addQ('cs','mid','Hire customer success','You are past 250 customers. Support is getting stretched and churn will climb.');
+  if(G.team.length>=3 && SU.count(G,'mgr')===0 && G.t>=6 && !G.reqs.length && runway>=8) addQ('mgr','mid','Hire a manager','+1 focus every month, and your pinned moves run free.');
   if(SU.Shop && hc>SU.Shop.seats(G)) addTab('shop','Move to a bigger office','You have more people than seats. Morale and speed are dropping.','Shop');
   else if(SU.Shop && hc>=2 && G.cash>15000 && !(G.shop&&G.shop.espresso) && runway>=10) addTab('shop','Buy an espresso machine','$1,200 and your team gets happier every month. It shows up in the office.','Shop');
   if(G.team.length>=2 && G.morale<50) addTab('shop','Spend on the office','Morale is '+R(G.morale)+'. Perks and upgrades lift it, and it shows up in the room.','Shop');
-  var seen={}; return out.filter(function(c){ var k=(c.aid||c.tab)+JSON.stringify(c.values||''); if(seen[k]) return false; seen[k]=1; return true; }).slice(0,5);
+  var seen={}; return out.filter(function(c){ var k=(c.aid||c.tab||('q'+(c.quick&&c.quick.role)))+JSON.stringify(c.values||''); if(seen[k]) return false; seen[k]=1; return true; }).slice(0,5);
 };
 })();

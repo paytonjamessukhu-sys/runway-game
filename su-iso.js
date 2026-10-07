@@ -638,7 +638,7 @@ function update(dt){
 function drawables(){
   var list=[];
   var sd=sc.slotList;
-  sd.forEach(function(sl){ if(!sl.show) return; var dk=slotDesk(sl); list.push({key:sl.x+sl.w+sl.y+sl.d,x0:sl.x,x1:sl.x+sl.w,y0:sl.y,y1:sl.y+sl.d,h:1.4,kind:'desk',id:'desk'+sl.i,draw:function(){ drawDesk({x:sl.x,y:sl.y,w:sl.w,d:sl.d,who:sl.who&&!sl.who.hidden?sl.who:null,t:sl.i,req:sl.req}); },info:{kind:'desk',slot:sl.i,mine:sl.who&&sl.who.kind==='you'}});
+  sd.forEach(function(sl){ if(!sl.show) return; var dk=slotDesk(sl); list.push({key:sl.x+sl.w+sl.y+sl.d,x0:sl.x,x1:sl.x+sl.w,y0:sl.y,y1:sl.y+sl.d,h:1.4,kind:'desk',id:'desk'+sl.i,draw:function(){ drawDesk({x:sl.x,y:sl.y,w:sl.w,d:sl.d,who:sl.who&&!sl.who.hidden?sl.who:null,t:sl.i,req:sl.req}); },info:{kind:'desk',slot:sl.i,mine:sl.who&&sl.who.kind==='you',empty:!(sl.who&&!sl.who.hidden)}});
     var p=sl.who; var seated=p&&!p.hidden&&p.mode==='sit'&&p.seatDesk&&p.seatDesk.slot===sl;
     list.push({key:dk.cx+0.4+dk.cy+0.4,x0:dk.cx-0.4,x1:dk.cx+0.4,y0:dk.cy-0.4,y1:dk.cy+0.4,h:1.3,kind:seated?(p.kind==='emp'?'person':p.kind):'chair',id:seated?p.id:'chair'+sl.i,draw:function(){ drawSeated({cx:dk.cx,cy:dk.cy,dir:3,chair:chairColor(),p:seated?p:null}); },info:seated?{kind:p.kind,id:p.id,person:p}:null});
   });

@@ -202,6 +202,7 @@ function pTeam(g){
   var reqs=g.reqs.map(function(r){ return '<div class="rw"><div class="av" style="background:#c9a227">?</div><div class="rm"><b>Hiring: '+esc(SU.ROLES[r.role].name)+'</b><div class="rs">'+fm(r.comp)+'/yr, open '+r.age+' period'+(r.age===1?'':'s')+'</div></div></div>'; }).join('');
   var tm=g.team, avg=function(fn){ return tm.length?tm.reduce(function(a,e){ return a+fn(e); },0)/tm.length:0; };
   h+='<div class="strip">'+stat('Build speed',SU.velocity(g).toFixed(1),'points a month')+stat('Avg skill',Math.round(avg(SU.skillRating)),tm.length?SU.RANKS[Math.round(avg(function(e){ return SU.rankOf(e).i; }))].name+' crew':'just you')+stat('Avg energy',Math.round(avg(SU.energyOf)),avg(SU.energyOf)<45?'Burnout risk':'Rested',avg(SU.energyOf)<45?'bad':'')+'</div>';
+  h+='<div class="sec"><h4>Hire in one click <span class="muted xs">candidates appear right away</span></h4>'+hireButtons(g)+'</div>';
   h+='<div class="sec"><h4>People</h4><div class="rows">'+cands+list.slice(pg*pageSize,(pg+1)*pageSize).map(function(p){ return '<div class="rw click" data-act="person" data-id="'+p.id+'">'+avatar(p.nm,p.col)+'<div class="rm"><b>'+esc(p.nm)+'</b><div class="rs">'+esc(p.role)+(p.e?' &middot; '+SU.rankOf(p.e).name+' &middot; skill '+SU.skillRating(p.e)+' &middot; energy '+Math.round(SU.energyOf(p.e)):' &middot; '+p.bt)+'</div></div><div style="width:64px">'+good(p.bar)+'</div></div>'; }).join('')+reqs+'</div>'+(pages>1?'<div class="pager"><button class="btn sm ghost" data-act="page" data-k="team" data-d="-1">Prev</button>'+(pg+1)+' / '+pages+'<button class="btn sm ghost" data-act="page" data-k="team" data-d="1">Next</button></div>':'')+'</div>';
   h+='<div class="tilegrid">'+['hire'].map(tileAction).join('')+'<button class="tile" data-act="view" data-id="roles"><span class="tt">What does each job do?</span><span class="tf">guide</span><span class="tb2">Exactly what every role does for you, and when to hire it.</span></button><button class="tile" data-act="view" data-id="policy"><span class="tt">Work policies</span><span class="tf">free</span><span class="tb2">Remote, four-day week, perks, crunch.</span></button>'+['allhands','offsite','raiseAll','layoff'].map(tileAction).join('')+'</div>';
   return h;
@@ -477,6 +478,8 @@ UI.onAct=function(a,t,e){
     case 'buy': { var r=SU.Shop.buy(g,t.getAttribute('data-id')); if(!r.ok){ UI.toast(r.why); return; } UI.sfx('money'); UI.toast(r.msg,2600); changed(); break; }
     case 'move': { var mv=SU.Shop.move(g,t.getAttribute('data-id')); if(!mv.ok){ UI.toast(mv.why); return; } UI.sfx(mv.up?'goal':'tick'); UI.toast(mv.msg,3000); changed(); break; }
     case 'cands': UI.openCands(t.getAttribute('data-id')); break;
+    case 'quick-hire': UI.closeModal(); UI.openShortlist(t.getAttribute('data-role'),t.getAttribute('data-level')||'mid'); break;
+    case 'hire-chooser': UI.openHireChooser(); break;
     case 'pick-cand': { var cid=t.getAttribute('data-id'); var emp=SU.pickCandidate(g,cid,+t.getAttribute('data-i')); UI.closeModal(); if(emp){ UI.sfx('hire'); UI.toast(emp.name+' joined as '+SU.ROLES[emp.role].name.toLowerCase()+'.',2600); changed(); } break; }
     case 'drop-cands': { g.cands=g.cands.filter(function(c){ return c.id!==t.getAttribute('data-id'); }); g.inbox.forEach(function(i){ if(i.action&&i.action.type==='cands'&&i.action.id===t.getAttribute('data-id')) i.open=false; }); UI.closeModal(); changed(); break; }
     case 'report': UI.showReport(); break;
@@ -522,10 +525,24 @@ UI.showReport=function(){
 };
 
 function candPay(g,e){ try{ if(e.role==='eng'||e.role==='design'||e.role==='pm'){ var g2=SU.clone(g); var e2=SU.clone(e); e2.joinMi=-99; g2.team.push(e2); var dv=SU.velocity(g2)-SU.velocity(g); return '<div class="pv"><div><b>Build speed '+(dv>=0?'+':'')+dv.toFixed(1)+'</b> a month once ramped up</div></div>'; } }catch(x){} return ''; }
+
+/* ------------------------------------------------------------ one-click hiring */
+function hireButtons(g){
+  return '<div class="rolegrid">'+CAT.hireRoles(g).map(function(r){ var fit=SU.roleFit(g,r), gd=SU.ROLE_GUIDE[r], no=fit.state==='no';
+    return '<button class="rolebtn'+(no?' no':'')+'" data-act="quick-hire" data-role="'+r+'" title="'+esc(fit.why)+'"><b>'+esc(SU.ROLES[r].name)+'</b><span>'+esc(gd.tag)+'</span><span class="mono xs">'+fm(SU.salaryFor(g,r,'mid'))+'/yr'+(no?' &middot; no effect for you':'')+'</span></button>'; }).join('')+'</div>';
+}
+UI.openHireChooser=function(){ var g=G(); UI.modal('<h2>Who do you need?</h2><p class="muted sm">Pick a job and you will see three candidates right away. One more click hires them.</p>'+hireButtons(g)+'<div class="foot"><button class="btn ghost" data-act="close-modal">Not now</button></div>',{wide:true}); };
+UI.openShortlist=function(role,level){
+  var g=G(); if((g.cands||[]).length>=8){ UI.toast('You have lots of open shortlists. Pick someone first.'); return; }
+  var c=SU.shortlist(g,role,level||'mid'); SU.save(g); UI.openCands(c.id);
+};
+
 /* ------------------------------------------------------------ candidates */
 UI.openCands=function(cid){
   var g=G(), c=(g.cands||[]).filter(function(x){ return x.id===cid; })[0]; if(!c){ UI.toast('Those candidates are gone.'); return; }
-  var h='<h2>Pick your '+esc(SU.ROLES[c.role].name.toLowerCase())+'</h2><div class="muted sm">Three people applied. Pick one. The others take other offers.</div><div class="cands">'+c.list.map(function(e,i){
+  var f0=SU.fin(g), avgSal=c.list.reduce(function(a,x){ return a+x.sal; },0)/c.list.length, addB=avgSal*1.3/12, nb=f0.burn+addB, rw0=f0.burn<=0?999:f0.runway, rw1=nb>0?Math.max(0,g.cash)/nb:999;
+  var lv=c.quick?'<div class="row" style="gap:6px"><span class="k">Experience</span>'+['junior','mid','senior'].map(function(l){ return '<button class="btn sm'+(c.level===l?' primary':'')+'" data-act="quick-hire" data-role="'+c.role+'" data-level="'+l+'">'+SU.cap1(l)+'</button>'; }).join('')+'</div>':'';
+  var h='<h2>Pick your '+esc(SU.ROLES[c.role].name.toLowerCase())+'</h2><div class="muted sm">'+esc(SU.ROLE_GUIDE[c.role].tag)+'. One click hires them, and they start right away.</div>'+lv+'<div class="pv"><div>Hiring adds about <b>'+fm(addB)+'</b> a month. Runway '+(rw0>99?'long':rw0.toFixed(1)+' mo')+' to '+(rw1>99?'long':rw1.toFixed(1)+' mo')+'.</div>'+(rw1<4?'<div class="wn">Warning: that leaves you under 4 months of cash.</div>':'')+'</div><div class="cands">'+c.list.map(function(e,i){
     var n=Math.max(0,Math.min(5,Math.round((e.skill-0.7)/0.6*5))); var tr=e.trait?SU.TRAITS[e.trait]:null; var fn=e.name.split(' ')[0];
     return '<div class="cand"><div class="row" style="gap:8px">'+avatar(e.name,ROLECOL[e.role]||'#5a6b7d')+'<div><h4>'+esc(e.name)+'</h4><div class="xs muted">'+(e.level!=='mid'?SU.cap1(e.level)+' ':'Mid-level ')+esc(SU.ROLES[e.role].name)+'</div></div></div><div class="stars" title="Skill">'+'★'.repeat(n)+'☆'.repeat(5-n)+' <span class="mono xs">skill '+SU.skillRating(e)+'</span></div>'+candPay(g,e)+'<div class="sm"><b>'+fm(e.sal)+'</b> a year<br><span class="muted">'+fm(e.sal*1.3/12)+'/mo with taxes</span></div>'+(tr?'<div class="pv"><div><b>'+esc(tr.name)+'</b></div><div>'+esc(tr.desc||'')+'</div></div>':'<div class="xs muted">No strong quirks.</div>')+'<div class="xs muted">Wants '+esc(SU.WANT_TEXT[e.want]||e.want)+'.</div><button class="btn primary" data-act="pick-cand" data-id="'+c.id+'" data-i="'+i+'">Hire '+esc(fn)+'</button></div>'; }).join('')+'</div><div class="foot"><button class="btn ghost" data-act="drop-cands" data-id="'+c.id+'">None of them</button><button class="btn" data-act="close-modal">Decide later</button></div>';
   UI.modal(h,{wide:true});

@@ -169,7 +169,7 @@ function buildShell(){
   '<header class="top" id="hdr"></header>'+
   '<main class="game">'+
     '<section class="office"><div class="stage"><canvas id="officeCv"></canvas>'+
-      '<div class="hud"><div class="hud-top"><b id="hudDate"></b><div class="hud-bar"><i id="hudBar"></i></div><span class="lvl" id="hudLvl" data-act="golvl" role="button"></span><button class="btn sm" data-act="view" data-id="health" id="hudHealth">Health</button><button class="btn sm" data-act="labels" id="hudLabels">Labels: on</button><button class="btn sm" data-act="report">Last month</button></div><div class="hud-cap"><span id="capR"></span><span id="capL"></span></div><div class="coach" id="coach"></div><div class="ticker" id="ticker"></div></div>'+
+      '<div class="hud"><div class="hud-top"><b id="hudDate"></b><div class="hud-bar"><i id="hudBar"></i></div><span class="lvl" id="hudLvl" data-act="golvl" role="button"></span><button class="btn sm hirebtn" data-act="hire-chooser">+ Hire</button><button class="btn sm" data-act="view" data-id="health" id="hudHealth">Health</button><button class="btn sm" data-act="labels" id="hudLabels">Labels: on</button><button class="btn sm" data-act="report">Last month</button></div><div class="hud-cap"><span id="capR"></span><span id="capL"></span></div><div class="coach" id="coach"></div><div class="ticker" id="ticker"></div></div>'+
       '<div class="tip" id="tip" hidden></div><div class="pop" id="pop" hidden></div></div></section>'+
     '<section class="card plan" id="plan"></section>'+
     '<div class="rcol"><aside class="card side"><div class="icontabs" id="tabs" role="tablist"></div><div class="pn" id="pn"><div class="pn-in" id="pnIn"></div><div id="drawer"></div></div></aside></div>'+
@@ -351,6 +351,7 @@ function onIsoHover(info,x,y){
 }
 function isoLabel(info){
   var p=info.person;
+  if(info.kind==='desk'&&info.empty) return '<b>Empty desk</b>Click to hire someone.';
   if(info.kind==='you') return '<b>'+esc(G.founder.name||'You')+'</b>You. Sanity '+Math.round(G.founder.sanity)+'.';
   if(info.kind==='co'&&G.co) return '<b>'+esc(G.co.name)+'</b>Cofounder. Bond '+Math.round(G.co.bond)+'.';
   if((info.kind==='emp'||info.kind==='person')&&p){ var e=G.team.filter(function(x){ return x.id===p.id; })[0]; return e? '<b>'+esc(e.name)+'</b>'+esc(SU.ROLES[e.role].name)+', loyalty '+Math.round(e.loyalty) : null; }
@@ -369,6 +370,7 @@ function isoLabel(info){
 function onIsoPick(info,x,y){
   var tip=$('#tip'); if(tip) tip.hidden=true; var k=info.kind;
   if(k==='board'){ UI.setTab('customers'); return; } if(k==='roadmap'){ UI.setTab('product'); return; } if(k==='tv'){ UI.setTab(G.feat&&G.feat.dashboard?'dash':'money'); return; } if(k==='door'){ UI.setTab('inbox'); return; }
+  if(k==='desk'&&info.empty){ UI.openHireChooser(); return; }
   if(k==='dog'){ Iso.fx.hearts(Iso.person('dog')); UI.toast('Biscuit approves.'); return; }
   if(k==='you'||k==='co'||k==='emp'||k==='person'){ showPop(info,x,y); return; }
   if(k==='rack'){ UI.toast('Tech debt '+Math.round(G.D)+'. Product quality '+Math.round(G.Q)+'. '+(G.incidents?G.incidents+' incident(s).':'No incidents.')); return; }
@@ -444,7 +446,7 @@ function onClick(e){
     case 'clear-plan': S.plan=[]; renderPlan(); break;
     case 'unplan': var u=+t.getAttribute('data-uid'); S.plan=S.plan.filter(function(x){ return x.uid!==u; }); renderPlan(); break;
     case 'pin': var u2=+t.getAttribute('data-uid'); S.plan.forEach(function(x){ if(x.uid===u2) x.repeat=!x.repeat; }); renderPlan(); UI.toast('Repeats every month until you remove it.',1800); break;
-    case 'coach-add': var c=S.ideas&&S.ideas[+t.getAttribute('data-i')]; if(c){ if(c.tab){ UI.setTab(c.tab); } else { if(c.repeat){ S.pinTold=S.pinTold||{}; S.pinTold[c.aid]=1; } UI.addItem({aid:c.aid,values:JSON.parse(JSON.stringify(c.values)),repeat:!!c.repeat}); } } break;
+    case 'coach-add': var c=S.ideas&&S.ideas[+t.getAttribute('data-i')]; if(c){ if(c.quick){ UI.openShortlist(c.quick.role,c.quick.level); } else if(c.tab){ UI.setTab(c.tab); } else { if(c.repeat){ S.pinTold=S.pinTold||{}; S.pinTold[c.aid]=1; } UI.addItem({aid:c.aid,values:JSON.parse(JSON.stringify(c.values)),repeat:!!c.repeat}); } } break;
     case 'labels': S.labels=(S.labels===false); Iso.setLabels(S.labels!==false); t.textContent='Labels: '+(S.labels!==false?'on':'off'); break;
     case 'golvl': UI.setTab('goals'); break;
     case 'tab': { var nt=t.getAttribute('data-tab'); if(isPhone()&&S.sheet&&S.tab===nt&&!S.drawer){ setSheet(false); } else { S.tab=nt; S.drawer=null; setSheet(true); } UI.renderTabs(); break; }
