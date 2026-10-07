@@ -24,7 +24,7 @@ function sub(tab,opts,def){ var cur=S.sub[tab]||def; return {cur:cur,html:'<div 
 /* ------------------------------------------------------------ pane and drawer plumbing */
 UI.renderPane=function(){
   var g=G(); var pn=$('#pnIn'); if(!g||!pn) return; var keep=(S.lastTab===S.tab)?pn.scrollTop:0;
-  var fn=PANELS[S.tab]||PANELS.customers; pn.innerHTML=fn(g); pn.scrollTop=keep; S.lastTab=S.tab; renderDrawer();
+  var fn=PANELS[S.tab]||PANELS.customers; pn.innerHTML=fn(g); pn.scrollTop=keep; S.lastTab=S.tab; renderDrawer(); if(S.tab==='shop') UI.paintBuildings(g);
 };
 function renderDrawer(){
   var d=$('#drawer'); if(!d) return; var dr=S.drawer; if(!dr){ d.innerHTML=''; return; }
@@ -99,6 +99,61 @@ function pricingCard(g){
   return '<div class="sec pricing"><div class="row" style="justify-content:space-between;align-items:flex-end"><div><div class="k">'+(mk?'Your cut':'Price')+'</div><div class="pbig mono">'+now+'</div></div><button class="btn sm ghost" data-act="open-act" data-aid="price">More options</button></div>'+
     '<div class="xs muted">'+esc(hint)+'</div><div class="row" style="gap:5px">'+btns+'</div>'+(extra?'<div class="row" style="gap:5px">'+extra+'</div>':'')+queued+'</div>';
 }
+
+
+/* ------------------------------------------------------------ the building outside (one picture per office tier) */
+UI.drawBuilding=function(cv,tier,o){
+  o=o||{}; var ctx=cv.getContext('2d'); var dpr=Math.min(2,window.devicePixelRatio||1); var W=cv.clientWidth||240, H=cv.clientHeight||120;
+  cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+  var spec={garage:{w:4.2,d:3.4,h:2.3},studio:{w:5,d:4,h:3.6},office:{w:5.6,d:4.6,h:6.4},hq:{w:6,d:5,h:12}}[tier]||{w:4,d:3,h:2};
+  var sS=Math.min((W-8)/((spec.w+spec.d+4.6)*0.5),(H-8)/(0.25*(spec.w+spec.d+4.6)+0.46*spec.h)); var s=Math.min(sS,60);
+  var ox=W/2-(spec.w-spec.d)/4*s, oy=H-4-(spec.w+spec.d+2.2)*s*0.25;
+  function P(x,y,z){ return [ox+(x-y)*s*0.5, oy+(x+y)*s*0.25-z*s*0.46]; }
+  function poly(pts,fill,stroke){ ctx.beginPath(); pts.forEach(function(p,i){ if(i) ctx.lineTo(p[0],p[1]); else ctx.moveTo(p[0],p[1]); }); ctx.closePath(); if(fill){ ctx.fillStyle=fill; ctx.fill(); } if(stroke){ ctx.strokeStyle=stroke; ctx.lineWidth=1; ctx.stroke(); } }
+  function shade(hex,f){ var n=parseInt(hex.slice(1),16), r=(n>>16)&255, g=(n>>8)&255, b=n&255; function c(v){ return Math.max(0,Math.min(255,Math.round(f<0?v*(1+f):v+(255-v)*f))); } return 'rgb('+c(r)+','+c(g)+','+c(b)+')'; }
+  function box(x,y,z,w,d,h,col){ poly([P(x,y,z+h),P(x+w,y,z+h),P(x+w,y+d,z+h),P(x,y+d,z+h)],shade(col,0.18),'rgba(0,0,0,.18)'); poly([P(x,y+d,z),P(x+w,y+d,z),P(x+w,y+d,z+h),P(x,y+d,z+h)],shade(col,-0.1),'rgba(0,0,0,.2)'); poly([P(x+w,y,z),P(x+w,y+d,z),P(x+w,y+d,z+h),P(x+w,y,z+h)],shade(col,-0.24),'rgba(0,0,0,.2)'); }
+  /* faces: left face is the plane y=d (spans x), right face is the plane x=w (spans y) */
+  function fl(u0,u1,z0,z1,fill){ var y=spec.d; poly([P(u0,y,z0),P(u1,y,z0),P(u1,y,z1),P(u0,y,z1)],fill); }
+  function fr(u0,u1,z0,z1,fill){ var x=spec.w; poly([P(x,u0,z0),P(x,u1,z0),P(x,u1,z1),P(x,u0,z1)],fill); }
+  /* ground */
+  poly([P(-1.2,-1.2,0),P(spec.w+1.1,-1.2,0),P(spec.w+1.1,spec.d+1.1,0),P(-1.2,spec.d+1.1,0)],o.night?'#2f4a3a':'#a9d18e','rgba(0,0,0,.12)');
+  poly([P(-1.2,spec.d,0),P(spec.w+1.1,spec.d,0),P(spec.w+1.1,spec.d+1.1,0),P(-1.2,spec.d+1.1,0)],'#cfd3da');
+  poly([P(spec.w,-1.2,0),P(spec.w+1.1,-1.2,0),P(spec.w+1.1,spec.d+1.1,0),P(spec.w,spec.d+1.1,0)],'#cfd3da');
+  var win=o.night?'#ffe08a':'#9fd0f0', brand=o.brand||'#4c6ef5';
+  if(tier==='garage'){
+    box(0,0,0,spec.w,spec.d,1.6,'#d9c9a8'); /* house */
+    poly([P(-0.2,-0.2,1.6),P(spec.w+0.2,-0.2,1.6),P(spec.w+0.2,spec.d/2,2.6),P(-0.2,spec.d/2,2.6)],'#8a5a44'); poly([P(-0.2,spec.d+0.2,1.6),P(spec.w+0.2,spec.d+0.2,1.6),P(spec.w+0.2,spec.d/2,2.6),P(-0.2,spec.d/2,2.6)],'#a0684e','rgba(0,0,0,.2)');
+    poly([P(spec.w+0.2,-0.2,1.6),P(spec.w+0.2,spec.d+0.2,1.6),P(spec.w+0.2,spec.d/2,2.6)],'#7b4e3a');
+    fl(0.5,2.7,0,1.3,'#c8cdd4'); for(var i=1;i<5;i++) fl(0.5,2.7,i*0.26,i*0.26+0.03,'rgba(60,70,85,.4)'); fl(3.1,3.8,0.2,1.0,win);
+    poly([P(-1.2,spec.d,0),P(2.7,spec.d,0),P(2.7,spec.d+1.1,0),P(-1.2,spec.d+1.1,0)],'#b6bcc6');
+    box(3.6,spec.d+0.4,0,0.25,0.25,0.5,'#6b4a2f'); box(3.35,spec.d+0.15,0.5,0.75,0.75,0.8,'#4aa56a');
+  } else if(tier==='studio'){
+    box(0,0,0,spec.w,spec.d,3.2,'#b5654a'); box(-0.1,-0.1,3.2,spec.w+0.2,spec.d+0.2,0.25,'#6b6f7a');
+    for(var f=0;f<2;f++) for(var k=0;k<3;k++){ fl(0.4+k*1.5,1.5+k*1.5,0.5+f*1.5,1.5+f*1.5,win); }
+    for(var f2=0;f2<2;f2++) for(var k2=0;k2<2;k2++){ fr(0.5+k2*1.8,1.7+k2*1.8,0.5+f2*1.5,1.5+f2*1.5,win); }
+    fl(1.9,3.1,0,1.6,'#4a3a2e'); poly([P(1.6,spec.d,1.6),P(3.4,spec.d,1.6),P(3.4,spec.d+0.7,1.35),P(1.6,spec.d+0.7,1.35)],brand); 
+    box(0.6,spec.d+0.3,0,0.4,0.4,0.7,'#4aa56a');
+    if(o.name){ ctx.save(); ctx.fillStyle='#fff'; ctx.font='bold '+Math.max(8,Math.round(s*0.3))+'px sans-serif'; ctx.textAlign='center'; var a=P(2.5,spec.d,3.0); ctx.fillText(String(o.name).toUpperCase().slice(0,9),a[0],a[1]); ctx.restore(); }
+  } else if(tier==='office'){
+    box(0,0,0,spec.w,spec.d,6,'#5d7aa3'); box(0.3,0.3,6,spec.w-0.6,spec.d-0.6,0.4,'#4a5568'); box(1.2,1.0,6.4,1.2,1,0.5,'#8a93a3');
+    for(var f3=0;f3<5;f3++){ fl(0.2,spec.w-0.2,0.55+f3*1.1,1.25+f3*1.1,o.night?'#ffe9a8':'#bfe3fb'); fr(0.2,spec.d-0.2,0.55+f3*1.1,1.25+f3*1.1,o.night?'#e9c870':'#a6cfe8'); }
+    for(var m=1;m<5;m++) fl(0.2+m*(spec.w-0.4)/5,0.24+m*(spec.w-0.4)/5,0.5,6,'rgba(30,50,80,.35)');
+    fl(2.0,3.6,0,1.5,'#274a6b'); poly([P(1.7,spec.d,1.6),P(3.9,spec.d,1.6),P(3.9,spec.d+0.8,1.4),P(1.7,spec.d+0.8,1.4)],brand);
+    box(0.3,spec.d+0.3,0,0.4,0.4,0.9,'#4aa56a'); box(spec.w-0.7,spec.d+0.3,0,0.4,0.4,0.9,'#4aa56a');
+  } else {
+    box(0,0,0,spec.w,spec.d,8,'#6a7f98'); box(0.6,0.5,8,spec.w-1.2,spec.d-1,3,'#7b90aa'); box(1.4,1.1,11,spec.w-2.8,spec.d-2.2,0.8,'#8fa2bb');
+    for(var f4=0;f4<7;f4++){ fl(0.25,spec.w-0.25,0.5+f4*1.1,1.2+f4*1.1,o.night?'#ffe9a8':'#bfe3fb'); fr(0.25,spec.d-0.25,0.5+f4*1.1,1.2+f4*1.1,o.night?'#e9c870':'#a6cfe8'); }
+    for(var m2=1;m2<6;m2++) fl(0.25+m2*(spec.w-0.5)/6,0.3+m2*(spec.w-0.5)/6,0.45,8,'rgba(30,45,70,.35)');
+    box(2.0,1.7,11.8,2,1.6,0.1,'#d9dde4'); var hp=P(3.0,2.5,11.95); ctx.fillStyle='#e8590c'; ctx.font='bold '+Math.round(s*0.5)+'px sans-serif'; ctx.textAlign='center'; ctx.fillText('H',hp[0],hp[1]+s*0.12);
+    fl(1.8,4.2,0,2.0,'#274a6b'); poly([P(1.5,spec.d,2.1),P(4.5,spec.d,2.1),P(4.5,spec.d+0.9,1.8),P(1.5,spec.d+0.9,1.8)],brand);
+    if(o.name){ ctx.save(); ctx.fillStyle='#fff'; ctx.font='bold '+Math.max(8,Math.round(s*0.28))+'px sans-serif'; ctx.textAlign='center'; var a2=P(3,spec.d,7.4); ctx.fillText(String(o.name).toUpperCase().slice(0,10),a2[0]-s*0.1,a2[1]); ctx.restore(); }
+    [-0.6,spec.w+0.3].forEach(function(tx){ box(tx,spec.d+0.4,0,0.4,0.4,1.1,'#4aa56a'); });
+  }
+};
+UI.paintBuildings=function(g){
+  var night=false; var order=SU.SPACE_ORDER;
+  document.querySelectorAll('canvas[data-tier]').forEach(function(cv){ var tier=cv.getAttribute('data-tier'); UI.drawBuilding(cv,tier,{name:g.name,brand:({smb:'#4c6ef5',consumer:'#e8590c',market:'#12b886'})[g.arch],night:night}); });
+};
 
 /* ------------------------------------------------------------ BUILD (product) */
 var KIND_ORDER={core:0,asked:1,plat:2,unknown:3,nopay:4};
@@ -187,18 +242,21 @@ function pYou(g){
 /* ------------------------------------------------------------ SHOP */
 function pShop(g){
   var sp=SU.Shop.space(g), over=SU.Shop.over(g), idx=SU.SPACE_ORDER.indexOf(g.space||'garage');
-  var h='<div class="sec"><h4>Your space <span class="pill">'+esc(sp.name)+'</span></h4><div class="row" style="justify-content:space-between"><span class="sm">'+SU.headcount(g)+' of '+sp.seats+' seats used</span><span class="xs muted">rent '+fm(sp.rent)+'/mo</span></div>'+bar(SU.headcount(g)/sp.seats*100,over?'bad':(SU.headcount(g)/sp.seats>0.8?'warn':'good'))+(over?'<div class="xs" style="color:var(--bad)">Cramped: morale and speed are dropping.</div>':'')+'<div class="rows">';
+  var h='<div class="sec"><h4>Your building <span class="muted xs">it grows when you move up</span></h4><canvas class="bldBig" data-tier="'+(g.space||'garage')+'"></canvas><div class="bstrip">'+SU.SPACE_ORDER.map(function(id,i){ var cur=id===(g.space||'garage'), locked=i>idx, c=SU.Shop.canMove(g,id), sp2=SU.SPACES[id]; return '<button class="bcell'+(cur?' cur':'')+(locked?' lock':'')+'" data-act="move" data-id="'+id+'"'+(cur||!c.ok?' disabled':'')+' title="'+esc(cur?'You are here':(c.ok?'Move here':c.why))+'"><canvas data-tier="'+id+'"></canvas><b>'+esc(sp2.name.replace('The ',''))+'</b><span>'+(cur?'here now':sp2.seats+' seats')+'</span></button>'; }).join('')+'</div></div>';
+  h+='<div class="sec"><h4>Your space <span class="pill">'+esc(sp.name)+'</span></h4><div class="row" style="justify-content:space-between"><span class="sm">'+SU.headcount(g)+' of '+sp.seats+' seats used</span><span class="xs muted">rent '+fm(sp.rent)+'/mo</span></div>'+bar(SU.headcount(g)/sp.seats*100,over?'bad':(SU.headcount(g)/sp.seats>0.8?'warn':'good'))+(over?'<div class="xs" style="color:var(--bad)">Cramped: morale and speed are dropping.</div>':'')+'<div class="rows">';
   SU.SPACE_ORDER.forEach(function(id,i){ if(id===g.space) return; var s=SU.SPACES[id], c=SU.Shop.canMove(g,id); h+='<div class="rw"><div class="rm"><b>'+esc(s.name)+'</b><div class="rs">'+s.seats+' seats &middot; rent '+fm(s.rent)+'/mo'+(i>idx?' &middot; deposit '+fm(s.deposit):'')+'</div></div><button class="btn sm '+(i>idx?'primary':'ghost')+'" data-act="move" data-id="'+id+'"'+(c.ok?'':' disabled title="'+esc(c.why)+'"')+'>'+(i>idx?'Move in':'Move down')+'</button></div>'; });
   h+='</div></div><div class="sec"><h4>Upgrades <span class="muted xs">they show up in the office</span></h4><div class="tilegrid">';
   SU.UPGRADES.forEach(function(u){ var owned=SU.Shop.has(g,u.id), c=SU.Shop.canBuy(g,u.id);
-    h+='<button class="tile'+(owned?' done':(c.ok?'':' no'))+'" data-act="buy" data-id="'+u.id+'"><span class="tt">'+esc(u.name)+'</span><span class="tf">'+(owned?'owned':fm(u.cost))+'</span><span class="tb2">'+esc(owned?u.text:(c.ok||c.why.indexOf('Need ')!==0&&c.why.indexOf('Needs ')!==0?u.text:c.why))+'</span></button>'; });
+    h+='<button class="tile'+(owned?' done':(c.ok?'':' no'))+'" data-act="buy" data-id="'+u.id+'"><span class="tt">'+esc(u.name)+'</span><span class="tf">'+(owned?'owned':fm(u.cost))+'</span>'+(u.needs?'<span class="tag plat" style="position:absolute;right:8px;bottom:6px">Level 2</span>':'')+'<span class="tb2">'+esc(owned?u.text:(c.ok||c.why.indexOf('Need ')!==0&&c.why.indexOf('Needs ')!==0?u.text:c.why))+'</span></button>'; });
   return h+'</div></div>';
 }
 
 /* ------------------------------------------------------------ GOALS */
 function pGoals(g){
   var L=SU.Goals.list(g), done=L.filter(function(x){ return x.done; }).length, next=L.filter(function(x){ return !x.done; }).slice(0,5);
-  var h='<div class="row" style="justify-content:space-between"><b>Goals</b><span class="pill good">'+done+' of '+L.length+' reached</span></div><div class="sec">';
+  var li=SU.Level.info(g);
+  var h='<div class="lvlcard"><div class="n">'+li.n+'</div><div><b>'+esc(li.cur.title)+'</b><small>'+(li.next?'Next, level '+li.next.n+': '+esc(li.next.title)+'. '+esc(li.next.hint):'You reached the top.')+'</small><small>Every level adds a trophy to the shelf in your office.</small></div></div>';
+  h+='<div class="row" style="justify-content:space-between"><b>Goals</b><span class="pill good">'+done+' of '+L.length+' reached</span></div><div class="sec">';
   next.forEach(function(x){ var pc=x.max?x.cur/x.max*100:0; h+='<div class="rw"><div class="rm"><div class="row" style="justify-content:space-between"><b>'+esc(x.goal.title)+'</b><span class="mono xs">'+(x.money?fm(x.cur)+' / '+fm(x.max):Math.round(x.cur)+' / '+x.max)+'</span></div>'+bar(pc,'')+'<div class="rs">'+esc(x.goal.desc)+' Reward: '+esc(SU.Goals.rewardText(x.goal.reward))+'.</div></div></div>'; });
   if(!next.length) h+=empty('Every goal reached. Go build something huge.');
   h+='</div><div class="sec"><h4>Reached</h4><div class="row">'+(L.filter(function(x){ return x.done; }).map(function(x){ return '<span class="chip static ok" title="'+esc(x.goal.desc)+'">'+esc(x.goal.title)+'</span>'; }).join('')||'<span class="muted xs">None yet.</span>')+'</div></div>';

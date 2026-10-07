@@ -23,8 +23,15 @@ SU.UPGRADES = [
   {id:'sign',name:'Neon sign',cost:1500,min:'studio',fx:{hypeFloor:8},text:'Buzz never falls below 8, and it goes up a bit now.',blurb:'Your name, glowing. Visitors take photos.'},
   {id:'lounge',name:'Lounge and beanbags',cost:3500,min:'studio',fx:{morale:3,sanity:0.5},text:'Morale +3 and a little sanity back every month.',blurb:'Somewhere to think that is not a desk.'},
   {id:'nap',name:'Nap pod',cost:4500,min:'studio',fx:{sanity:2},text:'You recover 2 sanity every month.',blurb:'Twenty minutes. Reset.'},
-  {id:'servers',name:'Server upgrade',cost:6000,min:'studio',fx:{incident:0.7,vel:0.02},text:'30% fewer outages and building 2% faster.',blurb:'Blinking lights, fewer 3am pages.'}
+  {id:'servers',name:'Server upgrade',cost:6000,min:'studio',fx:{incident:0.7,vel:0.02},text:'30% fewer outages and building 2% faster.',blurb:'Blinking lights, fewer 3am pages.'},
+  {id:'mural',name:'Brand mural',cost:2000,min:'studio',fx:{morale:1,hypeFloor:5},text:'Morale +1 and buzz never falls below 5.',blurb:'A local artist paints your logo ten feet tall.'},
+  {id:'monitors2',name:'Video wall',cost:9000,min:'office',needs:'monitors',fx:{vel:0.04},text:'Building 4% faster. A whole wall of screens.',blurb:'Level 2 of Big monitors.'},
+  {id:'execdesks',name:'Executive desks',cost:7000,min:'office',needs:'standing',fx:{morale:2,vel:0.02},text:'Morale +2 and building 2% faster. Dark wood, green lamps.',blurb:'Level 2 of Standing desks.'},
+  {id:'barista',name:'Barista bar',cost:5000,min:'office',needs:'espresso',fx:{morale:3,sanity:0.5},text:'Morale +3 and a little sanity back every month.',blurb:'Level 2 of the Espresso machine. Somebody learns latte art.'},
+  {id:'gameroom',name:'Game room',cost:8000,min:'office',needs:'lounge',fx:{morale:4},text:'Morale +4. Ping pong is now a meeting.',blurb:'Level 2 of the Lounge.'},
+  {id:'rooftop',name:'Rooftop terrace',cost:30000,min:'hq',needs:'lounge',fx:{morale:5,sanity:1},text:'Morale +5 and sanity +1 every month.',blurb:'Sunset standups.'}
 ];
+SU.upgrade=function(id){ return SU.UPGRADES.filter(function(u){ return u.id===id; })[0]; };
 
 SU.Shop = {
   has:function(G,id){ return !!(G.shop && G.shop[id]); },
@@ -43,6 +50,7 @@ SU.Shop = {
   canBuy:function(G,id){
     var u=SU.UPGRADES.filter(function(x){ return x.id===id; })[0]; if(!u) return {ok:false,why:'Unknown item.'};
     if(G.shop&&G.shop[id]) return {ok:false,why:'You already have it.'};
+    if(u.needs && !(G.shop&&G.shop[u.needs])) return {ok:false,why:'Needs '+SU.upgrade(u.needs).name+' first.'};
     if(SU.SPACE_ORDER.indexOf(G.space||'garage')<SU.SPACE_ORDER.indexOf(u.min)) return {ok:false,why:'Needs '+SU.SPACES[u.min].name+' or bigger.'};
     if(G.cash<u.cost) return {ok:false,why:'Need '+fm(u.cost-G.cash)+' more.'};
     return {ok:true};
@@ -68,6 +76,26 @@ SU.Shop = {
     G.space=to; SU.journal(G,(c.up?'Moved into ':'Moved down to ')+sp.name+'.','shop',c.up);
     return {ok:true,msg:(c.up?'Moved into ':'Moved down to ')+sp.name+'. Rent is now '+fm(sp.rent)+' a month.',up:c.up};
   }
+};
+
+/* ------------------------------------------------------------ company level: a title that grows as the company does (shows in the HUD, trophies appear in the office) */
+SU.LEVELS = [
+  {n:1,title:'Napkin sketch',hint:'Just an idea.',test:function(G){ return true; }},
+  {n:2,title:'Prototype',hint:'Ship your first product.',test:function(G){ return G.shipped.length>=1; }},
+  {n:3,title:'First dollars',hint:'Land your first paying customer.',test:function(G){ return SU.custCount(G)>=1 && (G.mrr||0)>0; }},
+  {n:4,title:'Real team',hint:'Grow to 3 people.',test:function(G){ return SU.headcount(G)>=3; }},
+  {n:5,title:'Funded',hint:'Raise your first round.',test:function(G){ return G.rounds.length>=1; }},
+  {n:6,title:'Gaining ground',hint:'Reach $25K a month.',test:function(G){ return (G.mrr||0)>=25000; }},
+  {n:7,title:'Scale-up',hint:'12 people and $100K a month.',test:function(G){ return SU.headcount(G)>=12 && (G.mrr||0)>=100000; }},
+  {n:8,title:'Big leagues',hint:'Two rounds raised and $500K a month.',test:function(G){ return G.rounds.length>=2 && (G.mrr||0)>=500000; }},
+  {n:9,title:'Market leader',hint:'Reach $2M a month.',test:function(G){ return (G.mrr||0)>=2e6; }},
+  {n:10,title:'Unicorn',hint:'Reach $8M a month.',test:function(G){ return (G.mrr||0)>=8e6; }}
+];
+SU.Level = {
+  calc:function(G){ var n=1; SU.LEVELS.forEach(function(l){ if(l.test(G)) n=Math.max(n,l.n); }); n=Math.max(n,G.lvl||1); return n; },
+  info:function(G){ var n=SU.Level.calc(G); return {n:n,cur:SU.LEVELS[n-1],next:SU.LEVELS[n]||null}; },
+  /* returns the new level when it just went up, else 0 */
+  check:function(G){ var n=SU.Level.calc(G), was=G.lvl||1; G.lvl=n; return n>was?n:0; }
 };
 
 /* ------------------------------------------------------------ platform features (each one does something you can see) */

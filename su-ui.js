@@ -10,9 +10,9 @@ function setSheet(open){ S.sheet=open; document.body.setAttribute('data-sheet',o
 UI.setSheet=setSheet;
 /* the office is centred in the part of the screen the floating panels leave free */
 function insets(){
-  var st=$('.office .stage'), sd=$('.side'); if(!st||!sd||isPhone()) return {l:0,t:0,r:0,b:0};
+  var st=$('.office .stage'), sd=$('.rcol'); if(!st||!sd||isPhone()) return {l:0,t:0,r:0,b:0};
   var a=st.getBoundingClientRect(), b=sd.getBoundingClientRect();
-  return {l:0,t:34,r:Math.max(0,a.right-b.left+6),b:window.innerHeight<620?70:120};
+  var pl=$('#plan'); var pb=pl?Math.max(0,a.bottom-pl.getBoundingClientRect().top):0; return {l:0,t:34,r:Math.max(0,a.right-b.left+6),b:Math.min(pb,170)+4};
 }
 var root=null, modalEl=null, toastTimer=null;
 
@@ -160,13 +160,13 @@ function buildShell(){
   '<header class="top" id="hdr"></header>'+
   '<main class="game">'+
     '<section class="office"><div class="stage"><canvas id="officeCv"></canvas>'+
-      '<div class="hud"><div class="hud-top"><b id="hudDate"></b><div class="hud-bar"><i id="hudBar"></i></div><button class="btn sm" data-act="report">Last month</button></div><div class="hud-cap"><span id="capR"></span><span id="capL"></span></div><div class="ticker" id="ticker"></div></div>'+
+      '<div class="hud"><div class="hud-top"><b id="hudDate"></b><div class="hud-bar"><i id="hudBar"></i></div><span class="lvl" id="hudLvl" data-act="golvl" role="button"></span><button class="btn sm" data-act="report">Last month</button></div><div class="hud-cap"><span id="capR"></span><span id="capL"></span></div><div class="ticker" id="ticker"></div></div>'+
       '<div class="tip" id="tip" hidden></div><div class="pop" id="pop" hidden></div></div></section>'+
     '<section class="card plan" id="plan"></section>'+
-    '<aside class="card side"><div class="icontabs" id="tabs" role="tablist"></div><div class="pn" id="pn"><div class="pn-in" id="pnIn"></div><div id="drawer"></div></div></aside>'+
+    '<div class="rcol"><aside class="card side"><div class="icontabs" id="tabs" role="tablist"></div><div class="pn" id="pn"><div class="pn-in" id="pnIn"></div><div id="drawer"></div></div></aside></div>'+
   '</main>';
 }
-function refreshAll(){ renderHeader(); renderCaption(); renderHud(); renderPlan(); UI.renderTabs(); }
+function refreshAll(){ renderHeader(); renderCaption(); renderHud(); renderPlan(); UI.renderTabs(); if(S.lvlPop){ S.lvlPop=false; var lb=$('#hudLvl'); if(lb){ lb.classList.remove('pop'); void lb.offsetWidth; lb.classList.add('pop'); } } }
 UI.refreshAll=refreshAll;
 
 /* ------------------------------------------------------------ header */
@@ -201,6 +201,7 @@ function renderCaption(){
   $('#capR').innerHTML=(f.burn<=0?'<span class="pill good">Profitable</span>':(G.mrr<=0&&G.t<=6)?'<span class="pill">Pre-revenue: '+(f.runway>=99?'99+':f.runway.toFixed(0))+' month'+(Math.round(f.runway)===1?'':'s')+' of cash</span>':da?'<span class="pill good">Default alive</span>':'<span class="pill bad">Default dead'+(f.daMonth?': cash out in ~'+f.daMonth+' mo':'')+'</span>');
 }
 function renderHud(){
+  var li=SU.Level.info(G), lb=$('#hudLvl'); if(lb){ lb.textContent='Lv '+li.n+' \u00b7 '+li.cur.title; lb.title=li.next?'Next: '+li.next.title+'. '+li.next.hint:'Top level. You built a unicorn.'; }
   $('#hudDate').textContent=SU.dateStr(G)+(SU.turnMonths(G)===3?' (a quarter per turn)':'');
   renderTicker();
 }
@@ -284,6 +285,7 @@ function finishRun(rec){
   G.inbox.filter(function(i){ return parseInt(i.id.slice(1),10)>S.seenIid && (i.kind==='person'||i.kind==='crisis'||i.kind==='opp'); }).slice(0,3).forEach(function(i){ pushTicker(i.title,i.kind==='crisis'?'bad':''); });
   (rec.newGoals||[]).forEach(function(g){ pushTicker('Goal reached: '+g.title+'. '+g.reward,'goal'); Iso.banner('Goal reached: '+g.title,'#7048e8',4); UI.sfx('goal'); });
   if(rec.hired&&rec.hired.length) UI.sfx('hire');
+  var lvUp=SU.Level.check(G); if(lvUp){ var lv=SU.LEVELS[lvUp-1]; pushTicker('Level '+lvUp+': '+lv.title+'.','goal'); Iso.banner('Level '+lvUp+': '+lv.title,'#f59f00',4.5); UI.sfx('goal'); S.lvlPop=true; }
   refreshAll(); Iso.sync(G);
   if(G.over){ setTimeout(function(){ UI.showEnd(); },700); return; }
   var blk=blockers(rec);
@@ -419,6 +421,7 @@ function onClick(e){
     case 'unplan': var u=+t.getAttribute('data-uid'); S.plan=S.plan.filter(function(x){ return x.uid!==u; }); renderPlan(); break;
     case 'pin': var u2=+t.getAttribute('data-uid'); S.plan.forEach(function(x){ if(x.uid===u2) x.repeat=!x.repeat; }); renderPlan(); UI.toast('Repeats every month until you remove it.',1800); break;
     case 'coach-add': var c=S.ideas&&S.ideas[+t.getAttribute('data-i')]; if(c) UI.addItem({aid:c.aid,values:JSON.parse(JSON.stringify(c.values))}); break;
+    case 'golvl': UI.setTab('goals'); break;
     case 'tab': { var nt=t.getAttribute('data-tab'); if(isPhone()&&S.sheet&&S.tab===nt&&!S.drawer){ setSheet(false); } else { S.tab=nt; S.drawer=null; setSheet(true); } UI.renderTabs(); break; }
     case 'pop-add': var pa=t.getAttribute('data-aid'); var pv={}; if(t.getAttribute('data-k')) pv[t.getAttribute('data-k')]=t.getAttribute('data-v'); UI.addItem({aid:pa,values:CAT.defaults(G,pa,pv)}); $('#pop').hidden=true; break;
     case 'ai-advice': UI.closeModal(); if(SU.AI) SU.AI.advice(); break;
