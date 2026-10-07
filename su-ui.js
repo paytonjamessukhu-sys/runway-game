@@ -160,7 +160,7 @@ function buildShell(){
   '<header class="top" id="hdr"></header>'+
   '<main class="game">'+
     '<section class="office"><div class="stage"><canvas id="officeCv"></canvas>'+
-      '<div class="hud"><div class="hud-top"><b id="hudDate"></b><div class="hud-bar"><i id="hudBar"></i></div><span class="lvl" id="hudLvl" data-act="golvl" role="button"></span><button class="btn sm" data-act="view" data-id="health" id="hudHealth">Health</button><button class="btn sm" data-act="report">Last month</button></div><div class="hud-cap"><span id="capR"></span><span id="capL"></span></div><div class="coach" id="coach"></div><div class="ticker" id="ticker"></div></div>'+
+      '<div class="hud"><div class="hud-top"><b id="hudDate"></b><div class="hud-bar"><i id="hudBar"></i></div><span class="lvl" id="hudLvl" data-act="golvl" role="button"></span><button class="btn sm" data-act="view" data-id="health" id="hudHealth">Health</button><button class="btn sm" data-act="labels" id="hudLabels">Labels: on</button><button class="btn sm" data-act="report">Last month</button></div><div class="hud-cap"><span id="capR"></span><span id="capL"></span></div><div class="coach" id="coach"></div><div class="ticker" id="ticker"></div></div>'+
       '<div class="tip" id="tip" hidden></div><div class="pop" id="pop" hidden></div></div></section>'+
     '<section class="card plan" id="plan"></section>'+
     '<div class="rcol"><aside class="card side"><div class="icontabs" id="tabs" role="tablist"></div><div class="pn" id="pn"><div class="pn-in" id="pnIn"></div><div id="drawer"></div></div></aside></div>'+
@@ -434,6 +434,7 @@ function onClick(e){
     case 'unplan': var u=+t.getAttribute('data-uid'); S.plan=S.plan.filter(function(x){ return x.uid!==u; }); renderPlan(); break;
     case 'pin': var u2=+t.getAttribute('data-uid'); S.plan.forEach(function(x){ if(x.uid===u2) x.repeat=!x.repeat; }); renderPlan(); UI.toast('Repeats every month until you remove it.',1800); break;
     case 'coach-add': var c=S.ideas&&S.ideas[+t.getAttribute('data-i')]; if(c) UI.addItem({aid:c.aid,values:JSON.parse(JSON.stringify(c.values))}); break;
+    case 'labels': S.labels=(S.labels===false); Iso.setLabels(S.labels!==false); t.textContent='Labels: '+(S.labels!==false?'on':'off'); break;
     case 'golvl': UI.setTab('goals'); break;
     case 'tab': { var nt=t.getAttribute('data-tab'); if(isPhone()&&S.sheet&&S.tab===nt&&!S.drawer){ setSheet(false); } else { S.tab=nt; S.drawer=null; setSheet(true); } UI.renderTabs(); break; }
     case 'pop-add': var pa=t.getAttribute('data-aid'); var pv={}; if(t.getAttribute('data-k')) pv[t.getAttribute('data-k')]=t.getAttribute('data-v'); UI.addItem({aid:pa,values:CAT.defaults(G,pa,pv)}); $('#pop').hidden=true; break;

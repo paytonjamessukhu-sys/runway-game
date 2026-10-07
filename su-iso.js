@@ -22,7 +22,10 @@ function mix(a,b,t){ var x=hex2rgb(a), y=hex2rgb(b); return '#'+[0,1,2].map(func
 var SKIN=['#f2d3b5','#e6b995','#c98e63','#9c6742','#6b4528'];
 var HAIR=['#2b2118','#5a3b22','#a1661f','#d8b45a','#b5352b','#8a8f99'];
 var SHIRT=['#4c78c9','#e0597a','#3aa38b','#e0922d','#7b5fc4','#c4553a','#5a6b7d','#2e9bb5'];
-var ROLECOL={eng:'#4c78c9',design:'#e0597a',pm:'#7b5fc4',sdr:'#3aa38b',ae:'#2e9bb5',cs:'#e0922d',mkt:'#c4553a',cos:'#5a6b7d',vp:'#2b2f3a'};
+var ROLECOL={eng:'#4c78c9',design:'#e0597a',pm:'#7b5fc4',sdr:'#3aa38b',ae:'#2e9bb5',cs:'#e0922d',mkt:'#c4553a',cos:'#5a6b7d',vp:'#2b2f3a',mgr:'#8a6d3b'};
+var ROLEABBR={eng:'ENG',design:'DESIGN',pm:'PM',mgr:'MGR',sdr:'SDR',ae:'AE',cs:'SUPPORT',mkt:'MKT',cos:'CoS',vp:'VP'};
+var showLabels=true;
+Iso.setLabels=function(v){ showLabels=!!v; };
 var OUT='rgba(30,25,45,.30)';
 
 /* ------------------------------------------------------------ projection and primitives */
@@ -415,6 +418,7 @@ function drawPerson(p){
   if(p.mug){ var m=P(x+fx*0.2+0.05,y+fy*0.2+0.05,tz+0.18); box(x+fx*0.22,y+fy*0.22,tz+0.12,0.1,0.1,0.12,'#fff'); }
   if(p.carry){ box(x+fx*0.26-0.12,y+fy*0.26-0.12,tz+0.02,0.3,0.3,0.24,'#c69a5c'); }
   if(p.star){ var sp2=P(x,y,hz+hs+0.35+Math.sin(wallClock*3)*0.03); ctx.fillStyle='#ffb703'; ctx.beginPath(); ctx.moveTo(sp2[0],sp2[1]-5*cam.s); ctx.lineTo(sp2[0]+4*cam.s,sp2[1]+3*cam.s); ctx.lineTo(sp2[0]-4*cam.s,sp2[1]+3*cam.s); ctx.closePath(); ctx.fill(); }
+  if(showLabels&&(p.kind==='emp'||p.kind==='you'||p.kind==='co')&&!p.leaving){ var lp=P(x,y,hz+hs+0.16); var role=p.kind==='you'?'YOU':(p.kind==='co'?'COFOUNDER':(ROLEABBR[p.role]||'')); var fn=(p.name||'').split(' ')[0]; var txt=role+(fn&&p.kind==='emp'?' \u00b7 '+fn:''); var fs=Math.max(8,Math.round(8.5*cam.s)); ctx.save(); ctx.font='bold '+fs+'px sans-serif'; var tw2=ctx.measureText(txt).width+10; var bx=lp[0]-tw2/2, by=lp[1]-fs-5; ctx.globalAlpha=0.93; ctx.fillStyle=p.kind==='you'?'#f2b01e':(p.kind==='co'?'#8b5cf6':(ROLECOL[p.role]||'#556')); rrect(bx,by,tw2,fs+5,3); ctx.fill(); ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(txt,lp[0],by+(fs+5)/2+0.5); var en=p.src&&p.src.energy!=null?p.src.energy:null; if(en!==null){ ctx.fillStyle=en<35?'#ff5a4d':(en<60?'#ffc83d':'#5be3a1'); ctx.beginPath(); ctx.arc(bx+tw2-3,by+3,2.6,0,6.3); ctx.fill(); } ctx.restore(); }
   if(p.suit){ vrect(fx!==0?'x':'y',(fx!==0?x+td/2:y+td/2),(fx!==0?y-0.03:x-0.03),(fx!==0?y+0.03:x+0.03),tz+0.04,tz+0.34,'#c4352f'); }
 }
 /* sitting person on a chair */
