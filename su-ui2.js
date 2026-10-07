@@ -398,7 +398,7 @@ function rivalCard(g,r){
    '<div class="sbar"><span class="sl">Share</span>'+bar(Math.min(100,r.presence*160),thr[1])+'<span class="sv mono">'+Math.round(r.presence*100)+'%</span></div>'+
    '<div class="sbar"><span class="sl">Product</span>'+bar(r.Q,'')+'<span class="sv mono">'+Math.round(r.Q)+'</span></div><div class="xs muted" style="margin:-2px 0 2px 70px">'+cmp(r.Q,g.Q)+' (yours '+Math.round(g.Q)+')</div>'+
    '<div class="sbar"><span class="sl">Buzz</span>'+bar(r.hype,'')+'<span class="sv mono">'+Math.round(r.hype)+'</span></div><div class="xs muted" style="margin:-2px 0 2px 70px">'+cmp(r.hype,g.hype)+' (yours '+Math.round(g.hype)+')</div>'+
-   '<div class="xs"><b>Price:</b> '+(r.price<0.9?'cheaper than the market':(r.price>1.1?'pricier than the market':'near the market'))+' &middot; <b>Cash:</b> '+fm(r.cash)+(r.burn>0?' ('+(months>=36?'3+ years':months.toFixed(0)+' months')+' left)':'')+'</div>'+
+   '<div class="xs"><b>To buy them:</b> '+fm(SU.buyoutPrice(g,r))+(SU.buyoutCheck(g,r).ok?' (you can afford it)':'')+'</div><div class="xs"><b>Price:</b> '+(r.price<0.9?'cheaper than the market':(r.price>1.1?'pricier than the market':'near the market'))+' &middot; <b>Cash:</b> '+fm(r.cash)+(r.burn>0?' ('+(months>=36?'3+ years':months.toFixed(0)+' months')+' left)':'')+'</div>'+
    (r.respect>0||r.grudge>0?'<div class="xs muted">'+(r.grudge>r.respect?'They hold a grudge against you.':'They respect you.')+'</div>':'')+'</div>';
   return h;
 }

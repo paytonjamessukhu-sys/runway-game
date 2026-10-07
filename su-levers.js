@@ -274,6 +274,15 @@ A.talkto=function(G,cl,ctx,r){
   else if(p.aud==='customers'){ G.trust.cust=clamp(G.trust.cust+4,0,100); note(r,'Customer note sent. Trust +4.'); }
   else { G.morale=clamp(G.morale+2,0,100); note(r,'Conversation held.'); }
 };
+SU.buyoutPrice=function(G,rv){ return Math.round(Math.max(300e3, rv.presence*3e6+Math.max(0,rv.cash)*0.5)/1e4)*1e4; };
+SU.buyoutCheck=function(G,rv){
+  if(!rv||!rv.active) return {ok:false,why:'They are not around.'};
+  var price=SU.buyoutPrice(G,rv), f=SU.fin(G), keep=Math.max(0,f.burn)*4;
+  if(G.act<2) return {ok:false,why:'Nobody sells to a garage startup. Come back in Act 2.',price:price};
+  if(rv.grudge>rv.respect+20) return {ok:false,why:rv.boss+' will not sell to you after how you have treated them. Try coffee first.',price:price};
+  if(G.cash<price+keep) return {ok:false,why:'You need '+SU.fmtMoney(price+keep-G.cash)+' more. You also keep 4 months of burn.',price:price};
+  return {ok:true,price:price};
+};
 A.rival=function(G,cl,ctx,r){
   var p=cl.params; var rv=G.rivals.filter(function(x){ return x.id===p.rival; })[0] || G.rivals.filter(function(x){ return x.active; })[0];
   if(!rv){ note(r,'No rival to deal with.'); r.status='warn'; return; }
@@ -281,6 +290,11 @@ A.rival=function(G,cl,ctx,r){
   else if(p.act==='sue'){ spend(G,40000,'Legal'); var win=SU.chance(G,0.3,'rivals'); if(win && rv.id==='mirrormint'){ rv.presence=Math.max(0,rv.presence-0.1); note(r,'You won. MirrorMint backed off.'); } else note(r,'The lawsuit drags on and costs '+fm(40000)+'. Nothing changed.'); rv.grudge=clamp(rv.grudge+10,-100,100); }
   else if(p.act==='poach'){ var comp=SU.salaryFor(G,'ae','senior')*1.2; G.reqs.push({id:'q'+(++G.rid),role:'ae',level:'senior',comp:comp,equity:0.003,age:2,agency:false}); rv.grudge=clamp(rv.grudge+15,-100,100); note(r,'Recruiting a senior account exec from '+rv.name+'. They will remember.'); }
   else if(p.act==='undercut'){ G.flags.priceWar=G.mi; rv.grudge=clamp(rv.grudge+10,-100,100); note(r,'You started a price war with '+rv.name+'. Margins suffer for both of you.'); r.status='warn'; }
+  else if(p.act==='buyout'){ var bc=SU.buyoutCheck(G,rv); if(!bc.ok){ note(r,bc.why); r.status='warn'; return; }
+    spend(G,bc.price,'Bought '+rv.name); var gain=Math.max(3,Math.round(SU.custCount(G)*rv.presence*0.8+rv.presence*20)), c=G.cust;
+    if(G.arch==='smb') c.n+=gain; else if(G.arch==='consumer'){ c.payers+=gain; c.mau+=gain*8; } else { c.S+=Math.round(gain/2); c.D+=Math.round(gain/2); }
+    rv.active=false; rv.presence=0; G.hype=clamp(G.hype+6,0,100); G.morale=clamp(G.morale-2,0,100); G.flags.bought=(G.flags.bought||0)+1;
+    SU.journal(G,'Bought '+rv.name+' for '+fm(bc.price)+'.','money',true); note(r,'You bought '+rv.name+' for '+fm(bc.price)+'. Their '+gain+' customers are yours, and the market got easier. Buzz +6.'); }
   else { note(r,'Merger talks need a respectful relationship. Try coffee first.'); }
 };
 A.exit=function(G,cl,ctx,r){
