@@ -160,7 +160,7 @@ function buildShell(){
   '<header class="top" id="hdr"></header>'+
   '<main class="game">'+
     '<section class="office"><div class="stage"><canvas id="officeCv"></canvas>'+
-      '<div class="hud"><div class="hud-top"><b id="hudDate"></b><div class="hud-bar"><i id="hudBar"></i></div><span class="lvl" id="hudLvl" data-act="golvl" role="button"></span><button class="btn sm" data-act="report">Last month</button></div><div class="hud-cap"><span id="capR"></span><span id="capL"></span></div><div class="coach" id="coach"></div><div class="ticker" id="ticker"></div></div>'+
+      '<div class="hud"><div class="hud-top"><b id="hudDate"></b><div class="hud-bar"><i id="hudBar"></i></div><span class="lvl" id="hudLvl" data-act="golvl" role="button"></span><button class="btn sm" data-act="view" data-id="health" id="hudHealth">Health</button><button class="btn sm" data-act="report">Last month</button></div><div class="hud-cap"><span id="capR"></span><span id="capL"></span></div><div class="coach" id="coach"></div><div class="ticker" id="ticker"></div></div>'+
       '<div class="tip" id="tip" hidden></div><div class="pop" id="pop" hidden></div></div></section>'+
     '<section class="card plan" id="plan"></section>'+
     '<div class="rcol"><aside class="card side"><div class="icontabs" id="tabs" role="tablist"></div><div class="pn" id="pn"><div class="pn-in" id="pnIn"></div><div id="drawer"></div></div></aside></div>'+
@@ -180,7 +180,7 @@ function renderHeader(over){
   var dashes=''; for(var i=0;i<24;i++) dashes+='<span class="dash'+(i<Math.round(rw.mo)?' on':'')+'"></span>';
   var act=SU.ACTS[G.act-1];
   $('#hdr').innerHTML='<div class="brand">RUNWAY</div><div class="who"><b>'+esc(G.name)+'</b><span>Act '+G.act+': '+esc(act.name)+'</span></div>'+
-   '<div class="meters">'+
+   '<div class="meters" data-act="view" data-id="health" title="Tap for a plain-words health check" style="cursor:pointer">'+
    '<div class="m'+(cash<0?' neg':'')+'"><span class="l">Cash</span><span class="v" id="mCash">'+fm(cash)+'</span><span class="d '+(b&&G.cash>=b.cash?'up':'dn')+'">'+(b&&!over?delta(G.cash,b.cash,true):'&nbsp;')+'</span></div>'+
    '<div class="runway '+rw.cls+'" title="Months of cash left at the current burn"><div class="dashes">'+dashes+'</div><div class="rt"><span>Runway</span><b>'+(rw.inf?'profitable':(f.runway>=99?'99+ mo':f.runway.toFixed(1)+' mo'))+'</b></div></div>'+
    '<div class="m"><span class="l">Revenue / mo</span><span class="v" id="mMrr">'+fm(mrr)+'</span><span class="d '+(b&&(G.mrr||0)>=b.mrr?'up':'dn')+'">'+(b&&!over?delta(G.mrr||0,b.mrr,true):'&nbsp;')+'</span></div>'+
@@ -201,6 +201,7 @@ function renderCaption(){
   $('#capR').innerHTML=(f.burn<=0?'<span class="pill good">Profitable</span>':(G.mrr<=0&&G.t<=6)?'<span class="pill">Pre-revenue: '+(f.runway>=99?'99+':f.runway.toFixed(0))+' month'+(Math.round(f.runway)===1?'':'s')+' of cash</span>':da?'<span class="pill good">Default alive</span>':'<span class="pill bad">Default dead'+(f.daMonth?': cash out in ~'+f.daMonth+' mo':'')+'</span>');
 }
 function renderHud(){
+  try{ var hh=CAT.health(G), w=hh[0], hb=$('#hudHealth'); if(hb){ hb.className='btn sm hb-'+(w?w.state:'good'); hb.textContent=(w&&w.state!=='good')?'Health: '+w.label:'Health'; } }catch(e){}
   var li=SU.Level.info(G), lb=$('#hudLvl'); if(lb){ lb.textContent='Lv '+li.n+' \u00b7 '+li.cur.title; lb.title=li.next?'Next: '+li.next.title+'. '+li.next.hint:'Top level. You built a unicorn.'; }
   $('#hudDate').textContent=SU.dateStr(G)+(SU.turnMonths(G)===3?' (a quarter per turn)':'');
   renderTicker();
@@ -210,7 +211,10 @@ function renderTicker(){ var el=$('#ticker'); if(!el) return; var now=Date.now()
 UI.pushTicker=pushTicker;
 
 /* ------------------------------------------------------------ the plan */
-UI.planFocus=function(){ var u=0; S.plan.forEach(function(it){ u+=CAT.item(G,it).focus; }); return u; };
+/* managers run up to 2 pinned (repeat) moves each, for free */
+function delegated(){ var slots=Math.min(4,2*SU.count(G,'mgr')), set={}, n=0; S.plan.forEach(function(it){ if(it.repeat&&n<slots){ set[it.uid]=1; n++; } }); return set; }
+UI.delegated=delegated;
+UI.planFocus=function(){ var u=0, d=delegated(); S.plan.forEach(function(it){ if(!d[it.uid]) u+=CAT.item(G,it).focus; }); return u; };
 UI.addItem=function(it){
   var a=CAT.actions[it.aid]; var item=CAT.item(G,it);
   if(a && a.unique){ var key=a.unique===true?'':String((it.values||{})[a.unique]); S.plan=S.plan.filter(function(x){ if(x.aid!==it.aid) return true; if(a.unique===true) return false; return String((x.values||{})[a.unique])!==key; }); }
@@ -228,9 +232,10 @@ function renderPlan(){
   var el=$('#plan'); if(!el||!G) return;
   var budget=SU.focusBudget(G).budget, used=UI.planFocus(), tm=SU.turnMonths(G);
   var dots=''; var total=Math.round(budget); for(var i=0;i<total;i++) dots+='<i class="'+(i<Math.round(used)?'on':'')+'"></i>';
+  var dlg=delegated();
   var items=S.plan.map(function(it,ix){ var r=CAT.item(G,it); var pin=(it.aid==='quick'||it.aid==='text')?false:!!(CAT.actions[it.aid]&&CAT.actions[it.aid].repeat); var a=CAT.actions[it.aid];
     var sub=''; try{ if(a&&a.preview&&it.values){ var pv=a.preview(G,it.values); sub=(pv&&pv[0])||''; } }catch(e){}
-    return '<div class="qrow'+(it.repeat?' pinned':'')+'"><span class="qn">'+(ix+1)+'</span><div class="qm"><b title="'+esc(r.label)+'">'+esc(r.label)+'</b>'+(sub?'<span class="qsub">'+esc(sub)+'</span>':'')+'</div>'+(r.focus?'<span class="pf">'+r.focus+' focus</span>':'<span class="pf">free</span>')+(pin?'<button class="pb'+(it.repeat?' on':'')+'" data-act="pin" data-uid="'+it.uid+'" title="Repeat every month">'+UI.icon('repeat')+'</button>':'')+'<button class="pb" data-act="unplan" data-uid="'+it.uid+'" title="Remove">'+UI.icon('x')+'</button></div>'; }).join('');
+    return '<div class="qrow'+(it.repeat?' pinned':'')+'"><span class="qn">'+(ix+1)+'</span><div class="qm"><b title="'+esc(r.label)+'">'+esc(r.label)+'</b>'+(sub?'<span class="qsub">'+esc(sub)+'</span>':'')+'</div>'+(dlg[it.uid]?'<span class="pf" title="Your manager handles this one">manager</span>':(r.focus?'<span class="pf">'+r.focus+' focus</span>':'<span class="pf">free</span>'))+(pin?'<button class="pb'+(it.repeat?' on':'')+'" data-act="pin" data-uid="'+it.uid+'" title="Repeat every month">'+UI.icon('repeat')+'</button>':'')+'<button class="pb" data-act="unplan" data-uid="'+it.uid+'" title="Remove">'+UI.icon('x')+'</button></div>'; }).join('');
   var vel=Math.max(0.1,SU.velocity(G)), cum=0;
   var bq=G.queue.map(function(q){ cum+=q.scope-q.progress; var mo=Math.max(1,Math.ceil(cum/vel-1e-6)); var pc=q.scope?Math.round(q.progress/q.scope*100):0;
     return '<div class="bq"><div class="bq-t"><b>'+esc(q.name)+'</b><span class="mono xs">'+pc+'%</span></div><div class="bar"><i style="width:'+pc+'%"></i></div><span class="xs muted">'+(mo===1?'Ships next month':'Ships in about '+mo+' months')+'</span></div>'; }).join('');
@@ -259,11 +264,11 @@ function renderCoach(){
 
 /* ------------------------------------------------------------ run a month */
 function planToCommit(){
-  var clauses=[], claims=null, promises=[], skipped=0, used=0, budget=SU.focusBudget(G).budget;
+  var dl=delegated(); var clauses=[], claims=null, promises=[], skipped=0, used=0, budget=SU.focusBudget(G).budget;
   S.plan.forEach(function(it){
     if(it.aid!=='quick'&&it.aid!=='text'){ var ok=CAT.validate(G,it.aid,it.values); if(!ok.ok){ skipped++; UI.pushTicker('Skipped: '+(CAT.actions[it.aid]?CAT.actions[it.aid].title:'a move')+'. '+(ok.why||''),'bad'); return; } }
-    var r=CAT.item(G,it); if(used+r.focus>budget+1e-9){ skipped++; return; } used+=r.focus;
-    if(r.special==='announce') claims=(claims||[]).concat(r.claims); else if(r.special==='promise') promises.push(r.promise); else r.clauses.forEach(function(c){ clauses.push(c); });
+    var r=CAT.item(G,it), free=!!dl[it.uid]; if(!free&&used+r.focus>budget+1e-9){ skipped++; return; } if(!free) used+=r.focus;
+    if(r.special==='announce') claims=(claims||[]).concat(r.claims); else if(r.special==='promise') promises.push(r.promise); else r.clauses.forEach(function(c){ if(free) c.focus=0; clauses.push(c); });
   });
   return {clauses:clauses,claims:claims,promises:promises};
 }

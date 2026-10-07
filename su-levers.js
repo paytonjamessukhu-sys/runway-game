@@ -297,6 +297,7 @@ SU.focusBudget=function(G){
   var b=(SU.FOCUS_BASE[G.act]||10)+(G.focusBonus||0), mods=[]; if(G.focusBonus) mods.push('goals +'+G.focusBonus);
   var s=G.founder.sanity; if(s<20){ b-=4; mods.push('fried -4'); } else if(s<40){ b-=2; mods.push('frayed -2'); }
   if(G.co&&G.co.cid==='ivy'){ b+=2; mods.push('operator +2'); }
+  var mg=Math.min(2,SU.count(G,'mgr')); if(mg>0){ b+=mg; mods.push('manager'+(mg>1?'s':'')+' +'+mg); }
   if(SU.count(G,'cos')>0){ b+=2; mods.push('chief of staff +2'); }
   if(G.round){ b-=4; mods.push('open round -4'); }
   if(G.lastStand){ b+=3; mods.push('last stand +3'); }

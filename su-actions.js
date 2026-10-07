@@ -146,11 +146,11 @@ def({id:'rival',group:'sales',title:'Deal with a competitor',blurb:'Coffee, a pr
   preview:function(G,v){ return {coffee:['Respect goes up and you may learn how much cash they have left.'],undercut:['Both of you lose margin. Do this only if you can win.'],poach:['Posts a senior account exec job. They will remember.'],sue:['Costs $40K. Wins about 30% of the time, and only against copycats.']}[v.act]; }});
 
 /* ------------------------------------------------------------ TEAM */
-var ROLE_BLURB={eng:'Builds the product faster.',design:'Makes it nicer, helps every engineer.',pm:'Keeps the roadmap sane.',sdr:'Sends outreach all month, every month.',ae:'Closes the deals your outreach finds.',cs:'Keeps customers happy and subscribed.',mkt:'Makes your marketing spend work harder.',cos:'Gives you more focus each month.',vp:'Runs a whole department.'};
+var ROLE_BLURB={mgr:'Handles the small stuff.',eng:'Builds the product faster.',design:'Makes it nicer, helps every engineer.',pm:'Keeps the roadmap sane.',sdr:'Sends outreach all month, every month.',ae:'Closes the deals your outreach finds.',cs:'Keeps customers happy and subscribed.',mkt:'Makes your marketing spend work harder.',cos:'Gives you more focus each month.',vp:'Runs a whole department.'};
 def({id:'hire',group:'team',title:'Hire someone',blurb:'You post a job, then pick from three candidates when they apply.',
   ok:function(G){ return G.reqs.length<8?{ok:true}:{ok:false,why:'You already have 8 open roles.'}; },
   ctl:function(G,v){
-    var roles=['eng','design','pm','sdr','ae','cs','mkt']; if(G.act>=3) roles.push('cos','vp');
+    var roles=['eng','design','pm','mgr','sdr','ae','cs','mkt']; if(G.act>=3) roles.push('cos','vp');
     var role=(v&&v.role)||'eng';
     return [{k:'role',label:'Who do you need',kind:'cards',opts:roles.map(function(r){ var fit=SU.roleFit(G,r); return opt(r,SU.ROLES[r].name,SU.ROLE_GUIDE[r].tag+(fit.state==='no'?' (no effect for you right now)':'')); }),def:'eng'},
       {k:'level',label:'Experience',kind:'choice',opts:[opt('junior','Junior'),opt('mid','Mid'),opt('senior','Senior')],def:(role==='vp'||role==='cos')?'senior':'mid'},
@@ -300,6 +300,42 @@ CAT.item=function(G,it){
 };
 
 /* ------------------------------------------------------------ coach: what a good player would look at now */
+/* ------------------------------------------------------------ health check: every header number in plain words, with a fix */
+CAT.health=function(G){
+  var f=SU.fin(G), out=[], mrr=G.mrr||0, n=SU.custCount(G), band=SU.pmfBand(G), churn=G.stat.churnRate||0, gm=SU.growthMo(G);
+  var avgEn=G.team.length?G.team.reduce(function(a,e){ return a+SU.energyOf(e); },0)/G.team.length:100;
+  function add(id,label,val,state,meaning,fix){ out.push({id:id,label:label,val:val,state:state,meaning:meaning,fix:fix||[]}); }
+  function fx(aid,values,label){ return {aid:aid,values:CAT.defaults(G,aid,values||{}),label:label}; }
+  /* runway */
+  var rs=f.burn<=0?'good':(f.runway<4?'bad':(f.runway<8?'warn':'good'));
+  add('runway','Runway',f.burn<=0?'profitable':(f.runway>=99?'99+ months':f.runway.toFixed(1)+' months'),rs,
+    f.burn<=0?'You make more than you spend. Nothing can kill you but a bad decision.':'Months until cash hits zero at today’s spending. Under 6 is dangerous, because raising money takes months.',
+    rs==='good'?[]:[fx('cutburn',{pct:25},'Cut spending 25%'),fx('raise',{stage:'preseed'},'Start raising money')]);
+  /* product fit */
+  var ps=band.hi<35?'bad':(band.hi<55?'warn':'good');
+  add('fit','Product fit',band.lo+' to '+band.hi+' of 100',ps,'How much customers want what you built. It is a range because you cannot see it exactly: talking to customers narrows it. Under 40 selling is a grind. Over 60 customers pull it from you.',
+    ps==='good'?[]:[fx('talk',{n:8},'Interview 8 customers')]);
+  /* growth */
+  if(mrr>0||n>0){ var gs=gm>=0.1?'good':(gm>=0.03?'warn':'bad'); add('growth','Growth',(gm>=0?'+':'')+Math.round(gm*100)+'% a month',gs,'How fast revenue is growing, averaged over 3 months. Above 10% a month is excellent. Under 3% means you are stalling.',
+    gs==='good'?[]:[(G.arch==='consumer'?fx('market',{channel:'social',budget:500},'Pay creators $500 a month'):fx('outbound',{ch:'email',n:300},'Cold-email 300 prospects'))]); }
+  /* churn */
+  if(n>0){ var cs=churn>0.08?'bad':(churn>0.04?'warn':'good'); add('churn','Churn',(Math.round(churn*1000)/10)+'% a month',cs,'Out of every 100 customers, how many cancel each month. Above 5% is a leaky bucket: you must sell just to stand still.',
+    cs==='good'?[]:[fx('build',{fk:'plat:onboarding',care:1},'Build guided onboarding'),fx('hire',{role:'cs'},'Hire customer success')]); }
+  /* support load */
+  if(n>0){ var cap=300+150*SU.count(G,'cs'), ld=n/cap, ss=ld>1?'bad':(ld>0.75?'warn':'good'); add('support','Support load',SU.fmtNum(n)+' of '+cap,ss,'You handle about 300 customers yourself and each customer success hire adds 150. Over the limit, churn jumps 20%.',
+    ss==='good'?[]:[fx('hire',{role:'cs'},'Hire customer success')]); }
+  /* team energy */
+  if(G.team.length){ var es=avgEn<35?'bad':(avgEn<55?'warn':'good'); add('energy','Team energy',Math.round(avgEn)+' of 100',es,'How rested your team is. Crunch, a crowded office and low morale drain it. Tired people build slower and quit sooner.',
+    es==='good'?[]:[fx('allhands',{},'Hold an all-hands'),fx('offsite',{},'Team offsite')]); }
+  /* tech debt */
+  var ds=G.D>50?'bad':(G.D>30?'warn':'good'); add('debt','Tech debt',Math.round(G.D)+' of 100',ds,'Shortcuts you took while building. High debt slows building and causes outages that cost trust.',
+    ds==='good'?[]:[fx('refactor',{pts:3},'Pay down tech debt')]);
+  /* founder sanity */
+  var ss2=G.founder.sanity<30?'bad':(G.founder.sanity<55?'warn':'good'); add('sanity','Your sanity',Math.round(G.founder.sanity)+' of 100',ss2,'Your own energy. Low sanity cuts your focus each month, and at zero you burn out and the game ends.',
+    ss2==='good'?[]:[fx('self',{kind:'weekend'},'Take the weekend off')]);
+  var rank={bad:0,warn:1,good:2}; out.sort(function(a,b){ return rank[a.state]-rank[b.state]; });
+  return out;
+};
 CAT.coach=function(G){
   var out=[], f=SU.fin(G), seg=SU.seg(G), w=seg.words[0], runway=f.runway, mrr=G.mrr||0;
   function add(aid,values,label,why){ out.push({aid:aid,values:CAT.defaults(G,aid,values),label:label,why:why}); }

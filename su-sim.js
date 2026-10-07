@@ -150,6 +150,7 @@ SU.roleFit=function(G,role){
   if(role==='sdr') return G.arch==='consumer' ? {state:'no',why:'Outreach does not work on consumers. SDRs would do nothing for you.'} : {state:'ok',why:'Outreach works on your customers.'};
   if(role==='mkt') return (spend>0||G.seo>0) ? {state:'ok',why:'You are spending on marketing: they make it work harder.'} : {state:'maybe',why:'You are not spending on any marketing channel yet. A marketer needs spend to multiply.'};
   if(role==='cs'){ var cap=300+150*count(G,'cs'), n=SU.custCount(G); return n>cap*0.7 ? {state:'ok',why:'You have '+SU.fmtNum(n)+' customers against room for '+cap+'. Support is getting stretched.'} : {state:'maybe',why:'You have '+SU.fmtNum(n)+' customers and room for '+cap+'. You do not need more support yet.'}; }
+  if(role==='mgr') return SU.headcount(G)>=2||G.t>6 ? {state:'ok',why:'An extra move every month, and your pinned moves run free.'} : {state:'maybe',why:'Works from day one, but pays off most once you repeat the same moves each month.'};
   if(role==='cos') return count(G,'cos')>0 ? {state:'no',why:'You already have a chief of staff. A second adds nothing.'} : {state:'ok',why:'Two more focus every month.'};
   if(role==='vp') return SU.headcount(G)>=10 ? {state:'ok',why:'A big team: a VP cuts the slowdown and impresses investors.'} : {state:'maybe',why:'Your team is small. A VP is expensive and mostly helps past 10 people.'};
   return {state:'ok',why:'Always useful.'};
@@ -169,7 +170,7 @@ SU.staffStep=function(G){
   G.rankUps=G.rankUps||[];
   G.team.forEach(function(e){
     var en=SU.energyOf(e), tr=e.trait&&SU.TRAITS[e.trait]||{};
-    var d=3+(G.morale-60)/15+perk*1.5-1.5*over-(crunch?9*(tr.crunchOk?0.4:1):0);
+    var d=3+Math.min(2,count(G,'mgr'))+(G.morale-60)/15+perk*1.5-1.5*over-(crunch?9*(tr.crunchOk?0.4:1):0);
     e.energy=clamp(en+d,0,100);
     if(e.energy<20) e.loyalty=clamp(e.loyalty-1.5,0,100);
     var before=SU.rankOf(e).i; e.xp=(e.xp||0)+1+(shipped?2:0);

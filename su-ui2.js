@@ -3,7 +3,7 @@
 'use strict';
 var SU = window.SU, UI = window.UI, Iso = SU.Iso, CAT = SU.CAT, M = SU.Money, fm = SU.fmtMoney, esc = UI.esc, $ = UI.$, $$ = UI.$$, S = UI.S;
 function G(){ return UI.G(); }
-var ROLECOL={eng:'#4c78c9',design:'#e0597a',pm:'#7b5fc4',sdr:'#3aa38b',ae:'#2e9bb5',cs:'#e0922d',mkt:'#c4553a',cos:'#5a6b7d',vp:'#2b2f3a'};
+var ROLECOL={eng:'#4c78c9',design:'#e0597a',pm:'#7b5fc4',sdr:'#3aa38b',ae:'#2e9bb5',cs:'#e0922d',mkt:'#c4553a',cos:'#5a6b7d',vp:'#2b2f3a',mgr:'#8a6d3b'};
 function pctS(x,d){ return SU.pct(x,d||0); }
 
 /* ------------------------------------------------------------ small building blocks */
@@ -332,6 +332,7 @@ function roleEffect(g,e){
   if(r==='sdr'){ var f2=SU.roleFit(g,'sdr'); return {k:'Outreach',v:f2.state==='ok'?'1,200/mo':'none',s:f2.state==='ok'?'cold contacts, on autopilot':'does nothing for consumer apps'}; }
   if(r==='cs'){ var capc=300+150*SU.count(g,'cs'); return {k:'Support',v:'+150 customers',s:'team handles '+capc+' of your '+SU.fmtNum(SU.custCount(g))}; }
   if(r==='mkt'){ var fm2=SU.roleFit(g,'mkt'); return {k:'Marketing boost',v:counted?'+'+Math.round(15*f*ef*rp)+'%':'none',s:fm2.state==='ok'?'on all your marketing channels':'needs marketing spend to matter'}; }
+  if(r==='mgr'){ var ms=g.team.filter(function(x){ return x.role==='mgr'; }), mi=ms.indexOf(e); return {k:'Delegation',v:mi<2?'+1 focus':'none',s:mi<2?'and runs 2 pinned moves free':'only your first 2 managers count'}; }
   if(r==='cos') return {k:'Extra focus',v:'+2',s:'moves every month'};
   if(r==='vp') return {k:'Team overhead',v:'halved',s:'above 8 people; investors like it'};
   return {k:'Impact',v:'x'+f.toFixed(2),s:''};
@@ -368,7 +369,7 @@ var EXP_LABEL={payroll:'Payroll',tools:'Tools',infra:'Servers and hosting',marke
 
 function rolesGuide(g){
   var h='<div class="dr-b"><div class="muted sm">Every job does something specific. Here is exactly what, with your numbers.</div>';
-  var order=['eng','design','pm','sdr','ae','cs','mkt','cos','vp'];
+  var order=['eng','design','pm','mgr','sdr','ae','cs','mkt','cos','vp'];
   order.forEach(function(r){
     var gd=SU.ROLE_GUIDE[r], R=SU.ROLES[r], fit=SU.roleFit(g,r), n=SU.count(g,r);
     h+='<div class="rg"><div class="row" style="justify-content:space-between;align-items:baseline"><b>'+esc(R.name)+'</b><span class="pill '+(fit.state==='ok'?'good':fit.state==='no'?'bad':'warn')+'">'+(fit.state==='ok'?'useful now':fit.state==='no'?'no effect now':'not yet')+'</span></div>'+
@@ -379,9 +380,19 @@ function rolesGuide(g){
   });
   return h+'</div>';
 }
+
+function healthView(g){
+  var list=CAT.health(g);
+  var h='<div class="dr-b"><div class="muted sm">Every number in the top bar in plain words, worst first. Tap a fix to add it to your plan.</div>';
+  list.forEach(function(x,i){
+    h+='<div class="hl '+x.state+'"><div class="row" style="justify-content:space-between;align-items:baseline"><b>'+esc(x.label)+'</b><span class="mono sm">'+esc(x.val)+'</span></div><div class="xs">'+esc(x.meaning)+'</div>'+(x.fix.length?'<div class="row" style="gap:5px;margin-top:3px">'+x.fix.map(function(f,j){ return '<button class="chip idea" data-act="health-fix" data-i="'+i+'" data-j="'+j+'">+ '+esc(f.label)+'</button>'; }).join('')+'</div>':'<div class="xs good-t">Looking fine.</div>')+'</div>';
+  });
+  return h+'</div>';
+}
 function drawerView(id){
   var g=G(), h='', title='';
-  if(id==='roles'){ title='What each job does'; h=rolesGuide(g); }
+  if(id==='health'){ title='Health check'; h=healthView(g); }
+  else if(id==='roles'){ title='What each job does'; h=rolesGuide(g); }
   else if(id==='policy'){
     title='Work policies'; h='<div class="dr-b"><div class="muted sm">Policies change how people feel and how fast they build. Each change is one move in your plan.</div><div class="rows">'+CAT.policyList(g).map(function(p){ var on=CAT.policyOn(g,p.id); return '<div class="rw"><div class="rm"><b>'+esc(p.name)+'</b></div><span class="pill '+(on?'good':'')+'">'+(on?'on':'off')+'</span><button class="btn sm" data-act="policy" data-kind="'+p.id+'">'+(on?'Turn off':'Turn on')+'</button></div>'; }).join('')+'</div></div>';
   } else if(id==='loans'){
@@ -418,6 +429,7 @@ UI.onInput=function(e){ if(e.target.id==='wf') wfUpdate(); };
 UI.onAct=function(a,t,e){
   var g=G();
   switch(a){
+    case 'health-fix': { var hl=CAT.health(g)[+t.getAttribute('data-i')], fxs=hl&&hl.fix[+t.getAttribute('data-j')]; if(fxs&&UI.addItem({aid:fxs.aid,values:JSON.parse(JSON.stringify(fxs.values))})) UI.toast('Added to your plan.',1400); break; }
     case 'price-quick': { var pv=CAT.defaults(g,'price',{}); if(g.arch==='market'){ var d=+t.getAttribute('data-d'); pv.take=Math.max(3,Math.min(40,Math.round(g.cust.take*100)+d)); } else { var m=+t.getAttribute('data-m'), p0=g.cust.price, st=priceStep(p0), np=Math.max(1,Math.round(p0*(1+m)/st)*st); if(Math.abs(np-p0)<0.005) np=Math.max(1,p0+(m>0?st:-st)); pv.price=np; } var okp=CAT.validate(g,'price',pv); if(!okp.ok){ UI.toast(okp.why); return; } if(UI.addItem({aid:'price',values:pv})){ UI.renderPane(); UI.toast('Price change added to your plan.',1500); } break; }
     case 'price-opt': { var po=CAT.defaults(g,'price',{}), o=t.getAttribute('data-o'); if(o==='annual') po.annual=true; else po.model=o; var oks=CAT.validate(g,'price',po); if(!oks.ok){ UI.toast(oks.why); return; } if(UI.addItem({aid:'price',values:po})){ UI.renderPane(); UI.toast('Added to your plan.',1500); } break; }
     case 'open-act': { var aid=t.getAttribute('data-aid'); var v=CAT.defaults(g,aid,{}); var ok=CAT.validate(g,aid,v); if(!ok.ok){ UI.toast(ok.why); return; } S.cfg[aid]=v; S.drawer={type:'act',aid:aid}; renderDrawer(); break; }
