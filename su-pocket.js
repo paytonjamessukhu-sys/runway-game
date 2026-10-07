@@ -22,10 +22,11 @@ function specs(A){
   var rm=A.roadmap||(g.biz==='bar'?A.wallFallback:null);
   if(rm){ var bq=g.queue.length; out.push({k:'product',a:rm,y:'top',ic:'cube',l:N.product,v:bq?bq+' in progress':'start',hot:!bq&&!g.shipped.length,tab:'product'}); }
   if(A.tv){ var rv=f.burn<=0?'profit':(f.runway>=99?'99+ mo':f.runway.toFixed(f.runway<10?1:0)+' mo'); out.push({k:'money',a:A.tv,y:'top',ic:'coin',l:N.money,v:rv,hot:f.burn>0&&f.runway<4,tab:(g.feat&&g.feat.dashboard)?'dash':'money'}); }
+  var un=function(t){ return UI.tabUnlocked?UI.tabUnlocked(g,t):true; };
   if(A.sales) out.push({k:'sales',a:A.sales,y:'top',ic:'mega',l:N.sales,v:'grow',tab:'sales'});
-  if(A.shop){ var aff=(SU.upgradesFor?SU.upgradesFor(g):[]).filter(function(u){ return !(g.shop&&g.shop[u.id])&&g.cash>=u.cost*2; }).length; out.push({k:'shop',a:A.shop,y:'top',ic:'bag',l:'Shop',v:aff?aff+' to buy':'upgrades',tab:'shop'}); }
+  if(A.shop&&un('shop')){ var aff=(SU.upgradesFor?SU.upgradesFor(g):[]).filter(function(u){ return !(g.shop&&g.shop[u.id])&&g.cash>=u.cost*2; }).length; out.push({k:'shop',a:A.shop,y:'top',ic:'bag',l:'Shop',v:aff?aff+' to buy':'upgrades',tab:'shop'}); }
   if(A.team) out.push({k:'team',a:A.team,y:'top',ic:'team',l:N.team,v:String(SU.headcount(g)),tab:'team'});
-  if(A.you) out.push({k:'you',a:A.you,y:'top',ic:'heart',l:'You',v:Math.round(g.founder.sanity)+'%',hot:g.founder.sanity<35,tab:'you',dy:-8});
+  if(A.you&&un('you')) out.push({k:'you',a:A.you,y:'top',ic:'heart',l:'You',v:Math.round(g.founder.sanity)+'%',hot:g.founder.sanity<35,tab:'you',dy:-8});
   (A.empty||[]).slice(0,3).forEach(function(e,i){ out.push({k:'hire'+i,a:e,y:'top',cls:'hire',l:'Hire',v:'+',hire:true,dy:0}); });
   return out;
 }

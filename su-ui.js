@@ -79,6 +79,11 @@ var DIFF={smb:['Steady grind','Real money per customer. Slow to win, hard to kil
 var GROUPS=SU.BIZ.map(function(b){ return [b.id,b.name]; });
 var TABS=[['inbox','Inbox','inbox'],['customers','Clients','users'],['product','Build','cube'],['sales','Sales','mega'],['team','Team','team'],['money','Money','coin'],['you','You','heart'],['shop','Shop','bag'],['goals','Goals','flag'],['dash','Stats','chart']];
 UI.TABS=TABS;
+/* tabs appear as you need them, so the first minutes are not a wall of menus */
+UI.tabUnlocked=function(g,t){
+  if(!g) return true; var any=g.t>=3||(g.mrr||0)>0||g.team.length>=1||g.rounds.length>0;
+  if(t==='shop') return any; if(t==='goals') return g.t>=1; if(t==='you') return g.t>=2||g.founder.sanity<75; return true;
+};
 
 /* ------------------------------------------------------------ boot */
 UI.boot = function(){
@@ -124,7 +129,10 @@ function renderWiz(){
   var h='';
   if(step===0){
     h+='<h3>What kind of company?</h3><p class="muted sm" style="margin-bottom:6px">Each kind plays differently: different money, different jobs, a different office.</p>';
-    SU.BIZ.forEach(function(g){ var ideas=SU.IDEAS.filter(function(i){ return i.biz===g.id; }); if(!ideas.length) return; h+='<div class="sec" style="margin-bottom:8px"><div class="row"><b class="k">'+esc(g.name)+'</b><span class="pill '+(g.id==='tech'?'good':'warn')+'">'+esc(g.diff)+'</span></div><div class="xs muted">'+esc(g.blurb)+'</div><div class="ideas">'+ideas.map(ideaCard).join('')+'</div></div>'; });
+    var grp=function(g){ var ideas=SU.IDEAS.filter(function(i){ return i.biz===g.id; }); if(!ideas.length) return ''; return '<div class="sec" style="margin-bottom:8px"><div class="row"><b class="k">'+esc(g.name)+'</b><span class="pill '+(g.id==='tech'?'good':'warn')+'">'+esc(g.id==='tech'?'The polished one':g.diff)+'</span></div><div class="xs muted">'+esc(g.blurb)+'</div><div class="ideas">'+ideas.map(ideaCard).join('')+'</div></div>'; };
+    var techG=SU.BIZ.filter(function(g){ return g.id==='tech'; }), otherG=SU.BIZ.filter(function(g){ return g.id!=='tech'; });
+    h+=techG.map(grp).join('');
+    h+='<details class="more"'+(idea.biz!=='tech'?' open':'')+'><summary>More company types <span class="muted xs">(rougher drafts: fun, but the tech startup is the one we are polishing)</span></summary>'+otherG.map(grp).join('')+'</details>';
   } else if(step===1){
     h+='<h3>Pick the year</h3><p class="muted sm" style="margin-bottom:8px">The money, the hiring market and the hype change with it.</p><div class="opts">'+['1999','2008','2021','2024'].map(function(k){ var i=SU.START_INFO[k]; return '<button class="opt'+(st.era===k?' on':'')+'" '+((idea.biz==='ai'&&(k==='1999'||k==='2008'))?'disabled title="Nobody can rent GPUs yet" style="opacity:.45" ':'')+'data-act="pick-era" data-id="'+k+'"><b>'+esc(i.name)+'</b><span class="tg">'+esc(i.blurb)+'</span></button>'; }).join('')+'</div>';
   } else if(step===2){
@@ -158,7 +166,7 @@ function startGame(){
   SU.save(g); begin(g,true);
 }
 function begin(g,fresh){
-  G=g; S.view='game'; S.receipt=G.last||null; S.plan=[]; S.cfg={}; S.drawer=null; S.auto.on=false; S.busy=false; S.ticker=[]; S.sub={}; S.page={}; S.seenIid=G.iid;
+  G=g; S.view='game'; S.unl={}; S.receipt=G.last||null; S.plan=[]; S.cfg={}; S.drawer=null; S.auto.on=false; S.busy=false; S.ticker=[]; S.sub={}; S.page={}; S.seenIid=G.iid;
   S.tab=fresh?'customers':(G.inbox.some(function(i){ return i.open&&(i.action||i.kind==='crisis'); })?'inbox':'customers');
   UI.pocket=UI.pocketNow(); document.body.classList.toggle('pocket',UI.pocket); S.sheet=!UI.pocket; buildShell(); if(UI.pocketBuild) UI.pocketBuild(); Iso.reset(); Iso.setInsetFn(insets); Iso.setGestures(UI.pocket); Iso.attach($('#officeCv')); Iso.start(); Iso.sync(G,{initial:true}); Iso.setHandlers({hover:onIsoHover,pick:onIsoPick,empty:onIsoEmpty});
   setTimeout(function(){ Iso.resize(); Iso.sync(G,{initial:true}); },40);
@@ -175,7 +183,7 @@ function buildShell(){
   '<header class="top" id="hdr"></header>'+
   '<main class="game">'+
     '<section class="office"><div class="stage"><canvas id="officeCv"></canvas>'+
-      '<div class="hud"><div class="hud-top"><b id="hudDate"></b><div class="hud-bar"><i id="hudBar"></i></div><span class="lvl" id="hudLvl" data-act="golvl" role="button"></span><button class="btn sm hirebtn" data-act="hire-chooser">+ Hire</button><button class="btn sm" data-act="view" data-id="health" id="hudHealth">Health</button><button class="btn sm" data-act="labels" id="hudLabels">Labels: on</button><button class="btn sm" data-act="report">Last month</button></div><div class="hud-cap"><span id="capR"></span><span id="capL"></span></div><div class="coach" id="coach"></div><div class="ticker" id="ticker"></div></div>'+
+      '<div class="hud"><div class="hud-top"><b id="hudDate"></b><div class="hud-bar"><i id="hudBar"></i></div><span class="lvl" id="hudLvl" data-act="golvl" role="button"></span><button class="btn sm hirebtn" data-act="hire-chooser">+ Hire</button><button class="btn sm" data-act="view" data-id="health" id="hudHealth">Health</button><button class="btn sm" data-act="labels" id="hudLabels">Labels: on</button><button class="btn sm" data-act="report">Last month</button></div><div class="hud-cap"><span id="capR"></span><span id="capL"></span></div><div class="mission" id="mission" data-act="golvl" role="button"></div><div class="coach" id="coach"></div><div class="ticker" id="ticker"></div></div>'+
       '<div class="tip" id="tip" hidden></div><div class="pop" id="pop" hidden></div></div></section>'+
     '<section class="card plan" id="plan"></section>'+
     '<div class="rcol"><aside class="card side"><div class="icontabs" id="tabs" role="tablist"></div><div class="pn" id="pn"><div class="pn-in" id="pnIn"></div><div id="drawer"></div></div></aside></div>'+
@@ -219,7 +227,12 @@ function renderHud(){
   try{ var hh=CAT.health(G), w=hh[0], hb=$('#hudHealth'); if(hb){ hb.className='btn sm hb-'+(w?w.state:'good'); hb.textContent=(w&&w.state!=='good')?'Health: '+w.label:'Health'; } }catch(e){}
   var li=SU.Level.info(G), lb=$('#hudLvl'); if(lb){ lb.textContent='Lv '+li.n+' \u00b7 '+li.cur.title; lb.title=li.next?'Next: '+li.next.title+'. '+li.next.hint:'Top level. You built a unicorn.'; }
   $('#hudDate').textContent=SU.dateStr(G)+(SU.turnMonths(G)===3?' (a quarter per turn)':'');
-  renderTicker();
+  renderMission(); renderTicker();
+}
+function renderMission(){
+  var el=$('#mission'); if(!el||!G) return; var n=SU.Goals.next(G,1)[0]; if(!n||G.over){ el.innerHTML=''; el.hidden=true; return; } el.hidden=false;
+  var pc=Math.round(Math.min(1,n.cur/n.max)*100), txt=n.money?(fm(n.cur)+' of '+fm(n.max)):(n.max>1?(Math.round(n.cur)+' of '+n.max):'');
+  el.innerHTML='<span class="k">Goal</span><b>'+esc(n.goal.title)+'</b>'+(txt?'<span class="mono xs">'+txt+'</span>':'')+'<div class="mbar"><i style="width:'+pc+'%"></i></div>';
 }
 function pushTicker(text,kind){ S.ticker=S.ticker.filter(function(x){ return x.text!==text; }); S.ticker.push({text:text,kind:kind||'',t:Date.now()}); if(S.ticker.length>3) S.ticker.shift(); renderTicker(); }
 function renderTicker(){ var el=$('#ticker'); if(!el) return; var now=Date.now(); S.ticker=S.ticker.filter(function(x){ return now-x.t<11000; }); el.innerHTML=S.ticker.map(function(x){ return '<div class="tk '+esc(x.kind)+'">'+esc(x.text)+'</div>'; }).join(''); }
@@ -259,8 +272,8 @@ function renderPlan(){
   var ideas=CAT.coach(G).filter(function(c){ return !S.plan.some(function(it){ return it.aid===c.aid && JSON.stringify(it.values)===JSON.stringify(c.values); }); }).slice(0,3);
   Object.keys(S.used||{}).forEach(function(aid){ if(S.used[aid]>=2&&!S.plan.some(function(it){ return it.aid===aid&&it.repeat; })&&!(S.pinTold&&S.pinTold[aid])){ var a=CAT.actions[aid]; ideas.unshift({aid:aid,values:CAT.defaults(G,aid,{}),repeat:true,label:'Pin: '+a.title,why:'You keep doing this every month. Pin it and it repeats by itself'+(SU.count(G,'mgr')>0?', free with your manager.':'.')}); } });
   S.ideas=ideas.slice(0,4); renderCoach();
-  var lbl=tm===3?'Run next quarter':'Run '+SU.MONTHS[G.month-1];
-  el.innerHTML='<div class="plan-h"><h2>'+(tm===3?'This quarter':SU.dateStr(G))+'</h2><span class="muted sm">Your plan</span><div class="focus"><span class="k">Focus</span><div class="dots" title="You can only give real attention to so much each period">'+dots+'</div><b>'+Math.round(used*2)/2+'/'+total+'</b></div></div>'+
+  var lbl=tm===3?'Run next quarter':'Run '+SU.MONTHS[G.month-1]; var fc=G.over?null:UI.forecast(); var fcH=fc?'<div class="fc" title="A forecast from several simulated copies of this month. Luck can move it."><span class="k">Forecast</span> cash <b>'+fm(fc.cash)+'</b> <span class="'+(fc.dCash>=0?'up':'dn')+'">('+(fc.dCash>=0?'+':'-')+fm(Math.abs(fc.dCash))+')</span> &middot; revenue <b>'+fm(fc.mrr)+'</b></div>':'';
+  el.innerHTML='<div class="plan-h"><h2>'+(tm===3?'This quarter':SU.dateStr(G))+'</h2><span class="muted sm">Your plan</span><div class="focus"><span class="k">Focus</span><div class="dots" title="You can only give real attention to so much each period">'+dots+'</div><b>'+Math.round(used*2)/2+'/'+total+'</b></div>'+fcH+'</div>'+
     '<div class="plan-body"><div class="plan-list">'+(items||'<span class="hint">'+(UI.pocket?'Tap things in the office to plan your month.':'Nothing planned yet. Pick moves from the menus, or just run the month.')+'</span>')+'</div>'+
     '<div class="bqs"><div class="k">Building'+(G.queue.length?' ('+G.queue.length+')':'')+'</div>'+(bq||'<span class="hint">Nothing in the build queue. Pick a feature on the Build tab.</span>')+'</div></div>'+
     (ideas.length?'<div class="plan-ideas"><span class="k">Try</span>'+ideas.map(function(c,i){ return '<button class="chip idea" data-act="coach-add" data-i="'+i+'" title="'+esc(c.why)+'">+ '+esc(c.label)+'</button>'; }).join('')+'</div>':'')+
@@ -279,15 +292,24 @@ function renderCoach(){
 }
 
 /* ------------------------------------------------------------ run a month */
-function planToCommit(){
+function planToCommit(quiet){
   var dl=delegated(); var clauses=[], claims=null, promises=[], skipped=0, used=0, budget=SU.focusBudget(G).budget;
   S.plan.forEach(function(it){
-    if(it.aid!=='quick'&&it.aid!=='text'){ var ok=CAT.validate(G,it.aid,it.values); if(!ok.ok){ skipped++; UI.pushTicker('Skipped: '+(CAT.actions[it.aid]?CAT.actions[it.aid].title:'a move')+'. '+(ok.why||''),'bad'); return; } }
+    if(it.aid!=='quick'&&it.aid!=='text'){ var ok=CAT.validate(G,it.aid,it.values); if(!ok.ok){ skipped++; if(!quiet) UI.pushTicker('Skipped: '+(CAT.actions[it.aid]?CAT.actions[it.aid].title:'a move')+'. '+(ok.why||''),'bad'); return; } }
     var r=CAT.item(G,it), free=!!dl[it.uid]; if(!free&&used+r.focus>budget+1e-9){ skipped++; return; } if(!free) used+=r.focus;
     if(r.special==='announce') claims=(claims||[]).concat(r.claims); else if(r.special==='promise') promises.push(r.promise); else r.clauses.forEach(function(c){ if(free) c.focus=0; clauses.push(c); });
   });
   return {clauses:clauses,claims:claims,promises:promises};
 }
+/* what this plan will probably do: run it on a few copies of the company with different luck */
+UI.forecast=function(){
+  try{ var pc=planToCommit(true), outs=[];
+    for(var k=0;k<4;k++){ var c=SU.clone(G); Object.keys(c.rs).forEach(function(n){ c.rs[n]=(c.rs[n]+k*104729+17)|0; });
+      SU.commit(c,'',null,{clauses:pc.clauses,claims:pc.claims||undefined,promises:pc.promises.length?pc.promises:undefined}); outs.push({cash:c.cash,mrr:c.mrr||0,burn:SU.fin(c).burn}); }
+    var avg=function(f){ return outs.reduce(function(a,o){ return a+o[f]; },0)/outs.length; };
+    return {cash:avg('cash'),mrr:avg('mrr'),dCash:avg('cash')-G.cash,lo:Math.min.apply(null,outs.map(function(o){ return o.cash; })),hi:Math.max.apply(null,outs.map(function(o){ return o.cash; }))};
+  }catch(e){ return null; }
+};
 UI.run=function(){
   if(S.busy||!G||G.over||S.view!=='game') return;
   var pc=planToCommit(); var backup=SU.clone(G), rec=null; S.seenIid=G.iid;
@@ -343,7 +365,9 @@ UI.toggleAuto=function(){
 UI.renderTabs=function(){
   if(!G||!$('#tabs')) return;
   var urgent=G.inbox.filter(function(i){ return i.open&&(i.kind==='crisis'||i.kind==='signal'||i.action||(i.kind==='opp'&&i.t>=G.t-1)); }).length;
-  var tabs=TABS.filter(function(t){ return t[0]!=='dash'||(G.feat&&G.feat.dashboard); });
+  var tabs=TABS.filter(function(t){ return (t[0]!=='dash'||(G.feat&&G.feat.dashboard))&&UI.tabUnlocked(G,t[0]); });
+  S.unl=S.unl||{}; tabs.forEach(function(t){ if(S.unl[t[0]]===undefined) S.unl[t[0]]=G.t; else if(S.unl[t[0]]===false){ S.unl[t[0]]=G.t; pushTicker('New: the '+t[1]+' tab is unlocked.','goal'); } });
+  TABS.forEach(function(t){ if(!UI.tabUnlocked(G,t[0])&&S.unl[t[0]]===undefined) S.unl[t[0]]=false; });
   if(!tabs.some(function(t){ return t[0]===S.tab; })) S.tab='customers';
   var lab={customers:SU.T(G,'tabCustomers',null),product:SU.T(G,'tabProduct',null),sales:SU.T(G,'tabSales',null)}; tabs=tabs.map(function(t){ return [t[0],lab[t[0]]||t[1],t[2]]; });
   $('#tabs').innerHTML=tabs.map(function(t){ return '<button class="tb'+(S.tab===t[0]?' on':'')+'" role="tab" aria-selected="'+(S.tab===t[0])+'" data-act="tab" data-tab="'+t[0]+'" title="'+t[1]+'">'+UI.icon(t[2])+'<span>'+t[1]+'</span>'+(t[0]==='inbox'&&urgent?'<span class="badge">'+urgent+'</span>':'')+'</button>'; }).join('');
@@ -399,10 +423,11 @@ UI.showHelp=function(first){
   '<p>You run a startup. Each month you pick a few moves from the menus on the right, then press <b>Run</b>. A month goes by, the office reacts, and you see what happened.</p>'+
   '<div class="sec"><h4>The rules that matter</h4>'+
   '<p class="sm"><b>1. Focus is limited.</b> You have about ten focus points a month. Every move costs some. Plan it, then run.</p>'+
-  '<p class="sm"><b>2. Talk to customers first.</b> Interviews reveal what people pay for. Then build exactly that. Every feature card tells you what it does.</p>'+
-  '<p class="sm"><b>3. Watch the runway.</b> The dashes at the top are months of cash left. When they run out, you run out.</p>'+
-  '<p class="sm"><b>4. Pin what works.</b> Hit the repeat icon on a move and it happens every month without using up your clicks. Auto-run plays the months for you and stops when something needs you.</p>'+
-  '<p class="sm"><b>5. Spend on the office.</b> The Shop gives you a bigger space and upgrades. You will see every one of them in the office.</p></div>'+
+  '<p class="sm"><b>2. Money has a path.</b> Nobody can buy what does not exist. Before you ship, take <b>contract work</b> for cash and build a <b>waitlist</b> with outreach. Your waitlist signs up on launch day. Ship a <b>rough beta</b> early if you need money sooner. The <b>Clients</b> tab shows exactly why money is or is not coming in.</p>'+
+  '<p class="sm"><b>3. Talk to customers first.</b> Interviews reveal what people pay for. Then build exactly that. The <b>Tech tree</b> in Build shows what unlocks what.</p>'+
+  '<p class="sm"><b>4. Watch the runway.</b> The dashes at the top are months of cash left. When they run out, you run out.</p>'+
+  '<p class="sm"><b>5. Pin what works.</b> Hit the repeat icon on a move and it happens every month without using up your clicks. Auto-run plays the months for you and stops when something needs you.</p>'+
+  '<p class="sm"><b>6. Spend on the office.</b> The Shop gives you a bigger space and upgrades. You will see every one of them in the office.</p></div>'+
   '<div class="sec"><h4>How it ends</h4><p class="sm">Ring the bell, sell the company, go profitable and free, burn out, or shut down. Most startups die. Yours might not.</p></div>'+
   '<div class="foot"><button class="btn primary" data-act="close-modal">'+(first?'Let me play':'Got it')+'</button></div>');
 };
@@ -454,6 +479,7 @@ function onClick(e){
     case 'clear-plan': S.plan=[]; renderPlan(); break;
     case 'unplan': var u=+t.getAttribute('data-uid'); S.plan=S.plan.filter(function(x){ return x.uid!==u; }); renderPlan(); break;
     case 'pin': var u2=+t.getAttribute('data-uid'); S.plan.forEach(function(x){ if(x.uid===u2) x.repeat=!x.repeat; }); renderPlan(); UI.toast('Repeats every month until you remove it.',1800); break;
+    case 'mm-add': var mf=S.mmFix&&S.mmFix[+t.getAttribute('data-i')]; if(mf){ if(mf.quick){ UI.openShortlist(mf.quick.role,mf.quick.level); } else if(mf.tab){ UI.setTab(mf.tab); } else { UI.addItem({aid:mf.aid,values:JSON.parse(JSON.stringify(mf.values||{})),repeat:false}); } } break;
     case 'coach-add': var c=S.ideas&&S.ideas[+t.getAttribute('data-i')]; if(c){ if(c.quick){ UI.openShortlist(c.quick.role,c.quick.level); } else if(c.tab){ UI.setTab(c.tab); } else { if(c.repeat){ S.pinTold=S.pinTold||{}; S.pinTold[c.aid]=1; } UI.addItem({aid:c.aid,values:JSON.parse(JSON.stringify(c.values)),repeat:!!c.repeat}); } } break;
     case 'labels': S.labels=(S.labels===false); Iso.setLabels(S.labels!==false); t.textContent='Labels: '+(S.labels!==false?'on':'off'); break;
     case 'golvl': UI.setTab('goals'); break;

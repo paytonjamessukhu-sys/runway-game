@@ -61,7 +61,7 @@ SU.LEVERS = {
   talk:{name:'Customer talks'}, build:{name:'Build'}, refactor:{name:'Refactor'}, compliance:{name:'Compliance'}, price:{name:'Pricing'}, market:{name:'Marketing'},
   outbound:{name:'Outbound'}, launch:{name:'Launch'}, hire:{name:'Hire'}, fire:{name:'Layoff'}, comp:{name:'Compensation'}, culture:{name:'Culture'},
   fundraise:{name:'Fundraise'}, finance:{name:'Finance'}, pivot:{name:'Pivot'}, ethics:{name:'Shortcut'}, self:{name:'Founder care'}, talkto:{name:'Talk to people'},
-  rival:{name:'Rivals'}, exit:{name:'Exit'}, train:{name:'Train a model'}, night:{name:'Host a night'}, happyhour:{name:'Happy hour'}, menu:{name:'Menu'}, hours:{name:'Hours'}, renovate:{name:'Renovate'}, optimize:{name:'Optimize serving'}, redteam:{name:'Red team'}
+  rival:{name:'Rivals'}, exit:{name:'Exit'}, train:{name:'Train a model'}, night:{name:'Host a night'}, contract:{name:'Contract work'}, launchearly:{name:'Launch a beta'}, happyhour:{name:'Happy hour'}, menu:{name:'Menu'}, hours:{name:'Hours'}, renovate:{name:'Renovate'}, optimize:{name:'Optimize serving'}, redteam:{name:'Red team'}
 };
 var PRIORITY = ['ethics','fire','comp','exit','finance','hire','fundraise','price','outbound','launch','market','talk','compliance','refactor','pivot','build','culture','talkto','rival','self'];
 
@@ -304,6 +304,8 @@ SU.focusCost = function(G, cl){
     case 'rival': f=2; break;
     case 'train': f=(p.size==='small'?1:2); break;
     case 'night': f=1; break;
+    case 'contract': f=1; break;
+    case 'launchearly': f=0.5; break;
     case 'happyhour': f=0.5; break;
     case 'menu': f=1; break;
     case 'hours': f=0.5; break;
@@ -369,6 +371,8 @@ SU.describe = function(cl){
     case 'talkto': return 'Talk to '+p.aud;
     case 'rival': return 'Rival: '+p.act;
     case 'night': return 'Host: '+({trivia:'trivia night',band:'live band',dj:'DJ night',game:'game-day special'}[p.kind]||'a night');
+    case 'contract': return 'Take '+((SU.GIGS&&SU.GIGS[p.kind])?SU.GIGS[p.kind].name:'a contract');
+    case 'launchearly': return 'Launch a rough beta';
     case 'happyhour': return p.on?'Start happy hour':'End happy hour';
     case 'menu': return 'Refresh the menu';
     case 'hours': return 'Open '+p.nights+' nights a week';

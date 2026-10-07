@@ -145,14 +145,18 @@ SU.PLAT = {
   loyalty:{biz:'bar',name:'Regulars card',scope:6,minAct:1,effect:'Regulars come back: they leave about 20% more slowly.',shipped:'A punch card and a birthday drink. Regulars stay longer.'},
   sso:{name:'Security: SSO and audit logs',scope:20,minAct:2,effect:'Bigger customers say yes. Finance buyers stop hesitating.',shipped:'Security reviews stop being a blocker. Bigger customers are saying yes.'}
 };
+/* the tech tree: what has to exist before what */
+(function(){ var R={dashboard:['mvp'],onboarding:['mvp'],mobile:['onboarding'],referrals:['onboarding'],integrations:['dashboard'],sso:['integrations'],evals:['mvp'],rag:['evals'],guardrails:['evals'],finetune:['rag']};
+  Object.keys(R).forEach(function(k){ if(SU.PLAT[k]) SU.PLAT[k].req=R[k]; }); })();
 SU.PLAT_ORDER=['dashboard','onboarding','mobile','referrals','integrations','sso','evals','rag','finetune','guardrails','pos','kitchen','patio','sound','late','loyalty'];
 
 /* ------------------------------------------------------------ goals */
 function lvl(cur,max,money){ return {cur:Math.min(cur,max),max:max,money:!!money}; }
 SU.GOALS = [
   {id:'g_talk',title:'Learn what customers pay for',desc:'Find your first real need.',prog:function(G){ return lvl(G.needs.filter(function(n){ return n.real&&n.revealed; }).length,1); },reward:{sanity:5}},
-  {id:'g_mvp',title:'Ship your first product',desc:'Build something real.',prog:function(G){ return lvl(G.shipped.length,1); },reward:{hype:5}},
-  {id:'g_cust1',title:'Land your first customer',desc:'Somebody pays you.',prog:function(G){ return lvl(SU.custCount(G),1); },reward:{hype:5}},
+  {id:'g_dollar',title:'Earn your first dollar',desc:'A contract, a beta customer, anything. Real money in.',prog:function(G){ return lvl((G.flags.firstDollar||(G.mrr||0)>0)?1:0,1); },reward:{hype:3,sanity:3}},
+  {id:'g_mvp',title:'Ship your first product',desc:'Build something real. Your waitlist signs up on launch day.',prog:function(G){ return lvl(G.shipped.length,1); },reward:{hype:5}},
+  {id:'g_cust1',title:'Land your first paying customer',desc:'Somebody pays monthly for what you built.',prog:function(G){ return lvl(SU.custCount(G),1); },reward:{hype:5}},
   {id:'g_hire1',title:'Hire your first person',desc:'You are not alone anymore.',prog:function(G){ return lvl(G.team.length,1); },reward:{morale:5}},
   {id:'g_cust10',title:'Reach 10 customers',desc:'It is not a fluke.',prog:function(G){ return lvl(SU.custCount(G),10); },reward:{focus:1}},
   {id:'g_mrr1k',title:'Make $1K a month',desc:'Revenue is real.',prog:function(G){ return lvl(G.mrr||0,1000,true); },reward:{morale:5}},

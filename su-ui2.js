@@ -61,10 +61,18 @@ function pInbox(g){
 }
 
 /* ------------------------------------------------------------ CLIENTS */
+
+function moneyMapCard(g){
+  var m=CAT.moneyMap(g); if(!m.nodes.length) return ''; S.mmFix=m.fix;
+  var flow=m.nodes.map(function(n,i){ return (i?'<i class="mm-op">'+(i===3?'=':(i===2?'x':'&rarr;'))+'</i>':'')+'<div class="mm-n"><span>'+esc(n.l)+'</span><b>'+esc(n.v)+'</b><em>'+esc(n.s)+'</em></div>'; }).join('');
+  return '<div class="sec mmap '+m.stage+'"><div class="row" style="justify-content:space-between"><h4>How you make money</h4><span class="pill '+(m.stage==='idea'?'warn':m.stage==='beta'?'blue':'good')+'">'+(m.stage==='idea'?'before launch':m.stage==='beta'?'beta':'live')+'</span></div><div class="mm-flow">'+flow+'</div>'+
+    '<div class="mm-why"><b>'+esc(m.headline)+'</b><ul>'+m.why.map(function(w){ return '<li>'+esc(w)+'</li>'; }).join('')+'</ul>'+(m.fix.length?'<div class="row" style="gap:6px;flex-wrap:wrap">'+m.fix.map(function(f,i){ return '<button class="chip idea" data-act="mm-add" data-i="'+i+'">'+(f.tab?esc(f.go||'Open')+': ':'+ ')+esc(f.label)+'</button>'; }).join('')+'</div>':'')+'</div></div>';
+}
 function pCustomers(g){
   var S0=SU.seg(g), band=SU.pmfBand(g), churn=g.stat.churnRate||0;
   var label=g.arch==='consumer'?'Subscribers':(g.arch==='market'?'Both sides':(g.arch==='venue'?'Regulars':'Customers'));
   var h='<div class="strip">'+stat(label,SU.fmtNum(SU.custCount(g)),'+'+Math.round(g.stat.newLast||0)+' / -'+Math.round(g.stat.churnLast||0)+' last month')+stat('Churn / month',pctS(churn,1),churn>0.08?'Too high':churn>0.04?'Watch it':'Healthy',churn>0.08?'bad':'')+stat('Product fit',band.lo+'-'+band.hi,'of 100')+'</div>';
+  h+=moneyMapCard(g);
   h+='<div class="sec"><div class="row" style="justify-content:space-between"><b class="sm">How well you know them</b><span class="mono xs">'+Math.round(g.insight)+' / 100</span></div>'+bar(g.insight,'')+'</div>';
   var real=g.needs.filter(function(n){ return n.real&&n.revealed; }), herr=g.needs.filter(function(n){ return n.herring&&n.revealed; }), hidden=g.needs.filter(function(n){ return n.real&&!n.revealed; }).length;
   h+='<div class="sec"><h4>What '+esc(S0.who)+' pay for</h4>';
@@ -162,17 +170,33 @@ function featureTile(f,g){
   var dead=(f.built&&f.key!=='mvp'&&!f.improve)||f.queued;
   return '<button class="tile'+(dead?' no':'')+(f.kind==='asked'&&!dead?' star':'')+(f.built?' done':'')+'" data-act="feat" data-key="'+esc(f.key)+'"><span class="tt">'+esc(f.name)+'</span><span class="tf">'+f.scope+' pts</span><span class="tb2">'+esc(f.kind==='plat'||f.improve?f.text:(f.kind==='asked'?'Raises product fit.':f.kind==='core'?'Nothing sells without it.':f.kind==='nopay'?'Only adds clutter.':'Might matter. Might not.'))+'</span>'+tag+'</button>';
 }
+
+function techTree(g){
+  var fs=CAT.features(g), by={}; fs.forEach(function(f){ by[f.key]=f; });
+  var plats=fs.filter(function(f){ return f.kind==='plat'; }), mvp=fs.filter(function(f){ return f.key==='mvp'; })[0];
+  var depth=function(f){ if(!f.req||!f.req.length) return 1; var d=1; f.req.forEach(function(r){ if(r==='mvp') return; var pf=by['plat:'+r]; if(pf) d=Math.max(d,1+depth(pf)); }); return d; };
+  var tiers={}; plats.forEach(function(f){ var d=depth(f); (tiers[d]=tiers[d]||[]).push(f); });
+  var node=function(f){ var st=f.built?'built':f.queued?'queued':f.locked?'locked':'open'; var tag=f.built?'<span class="tag built">built</span>':f.queued?'<span class="tag queued">in the queue</span>':f.locked?'<span class="tag nopay">locked</span>':'<span class="tag core">ready</span>';
+    var needs=f.req&&f.req.length?'<span class="tn-need">needs '+f.req.map(function(r){ return r==='mvp'?'first version':(SU.PLAT[r]?SU.PLAT[r].name:r); }).join(', ')+'</span>':'';
+    return '<button class="tnode '+st+'" data-act="feat" data-key="'+esc(f.key)+'"'+(f.locked?' title="'+esc(f.lockWhy)+'"':'')+'><span class="tt">'+esc(f.name)+'</span>'+tag+'<span class="tp">'+esc(f.text)+'</span>'+needs+'<span class="tf">'+f.scope+' pts</span></button>'; };
+  var h='<div class="sec"><h4>Tech tree <span class="muted xs">build left to right</span></h4><div class="tt-root">'+(mvp?node(mvp).replace('tnode ','tnode root '):'<div class="tnode built root"><span class="tt">First version</span><span class="tag built">shipped</span><span class="tp">Everything grows from this.</span></div>')+'</div>';
+  Object.keys(tiers).sort().forEach(function(d){ h+='<div class="tt-tier"><div class="tt-lab">Tier '+d+'</div><div class="tt-row">'+tiers[d].map(node).join('')+'</div></div>'; });
+  var asks=fs.filter(function(f){ return f.kind==='asked'||f.kind==='unknown'||f.kind==='nopay'||(f.needId&&(f.built||f.improve)); });
+  if(asks.length) h+='<div class="tt-tier"><div class="tt-lab">Customer asks</div><div class="tt-row">'+asks.map(function(f){ return featureTile(f,g); }).join('')+'</div></div>';
+  return h+'</div>';
+}
 function pProduct(g){
   var V=SU.velocity(g), h='<div class="strip">'+stat(SU.T(g,'buildSpeed','Build speed'),V.toFixed(1),SU.T(g,'buildSpeedSub','points a month'))+stat(SU.T(g,'quality','Quality'),Math.round(g.Q),'of 100')+stat(SU.T(g,'debt','Tech debt'),Math.round(g.D),g.D>50?SU.T(g,'debtBad','Dangerous'):g.D>30?SU.T(g,'debtWatch','Watch it'):SU.T(g,'debtOk','Fine'),g.D>50?'bad':'')+'</div>';
   h+=pricingCard(g);
-  var st=sub('product',[['features','Features'],['roadmap','Roadmap']],'features'); h+=st.html;
-  if(st.cur==='features'){
+  var st=sub('product',[['features','Features'],['tree','Tech tree'],['roadmap','Roadmap']],'features'); h+=st.html;
+  if(st.cur==='tree'){ h+=techTree(g); }
+  else if(st.cur==='features'){
     var fs=CAT.features(g).slice().sort(function(a,b){ var da=(a.built&&a.key!=='mvp')?1:0, db=(b.built&&b.key!=='mvp')?1:0; if(da!==db) return da-db; return (KIND_ORDER[a.kind]-KIND_ORDER[b.kind]); });
     h+='<div class="tilegrid">'+fs.map(function(f){ return featureTile(f,g); }).join('')+'</div>';
   } else {
     h+='<div class="sec"><h4>Building now <span class="muted xs">'+g.queue.length+' of 6</span></h4>'+(g.queue.length?'<div class="rmap">'+g.queue.map(function(q){ var pc=q.scope?q.progress/q.scope*100:0; return '<div class="rm-i"><div class="top2"><b>'+esc(q.name)+'</b><span class="mono xs">'+q.progress.toFixed(1)+' / '+q.scope+'</span></div>'+bar(pc,'')+'</div>'; }).join('')+'</div>':empty('Nothing in the queue. Pick a feature.'))+'</div>';
     h+='<div class="sec"><h4>Shipped</h4>'+(g.shipped.length?'<div class="row">'+g.shipped.slice(-12).map(function(s){ return '<span class="chip static '+(s.good!==0||s.plat?'ok':'')+'" title="'+esc(s.name)+'">'+esc(s.name)+'</span>'; }).join('')+'</div>':empty('Nothing shipped yet.'))+'</div>';
-    h+=tiles(g.flavor==='ai'?['train','optimize','redteam','refactor','compliance','pivot']:(g.arch==='venue'?['menu','renovate','hours','refactor','pivot']:['refactor','compliance','pivot']));
+    h+=tiles(g.flavor==='ai'?['train','optimize','redteam','refactor','compliance','pivot']:(g.arch==='venue'?['menu','renovate','hours','refactor','pivot']:['launchearly','refactor','compliance','pivot']));
   }
   return h;
 }
@@ -187,7 +211,7 @@ function pSales(g){
   h+=pricingCard(g);
   (function(){ var act=g.rivals.filter(function(r){ return r.active&&r.presence>0; }).sort(function(a,b){ return b.presence-a.presence; }); var top=act[0]; h+='<div class="sec compcard"><div class="row" style="justify-content:space-between;align-items:center"><div><div class="k">Competition</div><div class="sm">'+(top?'<b>'+esc(top.name)+'</b> is your biggest rival ('+act.length+' in all). They take '+Math.round((1-SU.compF(g))*100)+'% of demand.':'No rivals chasing you right now.')+'</div></div><button class="btn sm" data-act="view" data-id="rivals">See rivals</button></div></div>'; })();
   h+='<div class="sec"><h4>Marketing running now</h4>'+(ch.length?'<div class="rows">'+ch.join('')+'</div>':empty('Nothing. Try outreach, ads, content or a launch.'))+'</div>';
-  h+=tiles(g.arch==='venue'?['night','happyhour','market','rival']:['outbound','market','launch','rival']);
+  h+=tiles(g.arch==='venue'?['night','happyhour','market','rival']:['contract','outbound','market','launch','rival']);
   return h;
 }
 
@@ -219,10 +243,28 @@ function roundBlock(g){
     return '<div class="invc"><div class="top2"><b>'+esc(inv.name)+'</b><span class="pill '+(out?'':(warm==='hot'?'good':warm==='warm'?'blue':'warn'))+'">'+(out?'out':warm)+'</span></div><div class="stagebar">'+[0,1,2,3].map(function(i){ return '<i class="'+(out?'pass':(i<=idx?'on':''))+'"></i>'; }).join('')+'</div><div class="row" style="justify-content:space-between"><span class="xs muted">'+esc(st)+'</span>'+(p.pitchPending?'<button class="btn sm primary" data-act="pitch" data-inv="'+esc(p.inv)+'" data-id="">Go to the meeting</button>':'')+'</div></div>'; }).join('');
   return h+'</div>';
 }
+
+function cashChart(g){
+  var f=SU.fin(g), hist=(g.hist||[]).slice(-18).map(function(h){ return h.cash; }); if(hist.length<2) hist=[g.cash,g.cash];
+  var gr=Math.max(0,Math.min(0.15,SU.growthMo(g))), r=g.mrr||0, cash=g.cash, proj=[];
+  for(var k=1;k<=12;k++){ r=r*(1+gr*Math.pow(0.97,k)); cash+=r-f.ex.total; proj.push(cash); }
+  var all=hist.concat(proj), mx=Math.max.apply(null,all.concat([1])), mn=Math.min.apply(null,all.concat([0])), W=300, H=90, pad=6, n=all.length;
+  var X=function(i){ return pad+i*(W-2*pad)/(n-1); }, Y=function(v){ return pad+(1-(v-mn)/Math.max(1,mx-mn))*(H-2*pad); };
+  var pts=function(a,off){ return a.map(function(v,i){ return X(i+off).toFixed(1)+','+Y(v).toFixed(1); }).join(' '); };
+  var out=proj.findIndex?proj.findIndex(function(v){ return v<0; }):-1;
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" class="cashsvg" role="img" aria-label="Cash history and 12 month projection"><line x1="'+pad+'" x2="'+(W-pad)+'" y1="'+Y(0).toFixed(1)+'" y2="'+Y(0).toFixed(1)+'" stroke="#c22a2a" stroke-dasharray="3 3" stroke-width="1"/>'+
+    '<polyline points="'+pts(hist,0)+'" fill="none" stroke="#2b3a67" stroke-width="2"/>'+
+    '<polyline points="'+X(hist.length-1).toFixed(1)+','+Y(hist[hist.length-1]).toFixed(1)+' '+pts(proj,hist.length)+'" fill="none" stroke="'+(out>=0?'#c22a2a':'#1f9d63')+'" stroke-width="2" stroke-dasharray="5 4"/>'+
+    '<line x1="'+X(hist.length-1).toFixed(1)+'" x2="'+X(hist.length-1).toFixed(1)+'" y1="'+pad+'" y2="'+(H-pad)+'" stroke="#9aa6c0" stroke-width="1"/></svg>';
+  var msg=f.burn<=0?'You earn more than you spend. The line only goes up.':out>=0?'If nothing changes, cash runs out in about '+(out+1)+' month'+(out?'s':'')+'.':'At this pace you stay above zero for the next year.';
+  return '<div class="sec"><div class="row" style="justify-content:space-between"><h4>Cash over time</h4><span class="muted xs">solid: past &middot; dashed: if nothing changes</span></div>'+svg+'<div class="sm '+(out>=0&&f.burn>0?'bad-t':'')+'">'+msg+'</div></div>';
+}
 function pMoney(g){
   var f=SU.fin(g), E=SU.era(g);
   var h='<div class="strip">'+stat('Cash',fm(g.cash),'',g.cash<0?'bad':'')+stat(f.burn<=0?'Profit / mo':'Burn / mo',fm(Math.abs(f.burn)),f.burn<=0?'you earn more than you spend':'what you lose each month',f.burn>0?'':'good')+stat('Runway',f.burn<=0?'infinite':(f.runway>=99?'99+':f.runway.toFixed(1))+' mo','',f.burn>0&&f.runway<3?'bad':'')+'</div>';
   h+='<div>'+(f.burn<=0?'<span class="pill good">You make more than you spend</span>':f.defaultAlive?'<span class="pill good">Default alive: growth reaches break-even</span>':'<span class="pill bad">Default dead'+(f.daMonth?': cash runs out in about '+f.daMonth+' month'+(f.daMonth===1?'':'s'):'')+'</span>')+' <span class="pill">Money is '+(E.fundAvail>=1.4?'easy':E.fundAvail>=0.9?'normal':'tight')+' now</span></div>';
+  h+=moneyMapCard(g);
+  h+=cashChart(g);
   if(g.offer) h+=offerCard(g);
   if(g.round) h+=roundBlock(g);
   var ids=g.round?['addInvestor','walkaway']:['raise']; ids=ids.concat(['cutburn']);

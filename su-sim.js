@@ -200,7 +200,9 @@ SU.velocity = function(G){
   var crunch=G.orders.culture.crunch>0?1.25:1; var nightOwl=1; var whip=1-0.06*G.whip;
   var vm=(G.co&&G.co.flags.velMult)||1;
   var shopV=SU.Shop?SU.Shop.vel(G):1, cramp=SU.Shop?SU.Shop.crampedVel(G):1;
-  return 2*E*moraleF*debtF*orgF*crunch*whip*vm*shopV*cramp;   /* points per month */
+  var drag=1; if(G.arch==='smb'||G.arch==='consumer'){ var cs=count(G,'cs'), ld=SU.custCount(G)/(300+150*cs); drag=1-Math.min(0.4,0.25*ld); }
+  SU._supDrag=1-drag;
+  return Math.max(0.3,2*E*moraleF*debtF*orgF*crunch*whip*vm*shopV*cramp*drag-SU.gigLoad(G));   /* points per month */
 };
 function moraleBase(G){
   var E=SU.era(G), payVs=0, n=0;
@@ -308,7 +310,8 @@ function outboundFunnel(G,n,segId,spec,E,spam){
   var fit=(segId && segId!==G.segId)?0.25:1;
   var replies=n*(S.reply||0.05)*E.replyIdx*(0.55+0.6*spec)*(0.7+0.6*G.pmf/100)*fit*(spam?0.3:1);
   var meetings=replies*0.25;
-  var cb=0.28*convF(G)*(G.arch==='smb'?priceF(G):1)*SU.compF(G)*gateF(G)*(0.8+0.1*salesSkill(G))*closeMult(G);
+  var fl=G.arch==='smb'?1+0.9*Math.max(0,1-SU.custCount(G)/12):1;  /* the first customers are won by the founder, personally */
+  var cb=0.28*convF(G)*(G.arch==='smb'?priceF(G):1)*SU.compF(G)*gateF(G)*(0.8+0.1*salesSkill(G))*closeMult(G)*fl;
   return {replies:replies,meetings:meetings,closes:meetings*Math.min(0.9,cb),closeRate:Math.min(0.9,cb)};
 }
 SU.outboundFunnel=outboundFunnel;
@@ -316,7 +319,8 @@ SU.outboundFunnel=outboundFunnel;
 function demandSMB(G,E,S){
   var c=G.cust, cf=convF(G), pf=priceF(G), cmp=SU.compF(G), gate=gateF(G);
   var fr=c.freemium, leadMult=fr?2.2:1, convMult=fr?0.28:1;
-  var base=0.15*cf*pf*cmp*gate*convMult*(0.8+0.1*salesSkill(G))*closeMult(G);
+  var beta=!!G.flags.beta;
+  var base=0.15*cf*pf*cmp*gate*convMult*(0.8+0.1*salesSkill(G))*closeMult(G)*(beta?0.75:1);
   var spam=(G.flags.spamUntil||0)>G.mi;
   var newPaid=c.pipe||0; c.pipe=0; var leads=0, sent=0;
   /* outbound this turn: replies and meetings now, closes next month */
@@ -345,13 +349,13 @@ function demandSMB(G,E,S){
   if(fr){ c.free+=leads*3; var conv=SU.binom(G,Math.round(c.free),0.025*cf*pf*cmp*gate*0.4,'market'); c.free=Math.max(0,c.free*0.95-conv); newPaid+=conv; }
   /* churn */
   var sup=count(G,'cs'); var load=c.n/(300+150*sup); var supF=load>1?1.2:1;
-  var rate=S.churnMo*churnF(G)*(1+0.3*G.incidents)*(c.annual?0.45:1)*supF*lerp(1.2,0.85,G.trust.cust/100)*(G.flags.darkUntil>G.mi?0.7:1)+(c.shock||0);
+  var rate=S.churnMo*churnF(G)*(1+0.3*G.incidents)*(c.annual?0.45:1)*supF*lerp(1.2,0.85,G.trust.cust/100)*(G.flags.darkUntil>G.mi?0.7:1)*(beta?1.35:1)+(c.shock||0);
   rate=clamp(rate,0,0.9); c.shock=0;
   var churned=SU.binom(G,c.n,rate,'market');
   var before=c.n; c.n=Math.max(0,c.n+newPaid-churned);
-  if(before===0 && c.n>0){ SU.journal(G,'First paying customer.','milestone',true); SU.inbox(G,{kind:'opp',title:'First paying customer',body:S.quoteName+' signed up. Their words: "'+S.quote+'"'}); }
+  if(before===0 && c.n>0 && G.shipped.length){ SU.journal(G,'First paying customer.','milestone',true); SU.inbox(G,{kind:'opp',title:'First paying customer',body:S.quoteName+' signed up. Their words: "'+S.quote+'"'}); }
   if(before<10 && c.n>=10) SU.journal(G,'10 paying customers.','milestone',true);
-  var revenue=before*c.price+newPaid*c.price*0.5; if(c.annual) revenue*=1.0;
+  var revenue=(before*c.price+newPaid*c.price*0.5)*(beta?0.6:1); if(c.annual) revenue*=1.0;
   G.stat.newLast=newPaid; G.stat.churnLast=churned; G.stat.churnRate=before? churned/before : 0; G.stat.leadsLast=leads;
   return {revenue:revenue};
 }
@@ -379,7 +383,7 @@ function demandConsumer(G,E,S){
   var t12=c.rev12.reduce(function(a,b){ return a+b; },0); var fee=t12<1e6?0.15:0.30;
   var revenue=(before+c.payers)/2*c.price*(1-fee);
   c.rev12.push(revenue); if(c.rev12.length>12) c.rev12.shift();
-  if(before===0 && c.payers>0){ SU.journal(G,'First paying subscriber.','milestone',true); }
+  if(before===0 && c.payers>0 && G.shipped.length){ SU.journal(G,'First paying subscriber.','milestone',true); }
   if(c.mau>=500 && !G.flags.mau500){ G.flags.mau500=true; SU.journal(G,'500 monthly active users.','milestone',true); }
   G.stat.newLast=newPayers; G.stat.churnLast=lost; G.stat.churnRate=before?lost/before:0; G.stat.installs=installs;
   return {revenue:revenue};
@@ -468,6 +472,16 @@ function productStep(G){
   if(G.D<40) G.flags.debtSignal=false;
   return shipped;
 }
+SU.shipNow=function(G,f){ shipFeature(G,f); };
+SU.launchWaitlist=function(G,f){
+  var w=G.waitlist||0; if(w<=0) return 0; var beta=!!G.flags.beta;
+  var conv=clamp(0.22+0.4*G.pmf/100,0.15,0.7)*(0.7+0.3*G.Q/100)*(beta?0.8:1); var k=Math.round(w*conv);
+  if(G.arch==='smb') G.cust.n+=k; else if(G.arch==='consumer'){ G.cust.payers+=k; G.cust.mau+=Math.round(w); } else if(G.arch==='market'){ G.cust.D+=Math.round(k*0.7); G.cust.S+=Math.round(k*0.3); }
+  G.waitlist=Math.round((w-k)*0.5); G.flags.launchDay=G.mi;
+  SU.journal(G,'Launch day: '+k+' of '+w+' on the waitlist signed up.','milestone',true);
+  SU.inbox(G,{kind:'opp',title:'Launch day',body:k+' of the '+w+' people on your waitlist signed up. '+(k/w<0.35?'Many were lukewarm: fit and quality decide how many convert.':'The rest will drift away unless you keep telling them.')});
+  return k;
+};
 function shipFeature(G,f){
   var seg=SU.seg(G), fitB=SU.pmfStar(G);
   G.Q+=f.scope*1.2*(1-G.Q/120); G.D+=f.scope*0.5*f.care*((G.co&&G.co.flags.debtMult)||1);
@@ -479,6 +493,8 @@ function shipFeature(G,f){
   if(herring) G.bloat+=1;
   if(plat){ G.feat=G.feat||{}; G.feat[f.plat]=true; if(plat.onShip) plat.onShip(G); }
   G.shipped.push({id:f.id,name:f.name,t:G.t,tags:f.tags,good:good,plat:f.plat||null});
+  if(G.shipped.length===1) SU.launchWaitlist(G,f);
+  if(f.polish){ G.flags.beta=false; G.Q=Math.min(100,G.Q+8); G.trust.cust=Math.min(100,G.trust.cust+4); SU.journal(G,'Out of beta.','milestone'); }
   var fitA=SU.pmfStar(G), dFit=Math.round(fitA-fitB);
   var note=plat? plat.shipped : good? 'It matches a real customer need. Fit potential '+Math.round(fitB)+' to '+Math.round(fitA)+'.' : core? 'A solid base to build on.'+(dFit>0?' Fit potential +'+dFit+'.':'') : (herring?'People asked for it, but it will not move retention. It adds clutter.':'Nobody was waiting for this one. It adds clutter and costs you focus.');
   SU.journal(G,'Shipped: '+f.name+'.','ship',G.shipped.length===1);
@@ -520,6 +536,23 @@ SU.ACTS=[
 SU.turnMonths = function(G){ return G.act>=4?3:1; };
 
 /* ------------------------------------------------------------ monthly step */
+
+/* contract work: the way to earn before there is a product */
+SU.gigLoad=function(G){ var l=0; (G.gigs||[]).forEach(function(g){ l+=g.load; }); return l; };
+function gigStep(G){
+  G.stat.gigRev=0; if(!G.gigs||!G.gigs.length) return;
+  G.gigs.slice().forEach(function(g){
+    var pay=g.pay/g.months; G.flags.firstDollar=G.flags.firstDollar||G.mi; G.cash+=pay; G.stat.gigRev+=pay; SU.drv(G,'cash',pay,'Contract: '+g.client); g.left--;
+    if(g.left<=0){ G.gigs=G.gigs.filter(function(x){ return x!==g; });
+      G.insight=Math.min(100,G.insight+g.learn); G.trust.cust=Math.min(100,G.trust.cust+3);
+      var hid=G.needs.filter(function(n){ return n.real&&!n.revealed; })[0]; var learned='';
+      if(hid && SU.chance(G,Math.min(0.9,0.08*g.learn),'market')){ hid.revealed=true; learned=' Working inside their business taught you something: "'+hid.name+'" really matters here.'; SU.journal(G,'Customers revealed a real need: '+hid.name+'.','insight'); }
+      var conv=SU.chance(G,0.3,'market'); if(conv){ if(G.shipped.length) { if(G.arch==='smb') G.cust.n+=1; } else G.waitlist=(G.waitlist||0)+1; }
+      SU.journal(G,'Finished the contract for '+g.client+'.','milestone');
+      SU.inbox(G,{kind:'opp',title:'Contract done: '+g.client,body:'They paid '+SU.fmtMoney(g.pay)+' in total, and you learned how a real customer works. Insight +'+g.learn+'.'+learned+(conv?' They want to be a customer when the product is ready.':'')});
+    }
+  });
+}
 SU.step = function(G){
   var E=SU.era(G); SU.pmfRefresh(G);
   G.mi++; G.month++; if(G.month>12){ G.month=1; G.year++; }
@@ -528,9 +561,19 @@ SU.step = function(G){
   /* PMF drifts toward target (takes 2-3 months) */
   var star=SU.pmfStar(G); G.pmf+=0.4*(star-G.pmf); G.pmf=clamp(G.pmf,0,100);
   /* demand */
+  gigStep(G);
+  var pre=!G.shipped.length && G.arch!=='venue', snap=pre?SU.clone(G.cust):null, n0=pre?SU.custCount(G):0;
   var d = G.arch==='smb'? demandSMB(G,E,S) : G.arch==='consumer'? demandConsumer(G,E,S) : G.arch==='venue'? demandVenue(G,E,S) : demandMarket(G,E,S);
+  if(pre){ /* nothing to sell yet: interest piles up as a waitlist and pays out on launch day */
+    var moved=Math.max(0,SU.custCount(G)-n0)+(G.cust.pipe||0); G.cust=snap; if(G.cust.pipe!==undefined) G.cust.pipe=0;
+    G.waitlist=(G.waitlist||0)+moved; G.stat.waitLast=moved; G.stat.newLast=0; G.stat.churnLast=0; d={revenue:0};
+    if(moved>=1 && !G.flags.firstWait){ G.flags.firstWait=G.mi; SU.journal(G,'First person on the waitlist.','milestone'); SU.inbox(G,{kind:'opp',title:'You have a waitlist',body:'Somebody wants to buy the moment you ship. Interest from outreach and ads piles up until launch day, then turns into customers.'}); }
+  }
+  if(G.shipped.length && (G.waitlist||0)>0){ /* leftovers from the waitlist keep trickling in, then fade */
+    var w0=G.waitlist, k0=Math.round(w0*0.2*clamp(G.pmf/60,0.3,1)); if(k0>0){ if(G.arch==='smb') G.cust.n+=k0; else if(G.arch==='consumer') G.cust.payers+=k0; else if(G.arch==='market') G.cust.D+=k0; }
+    G.waitlist=Math.max(0,Math.round(w0*0.7-k0*0.5)); }
   var rev=d.revenue; G.mrrPrev=G.mrr; G.mrr=rev; G.mrrHist.push(rev); if(G.mrrHist.length>60) G.mrrHist.shift();
-  if(rev>0) SU.drv(G,'cash',rev,'Revenue');
+  if(rev>0){ SU.drv(G,'cash',rev,'Revenue'); G.flags.firstDollar=G.flags.firstDollar||G.mi; }
   /* rivals */
   rivalStep(G,E);
   /* finance */

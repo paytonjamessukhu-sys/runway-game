@@ -302,6 +302,31 @@ A.redteam=function(G,cl,ctx,r){
   if(G.flavor!=='ai'){ note(r,'Only AI companies red-team models.'); r.status='warn'; return; }
   spend(G,20000,'Red team'); G.flags.redteamUntil=G.mi+8; G.trust.cust=clamp(G.trust.cust+4,0,100); G.reg=Math.max(0,(G.reg||0)-4); note(r,'A red team broke the model on purpose and you fixed what they found. Fewer incidents for the next 8 months. Trust +4.');
 };
+
+/* contract work and the early beta launch: ways around "no product, no money" */
+SU.GIGS={small:{name:'a small fix-it job',pay:6000,months:2,load:1.2,learn:4},med:{name:'a custom integration',pay:18000,months:3,load:2.6,learn:7},big:{name:'a full custom build',pay:48000,months:4,load:5,learn:12}};
+SU.GIG_CLIENTS=['Harbor Dental Group','Pruitt Family Dental','Northwind Vet Clinics','Cobalt Roofing','Alder and Finch Accounting','Lumen Clinics','Brightwater Foods','Redwood Property Mgmt','Kestrel Logistics','Summit Physio','Maple Street Pharmacy','Ironclad Insurance'];
+A.contract=function(G,cl,ctx,r){
+  if(G.arch==='venue'){ note(r,'Bars do not take contract work.'); r.status='warn'; return; }
+  var g0=SU.GIGS[cl.params.kind]||SU.GIGS.small; G.gigs=G.gigs||[];
+  if(G.gigs.length>=2){ note(r,'You already have two contracts running.'); r.status='warn'; return; }
+  var V=SU.velocity(G); if(V-g0.load<1){ note(r,'You do not have the spare build capacity for that (it needs '+g0.load.toFixed(1)+' points a month and you have '+V.toFixed(1)+'). Take a smaller job or hire an engineer.'); r.status='warn'; return; }
+  var client=SU.GIG_CLIENTS[(G.mi*3+G.gigs.length+(G.fid||0))%SU.GIG_CLIENTS.length];
+  G.gigs.push({id:'c'+(++G.fid),client:client,kind:cl.params.kind,pay:g0.pay,months:g0.months,left:g0.months,load:g0.load,learn:g0.learn});
+  note(r,'Signed '+g0.name+' for '+client+': '+fm(g0.pay)+' over '+g0.months+' months. It takes '+g0.load.toFixed(1)+' points a month of build time, so the product moves slower until it is done.');
+  why(r,'Contract work pays right away and teaches you how a real customer works, but it competes with your product for engineering time.');
+};
+A.launchearly=function(G,cl,ctx,r){
+  var f=G.queue.filter(function(q){ return /mvp/i.test(q.name)&&!q.polish; })[0];
+  if(!f){ note(r,'There is no first version in the queue to launch.'); r.status='warn'; return; }
+  var ratio=f.progress/f.scope; if(ratio<0.4){ note(r,'It is only '+Math.round(ratio*100)+'% built. Wait until it is at least 40%.'); r.status='warn'; return; }
+  var rest=Math.max(2,Math.round((f.scope-f.progress)*1.15)); G.queue=G.queue.filter(function(q){ return q!==f; });
+  G.flags.beta=true; G.flags.betaMi=G.mi; f.scope=Math.max(1,f.progress); f.progress=f.scope;
+  G.queue.unshift({id:'f'+(++G.fid),name:'Finish the first version',scope:rest,progress:0,care:1,tags:[],born:G.t,plat:null,lvl:1,polish:true});
+  SU.shipNow(G,f);
+  note(r,'You launched a rough beta at '+Math.round(ratio*100)+'% built. Customers can sign up now, but they pay about 40% less, leave more often and sign up more slowly until you finish the product ('+rest+' more points).');
+  why(r,'A beta starts revenue and real feedback sooner, at the cost of quality. Finish the first version to leave beta.');
+};
 SU.NIGHTS={trivia:{name:'trivia night',cost:500,pct:0.10,hype:3},band:{name:'live band',cost:1500,pct:0.22,hype:6},dj:{name:'DJ night',cost:2500,pct:0.35,hype:9},game:{name:'game-day special',cost:800,pct:0.15,hype:4}};
 A.night=function(G,cl,ctx,r){
   if(G.arch!=='venue'){ note(r,'Only venues host nights.'); r.status='warn'; return; }
