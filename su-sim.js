@@ -39,7 +39,7 @@ SU.makeEmployee = function(G, role, level, sal, eq, opts){
   if(role!=='sdr'&&role!=='ae'&&tr==='rainmaker') tr='spreadsheet';
   var a=[SU.rnd(G,'people'),SU.rnd(G,'people'),SU.rnd(G,'people'),SU.rnd(G,'people')], tot=a[0]+a[1]+a[2]+a[3];
   var e={id:'e'+(++G.eid), name:SU.fullName(G,'people'), role:role, level:level, sal:sal, eq:eq, trait:tr, want:SU.pick(G,SU.WANTS,'people'),
-    loyalty:70, joinMi:G.mi, axes:{mission:a[0]/tot,pay:a[1]/tot,autonomy:a[2]/tot,stability:a[3]/tot}, mem:[],
+    loyalty:70, energy:85, xp:0, joinMi:G.mi, axes:{mission:a[0]/tot,pay:a[1]/tot,autonomy:a[2]/tot,stability:a[3]/tot}, mem:[],
     look:{skin:SU.int(G,0,4,'people'),hair:SU.int(G,0,5,'people'),color:SU.int(G,0,7,'people'),f:SU.chance(G,0.45,'people')}};
   e.skill=Math.round(clamp(1+0.13*SU.randn(G,'people'),0.78,1.28)*100)/100;
   return e;
@@ -131,9 +131,41 @@ SU.compF = function(G){
 function priceRel(G){ var S=SU.seg(G); if(G.arch==='market') return G.cust.take/S.takeDefault; return G.cust.price/S.defaultPrice; }
 
 /* ------------------------------------------------------------ people */
+/* ------------------------------------------------------------ people: stats, energy, experience, rank */
+SU.RANKS=[{xp:0,name:'Rookie'},{xp:6,name:'Regular'},{xp:15,name:'Veteran'},{xp:30,name:'Star'},{xp:50,name:'Legend'}];
+SU.rankOf=function(e){ var xp=e.xp||0, r=0; SU.RANKS.forEach(function(x,i){ if(xp>=x.xp) r=i; }); return {i:r,name:SU.RANKS[r].name,next:SU.RANKS[r+1]||null,xp:xp,from:SU.RANKS[r].xp}; };
+SU.energyOf=function(e){ return e.energy==null?85:e.energy; };
+SU.energyF=function(e){ return 0.9+0.15*(SU.energyOf(e)/100); };
+SU.skillRating=function(e){ return Math.round(clamp(((e.skill||1)-0.7)/0.75,0,1)*100); };
+SU.rampPct=function(G,e){ var r=(SU.ROLES[e.role].ramp[e.level])||3; return clamp((G.mi-e.joinMi)/r,0,1); };
+SU.empVel=function(G,e){ var ramp=Math.min(1,(G.mi-e.joinMi)/SU.ROLES.eng.ramp[e.level]); var tv=e.trait&&SU.TRAITS[e.trait].vel||1; var q=(e.trait==='quiet'&&G.mi-e.joinMi>6)?0.6:1; return SU.LEVEL_MULT[e.level]*ramp*tv*q*(e.skill||1)*SU.energyF(e); };
+SU.attrRisk3=function(G,e){ var tenure=G.mi-e.joinMi; var tm=e.trait&&SU.TRAITS[e.trait].attr||1; var p=0.018*attritionF(G.morale)*tm*(tenure===12?2:1)*(tenure<3?0.3:1)*(e.loyalty<45?1.5:1)*(SU.energyOf(e)<25?1.5:1); p=clamp(p,0,0.95); return 1-Math.pow(1-p,3); };
+SU.wantStatus=function(G,e){
+  var w=e.want, mk=SU.salaryFor(G,e.role,e.level), ok=true, why='';
+  if(w==='pay'){ ok=e.sal>=mk*1.03; why=ok?'Paid above market.':'Paid '+Math.round((1-e.sal/mk)*100)+'% under market.'; }
+  else if(w==='title'){ ok=(e.level==='senior'||e.level==='staff'); why=ok?'Has a senior title.':'Still waiting on a bigger title.'; }
+  else if(w==='mission'){ ok=G.pmf>=50; why=ok?'Believes in where this is going.':'Not sure the product is working yet.'; }
+  else if(w==='autonomy'){ var cu=G.orders&&G.orders.culture||{}; ok=!!(cu.remote||cu.fourday||cu.pto)&&!cu.office; why=ok?'Has room to work their way.':'Wants more freedom: try a work policy.'; }
+  else if(w==='stability'){ var f=SU.fin(G); ok=f.burn<=0||f.runway>=9; why=ok?'Feels the company is safe.':'Nervous about the cash runway.'; }
+  return {ok:ok,why:why};
+};
+/* monthly: energy moves with crunch, crowding, mood and perks; skill grows with experience; ranks are earned */
+SU.staffStep=function(G){
+  var mentor=G.team.some(function(e){ return e.trait==='mentor'; }), crunch=G.orders&&G.orders.culture&&G.orders.culture.crunch>0, over=SU.Shop?SU.Shop.over(G):0, perk=SU.Shop?SU.Shop.sanity(G):0, shipped=G.flags&&G.flags.shipMi===G.mi;
+  G.rankUps=G.rankUps||[];
+  G.team.forEach(function(e){
+    var en=SU.energyOf(e), tr=e.trait&&SU.TRAITS[e.trait]||{};
+    var d=3+(G.morale-60)/15+perk*1.5-1.5*over-(crunch?9*(tr.crunchOk?0.4:1):0);
+    e.energy=clamp(en+d,0,100);
+    if(e.energy<20) e.loyalty=clamp(e.loyalty-1.5,0,100);
+    var before=SU.rankOf(e).i; e.xp=(e.xp||0)+1+(shipped?2:0);
+    if(e.energy>=40) e.skill=Math.min(1.45,Math.round(((e.skill||1)+0.004*(mentor?1.5:1))*1000)/1000);
+    var after=SU.rankOf(e); if(after.i>before){ e.loyalty=clamp(e.loyalty+4,0,100); G.rankUps.push({id:e.id,name:e.name,rank:after.name,role:e.role}); SU.journal(G,e.name+' is now a '+after.name+'.','people'); }
+  });
+};
 SU.velocity = function(G){
   var E=0, moraleF=0.55+0.6*G.morale/100, debtF=1-G.D/200, flags=G.founder.bg.flags||{};
-  G.team.forEach(function(e){ if(e.role!=='eng') return; var ramp=Math.min(1,(G.mi-e.joinMi)/SU.ROLES.eng.ramp[e.level]); var tv=e.trait&&SU.TRAITS[e.trait].vel||1; var q=(e.trait==='quiet'&&G.mi-e.joinMi>6)?0.6:1; E+=SU.LEVEL_MULT[e.level]*ramp*tv*q*(e.skill||1); });
+  SU._vshare={}; G.team.forEach(function(e){ if(e.role!=='eng') return; var c=SU.empVel(G,e); SU._vshare[e.id]=c; E+=c; });
   var fb=0.35*G.founder.skills.t*(1+(flags.buildBonus||0))*(flags.buildMult||1); E+=fb;
   if(G.co&&G.co.flags.cto) E+=1.5*G.co.skills.t/5*1.4; else if(G.co) E+=0.2*G.co.skills.t;
   var des=Math.min(count(G,'design'),3), pm=Math.min(count(G,'pm'),2); E*=1+0.1*des+0.05*pm;
@@ -351,7 +383,7 @@ function productStep(G){
   var shipped=[];
   while(V>0.01 && G.queue.length){
     var f=G.queue[0], need=f.scope-f.progress, use=Math.min(V,need); f.progress+=use; V-=use;
-    if(f.progress>=f.scope-1e-6){ G.queue.shift(); shipFeature(G,f); shipped.push(f); } else break;
+    if(f.progress>=f.scope-1e-6){ G.queue.shift(); shipFeature(G,f); shipped.push(f); G.flags.shipMi=G.mi; } else break;
   }
   if(V>0.01 && !G.queue.length){ G.Q+=0.25*V*(1-G.Q/120); G.D+=0.1*V; }
   /* incidents */
@@ -444,6 +476,7 @@ SU.step = function(G){
       SU.journal(G,e.name+' left'+(e.trait==='founder'?' to start something of their own':'')+'.','people'); SU.inbox(G,{kind:'person',title:e.name+' resigned',body:'They are leaving the company. '+(e.trait==='founder'?'A new competitor may appear.':'Morale is the usual culprit.')}); G.stat.leftLast=(G.stat.leftLast||0)+1; if(e.trait==='founder') G.flags.founderLeft=G.mi; }
   });
   G.team.forEach(function(e){ e.loyalty=clamp(e.loyalty+(G.morale>65?0.8:G.morale<40?-1.5:0),0,100); });
+  SU.staffStep(G);
   /* culture timers */
   var cu=G.orders.culture; if(cu.crunch>0){ cu.crunch--; G.morale=clamp(G.morale-3,0,100); }
   /* hype/trust */

@@ -427,3 +427,9 @@ input[type=range]{width:100%;accent-color:var(--ink)}
 .lvlcard .n{font-family:var(--f-display);font-weight:800;font-size:26px;line-height:1;color:#6b4800;min-width:38px;text-align:center}
 .lvlcard small{display:block;color:#6b4800;font-size:11.5px}
 .hud .lvl{pointer-events:auto;cursor:pointer}
+
+.sbar{display:grid;grid-template-columns:62px minmax(0,1fr) 34px;gap:8px;align-items:center;font-size:12px}
+.sbar .sl{color:var(--muted);font-weight:600}.sbar .sv{text-align:right;font-size:12px}
+.sheetbars{gap:5px}
+.strip.stats4{grid-template-columns:repeat(3,minmax(0,1fr))}
+.st .v{font-size:15px}

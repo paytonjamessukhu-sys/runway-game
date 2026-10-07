@@ -199,7 +199,9 @@ function pTeam(g){
   var pages=Math.max(1,Math.ceil(list.length/pageSize)), pg=Math.min(S.page.team||0,pages-1);
   var cands=(g.cands||[]).map(function(c){ return '<div class="rw click" data-act="cands" data-id="'+c.id+'"><div class="av" style="background:#c9a227">?</div><div class="rm"><b>'+c.list.length+' candidates for '+esc(SU.ROLES[c.role].name.toLowerCase())+'</b><div class="rs">Pick before they take other offers</div></div><button class="btn sm primary">Meet</button></div>'; }).join('');
   var reqs=g.reqs.map(function(r){ return '<div class="rw"><div class="av" style="background:#c9a227">?</div><div class="rm"><b>Hiring: '+esc(SU.ROLES[r.role].name)+'</b><div class="rs">'+fm(r.comp)+'/yr, open '+r.age+' period'+(r.age===1?'':'s')+'</div></div></div>'; }).join('');
-  h+='<div class="sec"><h4>People</h4><div class="rows">'+cands+list.slice(pg*pageSize,(pg+1)*pageSize).map(function(p){ return '<div class="rw click" data-act="person" data-id="'+p.id+'">'+avatar(p.nm,p.col)+'<div class="rm"><b>'+esc(p.nm)+'</b><div class="rs">'+esc(p.role)+' &middot; '+p.bt+'</div></div><div style="width:64px">'+good(p.bar)+'</div></div>'; }).join('')+reqs+'</div>'+(pages>1?'<div class="pager"><button class="btn sm ghost" data-act="page" data-k="team" data-d="-1">Prev</button>'+(pg+1)+' / '+pages+'<button class="btn sm ghost" data-act="page" data-k="team" data-d="1">Next</button></div>':'')+'</div>';
+  var tm=g.team, avg=function(fn){ return tm.length?tm.reduce(function(a,e){ return a+fn(e); },0)/tm.length:0; };
+  h+='<div class="strip">'+stat('Build speed',SU.velocity(g).toFixed(1),'points a month')+stat('Avg skill',Math.round(avg(SU.skillRating)),tm.length?SU.RANKS[Math.round(avg(function(e){ return SU.rankOf(e).i; }))].name+' crew':'just you')+stat('Avg energy',Math.round(avg(SU.energyOf)),avg(SU.energyOf)<45?'Burnout risk':'Rested',avg(SU.energyOf)<45?'bad':'')+'</div>';
+  h+='<div class="sec"><h4>People</h4><div class="rows">'+cands+list.slice(pg*pageSize,(pg+1)*pageSize).map(function(p){ return '<div class="rw click" data-act="person" data-id="'+p.id+'">'+avatar(p.nm,p.col)+'<div class="rm"><b>'+esc(p.nm)+'</b><div class="rs">'+esc(p.role)+(p.e?' &middot; '+SU.rankOf(p.e).name+' &middot; skill '+SU.skillRating(p.e)+' &middot; energy '+Math.round(SU.energyOf(p.e)):' &middot; '+p.bt)+'</div></div><div style="width:64px">'+good(p.bar)+'</div></div>'; }).join('')+reqs+'</div>'+(pages>1?'<div class="pager"><button class="btn sm ghost" data-act="page" data-k="team" data-d="-1">Prev</button>'+(pg+1)+' / '+pages+'<button class="btn sm ghost" data-act="page" data-k="team" data-d="1">Next</button></div>':'')+'</div>';
   h+='<div class="tilegrid">'+['hire'].map(tileAction).join('')+'<button class="tile" data-act="view" data-id="policy"><span class="tt">Work policies</span><span class="tf">free</span><span class="tb2">Remote, four-day week, perks, crunch.</span></button>'+['allhands','offsite','raiseAll','layoff'].map(tileAction).join('')+'</div>';
   return h;
 }
@@ -316,6 +318,32 @@ function setCfg(aid,k,val){
 }
 
 /* ------------------------------------------------------------ drawer: a person */
+
+/* ------------------------------------------------------------ people: stat sheet */
+function sbar(label,val,cls,right,tip){ return '<div class="sbar" title="'+esc(tip||'')+'"><span class="sl">'+label+'</span><div class="bar '+(cls||'')+'"><i style="width:'+Math.max(0,Math.min(100,Math.round(val)))+'%"></i></div><span class="sv mono">'+(right==null?Math.round(val):right)+'</span></div>'; }
+function cls3(v){ return v<35?'bad':v<60?'warn':'good'; }
+function roleEffect(g,e){
+  var r=e.role, sk=SU.skillRating(e), f=e.skill||1;
+  if(r==='eng'){ var vs=SU._vshare||{}; SU.velocity(g); vs=SU._vshare||{}; var tot=0; Object.keys(vs).forEach(function(k){ tot+=vs[k]; }); var mine=vs[e.id]||0; var share=tot>0?mine/tot:0; var pts=SU.velocity(g)*share; return {k:'Build output',v:pts.toFixed(1)+' pts/mo',s:Math.round(share*100)+'% of your team’s building'}; }
+  if(r==='design') return {k:'Team boost',v:'+10%',s:'to every engineer (first 3 designers)'};
+  if(r==='pm') return {k:'Team boost',v:'+5%',s:'to building (first 2 PMs)'};
+  if(r==='ae') return {k:'Closing',v:'x'+f.toFixed(2),s:'on deals, with the other account execs'};
+  if(r==='sdr') return {k:'Outreach',v:'standing',s:'sends outreach every month'};
+  if(r==='cs') return {k:'Keeping customers',v:'x'+f.toFixed(2),s:'helps lower churn'};
+  if(r==='mkt') return {k:'Marketing',v:'x'+f.toFixed(2),s:'makes your spend work harder'};
+  if(r==='cos') return {k:'Focus',v:'+1',s:'extra focus every month'};
+  return {k:'Impact',v:'x'+f.toFixed(2),s:'runs a department'};
+}
+function personSheet(g,e){
+  var rk=SU.rankOf(e), sk=SU.skillRating(e), en=Math.round(SU.energyOf(e)), ramp=Math.round(SU.rampPct(g,e)*100), mk=SU.salaryFor(g,e.role,e.level), pay=Math.round((e.sal/mk-1)*100), risk=Math.round(SU.attrRisk3(g,e)*100), want=SU.wantStatus(g,e), eff=roleEffect(g,e), ten=Math.max(0,Math.round(g.mi-e.joinMi));
+  var xpPct=rk.next?(rk.xp-rk.from)/(rk.next.xp-rk.from)*100:100;
+  var h='<div class="sec sheetbars">'+sbar('Skill',sk,cls3(sk),sk,'How good they are at the job. It grows with experience.')+sbar('Energy',en,cls3(en),en,'Crunch, crowding and low morale drain it. Perks and rest refill it. Tired people build slower.')+sbar('Loyalty',e.loyalty,cls3(e.loyalty),Math.round(e.loyalty),'Low loyalty means they might leave.')+(ramp<100?sbar('Ramp-up',ramp,'',ramp+'%','New hires take a few months to reach full speed.'):'')+'</div>';
+  h+='<div class="strip stats4"><div class="st"><div class="l">'+esc(eff.k)+'</div><div class="v">'+esc(eff.v)+'</div><div class="s">'+esc(eff.s)+'</div></div><div class="st"><div class="l">Pay vs market</div><div class="v">'+(pay>=0?'+':'')+pay+'%</div><div class="s">'+fm(e.sal)+' a year</div></div><div class="st'+(risk>=20?' bad':'')+'"><div class="l">Might leave</div><div class="v">'+risk+'%</div><div class="s">in the next 3 months</div></div></div>';
+  h+='<div class="sec"><div class="row" style="justify-content:space-between"><b class="sm">Rank: '+rk.name+'</b><span class="mono xs">'+(rk.next?rk.xp+' / '+rk.next.xp+' xp to '+rk.next.name:'top rank')+'</span></div>'+bar(xpPct,'')+'<div class="xs muted">Experience grows every month, faster when you ship. Each rank makes them a little more loyal.</div></div>';
+  h+='<div class="pv"><div><b>Wants '+esc(SU.WANT_TEXT[e.want]||e.want)+'.</b> <span class="pill '+(want.ok?'good':'warn')+'">'+(want.ok?'happy':'not yet')+'</span></div><div>'+esc(want.why)+'</div></div>';
+  return h;
+}
+
 function drawerPerson(id){
   var g=G(), h='', e=g.team.filter(function(x){ return x.id===id; })[0];
   if(id==='you'){
@@ -323,10 +351,9 @@ function drawerPerson(id){
   } else if(id==='co'&&g.co){
     h='<div class="dr-h"><button class="btn sm ghost" data-act="back">'+UI.icon('back')+' Back</button><h3>'+esc(g.co.name)+'</h3></div><div class="dr-b"><div class="row">'+avatar(g.co.name,'#8b5cf6')+'<div><b>'+esc(g.co.arch)+'</b><div class="xs muted">'+esc(g.co.trait)+'</div></div></div><div class="sec"><div class="k">Bond</div>'+good(g.co.bond)+'<div class="sm">Wants: '+esc(g.co.wants)+'</div><div class="quote">"'+esc(g.co.voice)+'"</div></div><div class="tilegrid">'+tileAction('talkcofounder')+'</div></div>';
   } else if(e){
-    var acts=CAT.personActions(g,e), stars='★'.repeat(Math.round((e.skill-0.7)/0.6*5))+'☆'.repeat(5-Math.round((e.skill-0.7)/0.6*5));
-    h='<div class="dr-h"><button class="btn sm ghost" data-act="back">'+UI.icon('back')+' Back</button><h3>'+esc(e.name)+'</h3></div><div class="dr-b"><div class="row">'+avatar(e.name,ROLECOL[e.role]||'#5a6b7d')+'<div><b>'+(e.level!=='mid'?SU.cap1(e.level)+' ':'')+esc(SU.ROLES[e.role].name)+'</b><div class="xs muted">'+fm(e.sal)+' a year &middot; joined '+Math.max(0,Math.round(g.mi-e.joinMi))+' months ago</div></div><span class="stars" title="Skill">'+stars+'</span></div>'+
-      '<div class="sec"><div class="k">Loyalty</div>'+good(e.loyalty)+'</div>'+(e.trait?'<div class="pv"><div><b>'+esc(SU.TRAITS[e.trait].name)+'.</b> '+esc(SU.TRAITS[e.trait].desc||'')+'</div></div>':'')+'<div class="sm muted">Wants '+esc(SU.WANT_TEXT[e.want]||e.want)+'.</div>'+
-      '<div class="tilegrid">'+acts.map(function(x,i){ return '<button class="tile'+(x.danger?' danger':'')+'" data-act="pquick" data-id="'+e.id+'" data-i="'+i+'"><span class="tt">'+esc(x.label)+'</span><span class="tf">'+focusSpec(x.spec)+'</span><span class="tb2">'+esc(x.spec.text)+'</span></button>'; }).join('')+'</div></div>';
+    var acts=CAT.personActions(g,e), n5=Math.max(0,Math.min(5,Math.round(SU.skillRating(e)/20))), stars='★'.repeat(n5)+'☆'.repeat(5-n5);
+    h='<div class="dr-h"><button class="btn sm ghost" data-act="back">'+UI.icon('back')+' Back</button><h3>'+esc(e.name)+'</h3></div><div class="dr-b"><div class="row">'+avatar(e.name,ROLECOL[e.role]||'#5a6b7d')+'<div><b>'+(e.level!=='mid'?SU.cap1(e.level)+' ':'')+esc(SU.ROLES[e.role].name)+' <span class="pill blue">'+SU.rankOf(e).name+'</span></b><div class="xs muted">'+fm(e.sal)+' a year &middot; joined '+Math.max(0,Math.round(g.mi-e.joinMi))+' months ago</div></div><span class="stars" title="Skill">'+stars+'</span></div>'+
+      personSheet(g,e)+(e.trait?'<div class="pv"><div><b>'+esc(SU.TRAITS[e.trait].name)+'.</b> '+esc(SU.TRAITS[e.trait].desc||'')+'</div></div>':'')+'<div class="tilegrid">'+acts.map(function(x,i){ return '<button class="tile'+(x.danger?' danger':'')+'" data-act="pquick" data-id="'+e.id+'" data-i="'+i+'"><span class="tt">'+esc(x.label)+'</span><span class="tf">'+focusSpec(x.spec)+'</span><span class="tb2">'+esc(x.spec.text)+'</span></button>'; }).join('')+'</div></div>';
   } else h='<div class="dr-h"><button class="btn sm ghost" data-act="back">Back</button><h3>Gone</h3></div><div class="dr-b">That person is no longer here.</div>';
   return h;
 }
@@ -441,12 +468,13 @@ UI.showReport=function(){
   if(full){ var md=m.querySelector('.modal'); md.style.maxHeight='calc(100dvh - 28px)'; }
 };
 
+function candPay(g,e){ try{ if(e.role==='eng'||e.role==='design'||e.role==='pm'){ var g2=SU.clone(g); var e2=SU.clone(e); e2.joinMi=-99; g2.team.push(e2); var dv=SU.velocity(g2)-SU.velocity(g); return '<div class="pv"><div><b>Build speed '+(dv>=0?'+':'')+dv.toFixed(1)+'</b> a month once ramped up</div></div>'; } }catch(x){} return ''; }
 /* ------------------------------------------------------------ candidates */
 UI.openCands=function(cid){
   var g=G(), c=(g.cands||[]).filter(function(x){ return x.id===cid; })[0]; if(!c){ UI.toast('Those candidates are gone.'); return; }
   var h='<h2>Pick your '+esc(SU.ROLES[c.role].name.toLowerCase())+'</h2><div class="muted sm">Three people applied. Pick one. The others take other offers.</div><div class="cands">'+c.list.map(function(e,i){
     var n=Math.max(0,Math.min(5,Math.round((e.skill-0.7)/0.6*5))); var tr=e.trait?SU.TRAITS[e.trait]:null; var fn=e.name.split(' ')[0];
-    return '<div class="cand"><div class="row" style="gap:8px">'+avatar(e.name,ROLECOL[e.role]||'#5a6b7d')+'<div><h4>'+esc(e.name)+'</h4><div class="xs muted">'+(e.level!=='mid'?SU.cap1(e.level)+' ':'Mid-level ')+esc(SU.ROLES[e.role].name)+'</div></div></div><div class="stars" title="Skill">'+'★'.repeat(n)+'☆'.repeat(5-n)+'</div><div class="sm"><b>'+fm(e.sal)+'</b> a year<br><span class="muted">'+fm(e.sal*1.3/12)+'/mo with taxes</span></div>'+(tr?'<div class="pv"><div><b>'+esc(tr.name)+'</b></div><div>'+esc(tr.desc||'')+'</div></div>':'<div class="xs muted">No strong quirks.</div>')+'<div class="xs muted">Wants '+esc(SU.WANT_TEXT[e.want]||e.want)+'.</div><button class="btn primary" data-act="pick-cand" data-id="'+c.id+'" data-i="'+i+'">Hire '+esc(fn)+'</button></div>'; }).join('')+'</div><div class="foot"><button class="btn ghost" data-act="drop-cands" data-id="'+c.id+'">None of them</button><button class="btn" data-act="close-modal">Decide later</button></div>';
+    return '<div class="cand"><div class="row" style="gap:8px">'+avatar(e.name,ROLECOL[e.role]||'#5a6b7d')+'<div><h4>'+esc(e.name)+'</h4><div class="xs muted">'+(e.level!=='mid'?SU.cap1(e.level)+' ':'Mid-level ')+esc(SU.ROLES[e.role].name)+'</div></div></div><div class="stars" title="Skill">'+'★'.repeat(n)+'☆'.repeat(5-n)+' <span class="mono xs">skill '+SU.skillRating(e)+'</span></div>'+candPay(g,e)+'<div class="sm"><b>'+fm(e.sal)+'</b> a year<br><span class="muted">'+fm(e.sal*1.3/12)+'/mo with taxes</span></div>'+(tr?'<div class="pv"><div><b>'+esc(tr.name)+'</b></div><div>'+esc(tr.desc||'')+'</div></div>':'<div class="xs muted">No strong quirks.</div>')+'<div class="xs muted">Wants '+esc(SU.WANT_TEXT[e.want]||e.want)+'.</div><button class="btn primary" data-act="pick-cand" data-id="'+c.id+'" data-i="'+i+'">Hire '+esc(fn)+'</button></div>'; }).join('')+'</div><div class="foot"><button class="btn ghost" data-act="drop-cands" data-id="'+c.id+'">None of them</button><button class="btn" data-act="close-modal">Decide later</button></div>';
   UI.modal(h,{wide:true});
 };
 

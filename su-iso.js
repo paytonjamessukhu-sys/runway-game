@@ -571,7 +571,7 @@ function populate(G,fresh){
     if(!p){ p=mkPerson(o.kind,o.src,o.kind==='emp'?o.src.role:(o.kind==='co'?'cos':'eng')); p.id=o.id; p.name=o.kind==='you'?(G.founder.name||'You'):o.src.name; if(o.kind==='co') p.role='pm'; if(o.kind==='you') p.role='eng'; newOnes.push(p); }
     p.hidden=false; p.src=o.src; p.name=o.kind==='you'?(G.founder.name||'You'):o.src.name; if(o.kind==='emp') p.role=o.src.role; if(o.kind==='emp') p.look=o.src.look||p.look; if(o.kind==='co') p.look=(o.src.look||p.look);
     sl.who=p; p.slot=sl; p.seatDesk=slotDesk(sl); keep.push(p);
-    p.tired=G.founder.sanity<35&&o.kind==='you';
+    p.tired=(G.founder.sanity<35&&o.kind==='you')||(o.kind==='emp'&&o.src&&o.src.energy!=null&&o.src.energy<35);
   });
   /* people who left walk out */
   s.people.forEach(function(p){ if(!order.some(function(o){ return o.id===p.id; })){ if(!p.leaving){ p.leaving=true; p.carry=true; var d=doorPoint(); p.mode='stand'; sendPerson(p,{x:d.x,y:d.y,aisle:d.aisle,band:d.band},'stand',3,function(q){ q.gone=true; }); } keep.push(p); } });
