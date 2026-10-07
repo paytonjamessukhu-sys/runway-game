@@ -324,6 +324,8 @@ CAT.health=function(G){
   /* support load */
   if(n>0){ var cap=300+150*SU.count(G,'cs'), ld=n/cap, ss=ld>1?'bad':(ld>0.75?'warn':'good'); add('support','Support load',SU.fmtNum(n)+' of '+cap,ss,'You handle about 300 customers yourself and each customer success hire adds 150. Over the limit, churn jumps 20%.',
     ss==='good'?[]:[fx('hire',{role:'cs'},'Hire customer success')]); }
+  /* competition */
+  var sh=Math.round((1-SU.compF(G))*100); if(sh>0||G.rivals.some(function(r){ return r.active&&r.presence>0; })){ var cps=sh>=40?'bad':(sh>=20?'warn':'good'); add('rivals','Competition',sh+'% of demand',cps,'How much of your market rivals are taking. Beat them on product quality, buzz or price. Tap See rivals on the Sales tab to size them up.',cps==='good'?[]:[fx('rival',{act:'coffee'},'Have coffee with a rival')]); }
   /* team energy */
   if(G.team.length){ var es=avgEn<35?'bad':(avgEn<55?'warn':'good'); add('energy','Team energy',Math.round(avgEn)+' of 100',es,'How rested your team is. Crunch, a crowded office and low morale drain it. Tired people build slower and quit sooner.',
     es==='good'?[]:[fx('allhands',{},'Hold an all-hands'),fx('offsite',{},'Team offsite')]); }

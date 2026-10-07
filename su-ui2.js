@@ -185,6 +185,7 @@ function pSales(g){
   var priceTxt=g.arch==='market'?pctS(c.take,0)+' cut':fm(c.price)+'/mo';
   var h='<div class="strip">'+stat(g.arch==='consumer'?'Subscribers':'Customers',SU.fmtNum(SU.custCount(g)),'')+stat('Revenue',fm(g.mrr||0)+'/mo','')+stat('Rivals',String(g.rivals.filter(function(r){ return r.active; }).length),'take '+Math.round((1-SU.compF(g))*100)+'% of demand')+'</div>';
   h+=pricingCard(g);
+  (function(){ var act=g.rivals.filter(function(r){ return r.active&&r.presence>0; }).sort(function(a,b){ return b.presence-a.presence; }); var top=act[0]; h+='<div class="sec compcard"><div class="row" style="justify-content:space-between;align-items:center"><div><div class="k">Competition</div><div class="sm">'+(top?'<b>'+esc(top.name)+'</b> is your biggest rival ('+act.length+' in all). They take '+Math.round((1-SU.compF(g))*100)+'% of demand.':'No rivals chasing you right now.')+'</div></div><button class="btn sm" data-act="view" data-id="rivals">See rivals</button></div></div>'; })();
   h+='<div class="sec"><h4>Marketing running now</h4>'+(ch.length?'<div class="rows">'+ch.join('')+'</div>':empty('Nothing. Try outreach, ads, content or a launch.'))+'</div>';
   h+=tiles(['outbound','market','launch','rival']);
   return h;
@@ -389,9 +390,30 @@ function healthView(g){
   });
   return h+'</div>';
 }
+
+function rivalCard(g,r){
+  var thr=r.presence<0.15?['Low','good']:(r.presence<0.35?['Medium','warn']:['High','bad']);
+  var months=r.burn>0?r.cash/r.burn:99; var cmp=function(a,b){ return a>b+4?'better than you':(a<b-4?'behind you':'about even'); };
+  var h='<div class="rg"><div class="row" style="justify-content:space-between;align-items:baseline"><b>'+esc(r.name)+'</b><span class="pill '+thr[1]+'">'+thr[0]+' threat</span></div><div class="xs muted">'+esc(r.persona||'')+(r.boss?' &middot; run by '+esc(r.boss):'')+'</div>'+
+   '<div class="sbar"><span class="sl">Share</span>'+bar(Math.min(100,r.presence*160),thr[1])+'<span class="sv mono">'+Math.round(r.presence*100)+'%</span></div>'+
+   '<div class="sbar"><span class="sl">Product</span>'+bar(r.Q,'')+'<span class="sv mono">'+Math.round(r.Q)+'</span></div><div class="xs muted" style="margin:-2px 0 2px 70px">'+cmp(r.Q,g.Q)+' (yours '+Math.round(g.Q)+')</div>'+
+   '<div class="sbar"><span class="sl">Buzz</span>'+bar(r.hype,'')+'<span class="sv mono">'+Math.round(r.hype)+'</span></div><div class="xs muted" style="margin:-2px 0 2px 70px">'+cmp(r.hype,g.hype)+' (yours '+Math.round(g.hype)+')</div>'+
+   '<div class="xs"><b>Price:</b> '+(r.price<0.9?'cheaper than the market':(r.price>1.1?'pricier than the market':'near the market'))+' &middot; <b>Cash:</b> '+fm(r.cash)+(r.burn>0?' ('+(months>=36?'3+ years':months.toFixed(0)+' months')+' left)':'')+'</div>'+
+   (r.respect>0||r.grudge>0?'<div class="xs muted">'+(r.grudge>r.respect?'They hold a grudge against you.':'They respect you.')+'</div>':'')+'</div>';
+  return h;
+}
+function rivalsView(g){
+  var act=g.rivals.filter(function(r){ return r.active&&r.presence>0; }).sort(function(a,b){ return b.presence-a.presence; });
+  var share=Math.round((1-SU.compF(g))*100);
+  var h='<div class="dr-b"><div class="muted sm">Rivals take <b>'+share+'%</b> of the demand in your market. Beat them on product, buzz or price, or pick fights carefully.</div>';
+  h+=act.length?act.map(function(r){ return rivalCard(g,r); }).join(''):empty('No rivals are chasing you right now. Enjoy it.');
+  h+='<div class="tilegrid" style="margin-top:8px">'+tileAction('rival')+'</div></div>';
+  return h;
+}
 function drawerView(id){
   var g=G(), h='', title='';
-  if(id==='health'){ title='Health check'; h=healthView(g); }
+  if(id==='rivals'){ title='Your rivals'; h=rivalsView(g); }
+  else if(id==='health'){ title='Health check'; h=healthView(g); }
   else if(id==='roles'){ title='What each job does'; h=rolesGuide(g); }
   else if(id==='policy'){
     title='Work policies'; h='<div class="dr-b"><div class="muted sm">Policies change how people feel and how fast they build. Each change is one move in your plan.</div><div class="rows">'+CAT.policyList(g).map(function(p){ var on=CAT.policyOn(g,p.id); return '<div class="rw"><div class="rm"><b>'+esc(p.name)+'</b></div><span class="pill '+(on?'good':'')+'">'+(on?'on':'off')+'</span><button class="btn sm" data-act="policy" data-kind="'+p.id+'">'+(on?'Turn off':'Turn on')+'</button></div>'; }).join('')+'</div></div>';

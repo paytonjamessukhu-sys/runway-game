@@ -451,3 +451,4 @@ input[type=range]{width:100%;accent-color:var(--ink)}
 .hl.bad{border-left-color:var(--bad);background:#fff8f8}.hl.warn{border-left-color:var(--amber);background:#fffbef}.hl.good{border-left-color:#1f9d6a}
 .good-t{color:var(--good)}
 .hud .btn.hb-bad{background:#c22a2a;border-color:#ff9a9a}.hud .btn.hb-warn{background:#b97d00;border-color:#ffd479}
+.compcard{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:8px 10px}
