@@ -151,7 +151,7 @@ A.fire=function(G,cl,ctx,r){
   else if(p.role){ targets=G.team.filter(function(e){ return e.role===p.role; }); }
   else if(p.n){ targets=SU.shuffle(G,G.team,'people').slice(0,Math.min(p.n,G.team.length)); }
   if(!targets.length){ note(r,'Nobody to let go.'); r.status='warn'; return; }
-  var sev=0; targets.forEach(function(e){ sev+=e.sal*1.3/26*(p.severance>=1?4:2)/1; G.team=G.team.filter(function(x){ return x!==e; }); });
+  var sev=0; targets.forEach(function(e){ sev+=e.sal*1.3/26*(p.severance>=1?4:2)/1; G.team=G.team.filter(function(x){ return x!==e; }); if(e.shares){ G.cap.pool.granted=Math.max(0,G.cap.pool.granted-e.shares*0.5); G.cap.pool.unissued+=e.shares*0.5; } });
   spend(G,sev,'Severance'); var saved=targets.reduce(function(a,e){ return a+e.sal*1.3/12; },0);
   var hit=targets.length>=3||targets.length>=G.team.length*0.2? 15 : 6; G.morale=clamp(G.morale-hit,0,100); G.founder.sanity=clamp(G.founder.sanity-5,0,100); G.trust.emp=clamp(G.trust.emp-10,0,100);
   G.team.forEach(function(e){ e.loyalty=clamp(e.loyalty-8,0,100); });
@@ -219,9 +219,9 @@ A.fundraise=function(G,cl,ctx,r){
 };
 A.finance=function(G,cl,ctx,r){
   var k=cl.params.kind;
-  if(k==='card'){ if(G.flags.cardUsed){ note(r,'You already maxed the card.'); r.status='warn'; return; } G.flags.cardUsed=true; G.cash+=25000; G.founder.sanity=clamp(G.founder.sanity-15,0,100); G.loans.card=25000; SU.drv(G,'cash',25000,'Founder credit card'); note(r,'$25K on the founder credit card. Sanity -15.'); }
+  if(k==='card'){ if(G.flags.cardUsed){ note(r,'You already maxed the card.'); r.status='warn'; return; } G.flags.cardUsed=true; G.cash+=25000; G.founder.sanity=clamp(G.founder.sanity-15,0,100); G.loans.card=25000; SU.drv(G,'cash',25000,'Founder credit card'); note(r,'$25K on the founder credit card. You repay $2,500 a month plus 2% interest. Sanity -15.'); }
   else if(k==='deferFounder'){ G.founder.pay=0; note(r,'Founders defer their salaries.'); }
-  else if(k==='deferStaff'){ var pay=SU.fin(G).ex.payroll; var save=Math.round(pay*0.3); G.cash+=save; G.owed=(G.owed||0)+save; G.morale=clamp(G.morale-10,0,100); G.team.forEach(function(e){ e.loyalty=clamp(e.loyalty-12,0,100); }); SU.drv(G,'cash',save,'Deferred payroll'); note(r,'Staff defer 30% of pay this month ('+fm(save)+'). You owe it next month. Morale -10.'); r.status='warn'; }
+  else if(k==='deferStaff'){ var pay=SU.fin(G).ex.payroll; var save=Math.round(pay*0.3); G.deferNow=(G.deferNow||0)+save; G.morale=clamp(G.morale-10,0,100); G.team.forEach(function(e){ e.loyalty=clamp(e.loyalty-12,0,100); }); note(r,'Staff are paid 30% less this month (you keep '+fm(save)+'). You owe it all next month. Morale -10.'); r.status='warn'; }
   else if(k==='bridge'){ var b=M.insiderBridge(G); note(r,b.msg); if(!b.ok) r.status='warn'; }
   else if(k==='rbf'){ var x=M.rbf(G); note(r,x.msg); if(!x.ok) r.status='warn'; }
   else if(k==='debt'){ var d=M.ventureDebt(G); note(r,d.msg); if(!d.ok) r.status='warn'; }

@@ -168,7 +168,7 @@ def({id:'layoff',group:'team',title:'Lay people off',blurb:'Painful. Saves cash.
   ok:function(G){ return G.team.length?{ok:true}:{ok:false,why:'You have no team to let go.'}; },
   ctl:function(){ return [{k:'pct',label:'How many',kind:'choice',opts:[opt(10,'10%'),opt(20,'20%'),opt(30,'30%'),opt(50,'Half')],def:20},{k:'generous',label:'Generous severance (costs more, softer landing)',kind:'toggle',def:false}]; },
   make:function(G,v){ return mk(G,'fire',{who:[],pct:v.pct/100,n:null,role:null,severance:v.generous?1:0.5},'Layoff'); },
-  preview:function(G,v){ var k=Math.max(1,R(G.team.length*v.pct/100)); var avg=G.team.length?G.team.reduce(function(a,e){ return a+e.sal; },0)/G.team.length:0; return ['About '+k+' '+(k===1?'person':'people')+' go. Burn drops about '+fm(k*avg*1.3/12)+' a month.','Morale drops and the rest get nervous.']; }});
+  preview:function(G,v){ var k=Math.max(1,R(G.team.length*v.pct/100)); var avg=G.team.length?G.team.reduce(function(a,e){ return a+e.sal; },0)/G.team.length:0; var sev=k*avg*1.3/26*(v.generous?4:2); return ['About '+k+' '+(k===1?'person':'people')+' go. Burn drops about '+fm(k*avg*1.3/12)+' a month from this month on.','Severance costs about '+fm(sev)+' once, this month ('+(v.generous?'8':'4')+' weeks of pay each). After that you pay them nothing.','Morale drops and the rest get nervous.']; }});
 def({id:'raiseAll',group:'team',title:'Give everyone a raise',blurb:'Keeps people. Costs cash every month.',
   ok:function(G){ return G.team.length?{ok:true}:{ok:false,why:'You have no team yet.'}; },
   ctl:function(){ return [{k:'pct',label:'How much',kind:'choice',opts:[opt(5,'5%'),opt(10,'10%'),opt(15,'15%')],def:10}]; },
@@ -228,7 +228,7 @@ def({id:'cutburn',group:'money',title:'Cut spending',blurb:'Trim ads, content an
   preview:function(G){ return ['Cuts marketing budgets and perks. Morale -2.']; }});
 def({id:'card',group:'money',title:'Max out the founder credit card',blurb:'$25K right now. Your sanity pays the interest.',danger:true,
   ok:function(G){ return G.flags.cardUsed?{ok:false,why:'Already maxed.'}:{ok:true}; },
-  ctl:function(){ return []; }, make:function(G){ return mk(G,'finance',{kind:'card',pct:0.25},'Credit card'); }, preview:function(){ return ['+$25K cash. Sanity -15.']; }});
+  ctl:function(){ return []; }, make:function(G){ return mk(G,'finance',{kind:'card',pct:0.25},'Credit card'); }, preview:function(){ return ['+$25K cash now. You repay $2,500 a month plus 2% interest until it is gone. Sanity -15.']; }});
 def({id:'deferStaff',group:'money',title:'Ask staff to defer pay',blurb:'Buy a month. Costs trust.',danger:true,
   ok:function(G){ return G.team.length?{ok:true}:{ok:false,why:'No staff to ask.'}; },
   ctl:function(){ return []; }, make:function(G){ return mk(G,'finance',{kind:'deferStaff',pct:0.25},'Defer staff pay'); }, preview:function(G){ return ['You hold back 30% of payroll this month and owe it next month. Morale -10.']; }});

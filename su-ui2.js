@@ -359,14 +359,14 @@ function drawerPerson(id){
   } else if(e){
     var acts=CAT.personActions(g,e), n5=Math.max(0,Math.min(5,Math.round(SU.skillRating(e)/20))), stars='★'.repeat(n5)+'☆'.repeat(5-n5);
     h='<div class="dr-h"><button class="btn sm ghost" data-act="back">'+UI.icon('back')+' Back</button><h3>'+esc(e.name)+'</h3></div><div class="dr-b"><div class="row">'+avatar(e.name,ROLECOL[e.role]||'#5a6b7d')+'<div><b>'+(e.level!=='mid'?SU.cap1(e.level)+' ':'')+esc(SU.ROLES[e.role].name)+' <span class="pill blue">'+SU.rankOf(e).name+'</span></b><div class="xs muted">'+fm(e.sal)+' a year &middot; joined '+Math.max(0,Math.round(g.mi-e.joinMi))+' months ago</div></div><span class="stars" title="Skill">'+stars+'</span></div>'+
-      personSheet(g,e)+(e.trait?'<div class="pv"><div><b>'+esc(SU.TRAITS[e.trait].name)+'.</b> '+esc(SU.TRAITS[e.trait].desc||'')+'</div></div>':'')+'<div class="tilegrid">'+acts.map(function(x,i){ return '<button class="tile'+(x.danger?' danger':'')+'" data-act="pquick" data-id="'+e.id+'" data-i="'+i+'"><span class="tt">'+esc(x.label)+'</span><span class="tf">'+focusSpec(x.spec)+'</span><span class="tb2">'+esc(x.spec.text)+'</span></button>'; }).join('')+'</div></div>';
+      personSheet(g,e)+(e.trait?'<div class="pv"><div><b>'+esc(SU.TRAITS[e.trait].name)+'.</b> '+esc(SU.TRAITS[e.trait].desc||'')+'</div></div>':'')+'<div class="tilegrid">'+acts.map(function(x,i){ return '<button class="tile'+(x.danger?' danger':'')+'" data-act="pquick" data-id="'+e.id+'" data-i="'+i+'"><span class="tt">'+esc(x.label)+'</span><span class="tf">'+focusSpec(x.spec)+'</span><span class="tb2">'+esc(x.spec.lever==='fire'?'Severance '+fm(e.sal*1.3/26*2)+' once (4 weeks). Their '+fm(e.sal*1.3/12)+' a month stops right away.':x.spec.text)+'</span></button>'; }).join('')+'</div></div>';
   } else h='<div class="dr-h"><button class="btn sm ghost" data-act="back">Back</button><h3>Gone</h3></div><div class="dr-b">That person is no longer here.</div>';
   return h;
 }
 function focusSpec(sp){ var f=SU.mkClause(G(),sp.lever,sp.params,sp.text).focus; return f?f+' focus':'free'; }
 
 /* ------------------------------------------------------------ drawer: views (policies, loans, exit, cap table, spending, story) */
-var EXP_LABEL={payroll:'Payroll',tools:'Tools',infra:'Servers and hosting',marketing:'Marketing and outreach',cogs:'Cost of serving customers',fixed:'Rent, legal, accounting',other:'Perks and care',rbf:'Revenue-based repayment',debt:'Debt interest',owed:'Deferred pay owed'};
+var EXP_LABEL={payroll:'Payroll',tools:'Tools',infra:'Servers and hosting',marketing:'Marketing and outreach',cogs:'Cost of serving customers',fixed:'Rent, legal, accounting',other:'Perks and care',rbf:'Revenue-based repayment',debt:'Debt interest',owed:'Deferred pay owed',card:'Credit card payments'};
 
 function rolesGuide(g){
   var h='<div class="dr-b"><div class="muted sm">Every job does something specific. Here is exactly what, with your numbers.</div>';
@@ -422,7 +422,7 @@ function drawerView(id){
   } else if(id==='exit'){
     title='Sell or go public'; h='<div class="dr-b"><div class="tilegrid">'+['banker','ipo','indie','shutdown'].map(tileAction).join('')+'</div></div>';
   } else if(id==='spend'){
-    title='Where the money goes'; var f=SU.fin(g), ex=f.ex, rows=['payroll','tools','infra','marketing','cogs','fixed','other','rbf','debt','owed'].filter(function(k){ return ex[k]>1; });
+    title='Where the money goes'; var f=SU.fin(g), ex=f.ex, rows=['payroll','tools','infra','marketing','cogs','fixed','other','rbf','debt','owed','card'].filter(function(k){ return ex[k]>1; });
     h='<div class="dr-b"><div class="row" style="justify-content:space-between"><b>Costs</b><span class="mono">'+fm(ex.total)+'/mo</span></div><table class="t"><tbody>'+rows.map(function(k){ return '<tr><td>'+EXP_LABEL[k]+'</td><td class="n">'+fm(ex[k])+'</td></tr>'; }).join('')+'<tr><td><b>Revenue</b></td><td class="n"><b>'+fm(f.rev)+'</b></td></tr></tbody></table></div>';
   } else if(id==='cap'){
     title='Who owns what'; var t=M.table(g);

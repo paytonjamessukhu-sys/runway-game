@@ -252,6 +252,7 @@ function expenses(G,E,rev){
   var load=1.3, pay=0;
   G.team.forEach(function(e){ pay+=e.sal*load/12; });
   var foundersPay=(G.founder.pay||0)*(G.co?2:1); pay+=foundersPay;
+  pay=Math.max(0,pay-(G.deferNow||0));
   var heads=SU.headcount(G); var tools=100*heads;
   var c=G.cust, infra=150;
   if(G.arch==='smb') infra+=2*c.n+0.4*(c.free||0); else if(G.arch==='consumer') infra+=0.03*c.mau; else infra+=0.02*c.gmv;
@@ -263,8 +264,9 @@ function expenses(G,E,rev){
   var rbf=(G.loans.rbf&&G.loans.rbf.left>0)?Math.min(G.loans.rbf.left,0.06*rev):0;
   var debt=(G.loans.debt&&G.loans.debt.bal>0)?G.loans.debt.bal*0.11/12:0;
   var owed=G.owed||0;
-  var total=pay+tools+infra+mk+outCost+cogs+fixed+other+rbf+debt+owed;
-  return {payroll:pay,tools:tools,infra:infra,marketing:mk+outCost,cogs:cogs,fixed:fixed,other:other,rbf:rbf,debt:debt,owed:owed,total:total};
+  var cardBal=(G.loans.card>0)?G.loans.card:0, card=cardBal>0?cardBal*0.02+Math.min(cardBal,2500):0;
+  var total=pay+tools+infra+mk+outCost+cogs+fixed+other+rbf+debt+owed+card;
+  return {payroll:pay,tools:tools,infra:infra,marketing:mk+outCost,cogs:cogs,fixed:fixed,other:other,rbf:rbf,debt:debt,owed:owed,card:card,total:total};
 }
 SU.expenses=expenses;
 SU.fin = function(G){
@@ -476,9 +478,9 @@ SU.step = function(G){
   rivalStep(G,E);
   /* finance */
   var ex=expenses(G,E,rev);
-  if(G.owed){ G.owed=0; }
+  G.owed=G.deferNow||0; G.deferNow=0; if(G.loans.card>0) G.loans.card=Math.max(0,G.loans.card-2500);
   G.cash+=rev-ex.total; G.burnHist.push(ex.total-rev); if(G.burnHist.length>12) G.burnHist.shift();
-  SU.drv(G,'cash',-ex.payroll,'Payroll'); SU.drv(G,'cash',-(ex.marketing),'Marketing'); SU.drv(G,'cash',-(ex.fixed+ex.tools+ex.infra+ex.cogs+ex.other+ex.rbf+ex.debt),'Infra, tools, office');
+  SU.drv(G,'cash',-ex.payroll,'Payroll'); SU.drv(G,'cash',-(ex.marketing),'Marketing'); SU.drv(G,'cash',-(ex.fixed+ex.tools+ex.infra+ex.cogs+ex.other+ex.rbf+ex.debt+ex.owed+ex.card),'Infra, tools, office');
   if(G.loans.rbf&&G.loans.rbf.left>0){ G.loans.rbf.left=Math.max(0,G.loans.rbf.left-ex.rbf); }
   /* people */
   var filled=hireFill(G,E);
