@@ -11,6 +11,8 @@ SU.SPACES = {
   hq:{id:'hq',name:'Headquarters',seats:40,rent:25000,deposit:120000,blurb:'Your name on the building. Room for everyone.'}
 };
 SU.SPACE_ORDER=['garage','studio','office','hq'];
+SU.SPACE_NAMES={ai:{garage:'The Garage (one GPU)',studio:'The Lab Loft',office:'The Research Floor',hq:'The AI Campus'}};
+SU.spaceName=function(G,id){ var a=SU.SPACE_NAMES[G&&G.biz]; return (a&&a[id])||SU.SPACES[id].name; };
 
 /* ------------------------------------------------------------ upgrades (visible in the office) */
 SU.UPGRADES = [
@@ -41,7 +43,7 @@ SU.Shop = {
   sanity:function(G){ var s=0; SU.Shop.owned(G).forEach(function(u){ s+=u.fx.sanity||0; }); return s; },
   hypeFloor:function(G){ var s=0; SU.Shop.owned(G).forEach(function(u){ s=Math.max(s,u.fx.hypeFloor||0); }); return s; },
   incident:function(G){ var s=1; SU.Shop.owned(G).forEach(function(u){ if(u.fx.incident) s*=u.fx.incident; }); return s; },
-  space:function(G){ return SU.SPACES[G.space||'garage']; },
+  space:function(G){ var sp=SU.SPACES[G.space||'garage']; var o={}; for(var k in sp) o[k]=sp[k]; o.name=SU.spaceName(G,sp.id); return o; },
   rent:function(G){ return SU.Shop.space(G).rent; },
   seats:function(G){ return SU.Shop.space(G).seats; },
   over:function(G){ return Math.max(0,SU.headcount(G)-SU.Shop.seats(G)); },
@@ -105,9 +107,13 @@ SU.PLAT = {
   referrals:{name:'Referral program',scope:10,minAct:2,effect:'Happy customers bring friends: referrals up about 40%.',shipped:'Customers now invite their friends. Referrals are up about 40%.'},
   integrations:{name:'Integrations',scope:20,minAct:2,effect:'Deals close easier: close rate up about 12%.',shipped:'Your product plugs into the tools people already use. Close rate is up about 12%.'},
   mobile:{name:'Mobile app',scope:20,minAct:1,effect:'More signups and a little less churn.',shipped:'The mobile app is out. More signups, a little less churn.'},
+  evals:{biz:'ai',name:'Eval suite',scope:10,minAct:1,effect:'Catches regressions before customers do: churn down about 12%.',shipped:'Every release is tested against hundreds of cases. Churn is down about 12%.'},
+  rag:{biz:'ai',name:'Retrieval over customer data',scope:14,minAct:1,effect:'The model uses the customer\u2019s own documents: model quality +8 and it decays more slowly.',shipped:'The model now answers from the customer\u2019s own data. Quality +8.',onShip:function(G){ G.Q=Math.min(100,G.Q+8); }},
+  finetune:{biz:'ai',name:'Customer fine-tuning',scope:20,minAct:2,effect:'Deals close easier: close rate up about 15%.',shipped:'Customers can tune the model to their own work. Close rate is up about 15%.'},
+  guardrails:{biz:'ai',name:'Safety guardrails',scope:16,minAct:2,effect:'Fewer incidents and bigger customers say yes.',shipped:'Guardrails catch the worst answers. Incidents are rarer and cautious buyers relax.'},
   sso:{name:'Security: SSO and audit logs',scope:20,minAct:2,effect:'Bigger customers say yes. Finance buyers stop hesitating.',shipped:'Security reviews stop being a blocker. Bigger customers are saying yes.'}
 };
-SU.PLAT_ORDER=['dashboard','onboarding','mobile','referrals','integrations','sso'];
+SU.PLAT_ORDER=['dashboard','onboarding','mobile','referrals','integrations','sso','evals','rag','finetune','guardrails'];
 
 /* ------------------------------------------------------------ goals */
 function lvl(cur,max,money){ return {cur:Math.min(cur,max),max:max,money:!!money}; }

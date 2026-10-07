@@ -51,7 +51,7 @@ SU.newGame = function(o){
     pend:{outbound:[],launch:[]},flags:{},stat:{},launches:{},mrrHist:[],claims:[],promises:[],achv:[],ev:{open:[],cool:{},sched:[],hist:[]},rivals:[],round:null,rounds:[],loans:{},lastStand:false,seo:0,incidents:0,bloat:0,whip:0,refactorPts:0,shock:0};
   SU.rngInit(G,seed);
   var idea=SU.IDEAS.filter(function(i){ return i.id===o.ideaId; })[0]||SU.IDEAS[0];
-  G.idea=idea; G.ideaId=idea.id; G.arch=idea.arch; G.segId=idea.segId; G.name=o.company||idea.name;
+  G.idea=idea; G.ideaId=idea.id; G.arch=idea.arch; G.segId=idea.segId; G.name=o.company||idea.name; G.biz=idea.biz||'tech'; G.flavor=G.biz==='ai'?'ai':null; if(G.flavor==='ai') G.ai={eff:0,size:0,runs:0};
   var sk=SU.START[o.startKey||'2024']||SU.START['2024']; G.startKey=o.startKey||'2024'; G.year=sk.y; G.month=sk.m; G.startYear=sk.y;
   var S=SU.SEG[G.segId], A=SU.ARCH_START[G.arch];
   var bg=SU.BACKGROUNDS.filter(function(b){ return b.id===o.bgId; })[0]||SU.BACKGROUNDS[0];
@@ -60,7 +60,7 @@ SU.newGame = function(o){
   if(cf){ G.co={id:'co',cid:cf.id,name:cf.name,arch:cf.arch,skills:{p:cf.skills.p,t:cf.skills.t,s:cf.skills.s,c:cf.skills.c},trait:cf.trait,wants:cf.wants,likes:cf.likes,dislikes:cf.dislikes,flags:cf.flags,voice:cf.voice,bond:60+(o.split===0.5?5:o.split>=0.8?-20:o.split>=0.7?-10:0),mem:[],look:{skin:SU.int(G,0,4,'people'),hair:SU.int(G,0,5,'people'),color:8+SU.int(G,0,2,'people'),f:cf.id==='nadia'}}; }
   else G.co=null;
   G.cash=Math.round((A.cash+bg.cash)/2/100)*100; G.cash0=G.cash;
-  G.fixed=A.fixed; G.Q=A.Q; G.D=5; G.hype=10; G.morale=75; G.insight=(bg.flags&&bg.flags.insight)||0; G.ethics=0; G.reg=0; G.mrr=0;
+  G.fixed=A.fixed+(G.flavor==='ai'?600:0); G.Q=A.Q+(G.flavor==='ai'?16:0); G.D=5; G.hype=10; G.morale=75; G.insight=(bg.flags&&bg.flags.insight)||0; G.ethics=0; G.reg=0; G.mrr=0;
   G.trust={cust:50,inv:50+((bg.flags&&bg.flags.warmIntro)?5:0),emp:60,press:50};
   G.orders={ads:0,content:0,social:0,events:0,referral:0,ua:0,culture:{remote:false,hybrid:false,office:false,fourday:false,crunch:0,perks:false,pto:false},therapy:false};
   rollNeeds(G);
@@ -110,7 +110,7 @@ SU.pmfBand = function(G){
 var convF=function(G){ return lerp(0.4,1.6,G.pmf/100); };
 var featN=function(G,k){ return (G.feat&&G.feat[k])?1:0; };
 SU.featN=featN;
-var featChurn=function(G){ return (1-0.12*featN(G,'onboarding'))*(1-0.05*featN(G,'mobile')); };
+var featChurn=function(G){ return (1-0.12*featN(G,'onboarding'))*(1-0.05*featN(G,'mobile'))*(1-0.12*featN(G,'evals')); };
 var churnF=function(G){ return lerp(1.8,0.5,G.pmf/100)*featChurn(G); };
 SU.featChurn=featChurn;
 SU.convF=convF; SU.churnF=churnF;
@@ -120,11 +120,11 @@ function priceF(G){
   var elas=0.4+1.4*S.priceSens; return clamp(Math.pow(G.wtpMed/Math.max(0.01,c.price),elas),0.25,2.0);
 }
 SU.priceF=priceF;
-function gateF(G){ var id=G.segId; if(id==='finance' && !G.flags.soc2) return (G.feat&&G.feat.sso)?0.85:0.6; if(id==='practice' && !G.flags.hipaa && G.cust.n>30) return 0.85; return 1; }
+function gateF(G){ var id=G.segId; if(id==='lawfirm' && !(G.feat&&G.feat.guardrails)) return 0.7; if(id==='finance' && !G.flags.soc2) return (G.feat&&G.feat.sso)?0.85:0.6; if(id==='practice' && !G.flags.hipaa && G.cust.n>30) return 0.85; return 1; }
 function salesSkill(G){ var s=G.founder.skills.s*(G.founder.bg.flags.salesMult||1); if(G.co) s=Math.max(s,G.co.skills.s); return s; }
 function mktF(G){ var m=0, n=0; G.team.forEach(function(e){ if(e.role==='mkt' && n<3){ m+=(e.skill||1)*SU.energyF(e)*SU.rampPct(G,e); n++; } }); return 1+0.15*m; }
 SU.mktF=mktF;
-function closeMult(G){ var ae=0, n=0; G.team.forEach(function(e){ if(e.role==='ae' && n<3){ ae+=(e.skill||1); n++; } }); return (G.co&&G.co.flags.closeMult||1)*(1+0.12*ae)*(1+0.12*featN(G,'integrations')+0.05*featN(G,'sso')); }
+function closeMult(G){ var ae=0, n=0; G.team.forEach(function(e){ if(e.role==='ae' && n<3){ ae+=(e.skill||1); n++; } }); return (G.co&&G.co.flags.closeMult||1)*(1+0.12*ae)*(1+0.12*featN(G,'integrations')+0.05*featN(G,'sso')+0.15*featN(G,'finetune')+0.05*featN(G,'guardrails')); }
 SU.compF = function(G){
   var S=SU.seg(G), you=0.5*G.Q+15*Math.log(1/Math.max(0.3,priceRel(G)))+0.2*G.hype+10*(G.splitSeg?0.5:1), tot=0;
   G.rivals.forEach(function(r){ if(!r.active||r.presence<=0) return; var U=0.5*r.Q+15*Math.log(1/Math.max(0.3,r.price))+0.2*r.hype+10; tot+=r.presence*0.5/(1+Math.exp(-(U-you)/10)); });
@@ -150,6 +150,7 @@ SU.roleFit=function(G,role){
   if(role==='sdr') return G.arch==='consumer' ? {state:'no',why:'Outreach does not work on consumers. SDRs would do nothing for you.'} : {state:'ok',why:'Outreach works on your customers.'};
   if(role==='mkt') return (spend>0||G.seo>0) ? {state:'ok',why:'You are spending on marketing: they make it work harder.'} : {state:'maybe',why:'You are not spending on any marketing channel yet. A marketer needs spend to multiply.'};
   if(role==='cs'){ var cap=300+150*count(G,'cs'), n=SU.custCount(G); return n>cap*0.7 ? {state:'ok',why:'You have '+SU.fmtNum(n)+' customers against room for '+cap+'. Support is getting stretched.'} : {state:'maybe',why:'You have '+SU.fmtNum(n)+' customers and room for '+cap+'. You do not need more support yet.'}; }
+  if(role==='ml') return G.flavor==='ai' ? {state:'ok',why:'You are an AI company: researchers make every training run stronger.'} : {state:'no',why:'Only AI companies train models. A researcher would do nothing here.'};
   if(role==='mgr') return SU.headcount(G)>=2||G.t>6 ? {state:'ok',why:'An extra move every month, and your pinned moves run free.'} : {state:'maybe',why:'Works from day one, but pays off most once you repeat the same moves each month.'};
   if(role==='cos') return count(G,'cos')>0 ? {state:'no',why:'You already have a chief of staff. A second adds nothing.'} : {state:'ok',why:'Two more focus every month.'};
   if(role==='vp') return SU.headcount(G)>=10 ? {state:'ok',why:'A big team: a VP cuts the slowdown and impresses investors.'} : {state:'maybe',why:'Your team is small. A VP is expensive and mostly helps past 10 people.'};
@@ -258,7 +259,7 @@ function expenses(G,E,rev){
   if(G.arch==='smb') infra+=2*c.n+0.4*(c.free||0); else if(G.arch==='consumer') infra+=0.03*c.mau; else infra+=0.02*c.gmv;
   var o=G.orders, mk=o.ads+o.content+o.social+o.events+o.referral+o.ua;
   var outCost=(G.pend&&G.pend.outbound||[]).reduce(function(a,x){ return a+0.05*x.n; },0)+count(G,'sdr')*1200*0.05;
-  var cogs=0, gm=G.arch==='smb'?0.78:G.arch==='consumer'?0.88:0.97; cogs=rev*(1-gm);
+  var cogs=0, gm=G.arch==='smb'?0.78:G.arch==='consumer'?0.88:0.97; if(G.flavor==='ai'){ gm=Math.max(0.35,gm-0.18+0.25*(G.ai.eff||0)-0.012*(G.ai.size||0)); infra+=1500+250*(G.ai.size||0); } cogs=rev*(1-gm);
   var fixed=G.fixed*(1+0.25*Math.max(0,G.act-1))+(G.act>=2?60*Math.max(0,heads-3):0)+(SU.Shop?SU.Shop.rent(G):0);
   var other=(o.therapy?400:0)+(o.culture.perks?150*heads:0);
   var rbf=(G.loans.rbf&&G.loans.rbf.left>0)?Math.min(G.loans.rbf.left,0.06*rev):0;
@@ -497,6 +498,7 @@ SU.step = function(G){
   /* culture timers */
   var cu=G.orders.culture; if(cu.crunch>0){ cu.crunch--; G.morale=clamp(G.morale-3,0,100); }
   /* hype/trust */
+  if(G.flavor==='ai'){ var mlN=Math.min(3,count(G,'ml')); G.Q=Math.max(4,G.Q*(1-0.014*(1-0.22*mlN))); }
   var arr=SU.arr(G), Hb=Math.min(50,10+10*Math.log10(1+arr/1e5)); G.hype+=(Hb-G.hype)*0.08; G.hype=clamp(G.hype,0,100);
   if(G.incidents<0.2) G.trust.cust=clamp(G.trust.cust+0.4,0,100);
   G.trust.emp=clamp(G.trust.emp+(G.morale>60?0.4:-0.4),0,100);

@@ -283,6 +283,24 @@ SU.buyoutCheck=function(G,rv){
   if(G.cash<price+keep) return {ok:false,why:'You need '+SU.fmtMoney(price+keep-G.cash)+' more. You also keep 4 months of burn.',price:price};
   return {ok:true,price:price};
 };
+SU.TRAIN={small:{name:'small',cost:30000,gain:8,hype:2,size:0.5},medium:{name:'medium',cost:120000,gain:18,hype:5,size:1.5},large:{name:'large',cost:450000,gain:32,hype:9,size:3}};
+A.train=function(G,cl,ctx,r){
+  if(G.flavor!=='ai'){ note(r,'Only AI companies train models.'); r.status='warn'; return; }
+  var t=SU.TRAIN[cl.params.size]||SU.TRAIN.small; var cost=Math.round(t.cost*(SU.era(G).cpiIdx>0?1:1)); if(G.cash<cost){ note(r,'You need '+fm(cost-G.cash)+' more for compute.'); r.status='warn'; return; }
+  var ml=Math.min(3,SU.count(G,'ml')), gain=t.gain*(1+0.25*ml)*(1-G.Q/115)*ctx.eff;
+  spend(G,cost,'Compute: training run'); G.Q=Math.min(100,G.Q+gain); G.hype=clamp(G.hype+t.hype,0,100); G.ai.size=(G.ai.size||0)+t.size; G.ai.runs=(G.ai.runs||0)+1;
+  note(r,'A '+t.name+' training run finished for '+fm(cost)+'. Model quality +'+gain.toFixed(1)+' (now '+Math.round(G.Q)+'). It costs more to serve.'+(ml?' Your '+ml+' researcher'+(ml>1?'s':'')+' made it '+Math.round(25*ml)+'% stronger.':''));
+};
+A.optimize=function(G,cl,ctx,r){
+  if(G.flavor!=='ai'){ note(r,'Only AI companies pay for inference.'); r.status='warn'; return; }
+  if((G.ai.eff||0)>=0.35){ note(r,'Serving is already as lean as it gets.'); r.status='warn'; return; }
+  if(G.cash<40000){ note(r,'You need '+fm(40000-G.cash)+' more.'); r.status='warn'; return; }
+  spend(G,40000,'Optimizing inference'); G.ai.eff=Math.min(0.35,(G.ai.eff||0)+0.1*ctx.eff); note(r,'Quantization and caching: it costs less to serve every answer. Gross margin up about '+Math.round(25*0.1*ctx.eff)+' points.');
+};
+A.redteam=function(G,cl,ctx,r){
+  if(G.flavor!=='ai'){ note(r,'Only AI companies red-team models.'); r.status='warn'; return; }
+  spend(G,20000,'Red team'); G.flags.redteamUntil=G.mi+8; G.trust.cust=clamp(G.trust.cust+4,0,100); G.reg=Math.max(0,(G.reg||0)-4); note(r,'A red team broke the model on purpose and you fixed what they found. Fewer incidents for the next 8 months. Trust +4.');
+};
 A.rival=function(G,cl,ctx,r){
   var p=cl.params; var rv=G.rivals.filter(function(x){ return x.id===p.rival; })[0] || G.rivals.filter(function(x){ return x.active; })[0];
   if(!rv){ note(r,'No rival to deal with.'); r.status='warn'; return; }

@@ -3,7 +3,7 @@
 'use strict';
 var SU = window.SU, UI = window.UI, Iso = SU.Iso, CAT = SU.CAT, M = SU.Money, fm = SU.fmtMoney, esc = UI.esc, $ = UI.$, $$ = UI.$$, S = UI.S;
 function G(){ return UI.G(); }
-var ROLECOL={eng:'#4c78c9',design:'#e0597a',pm:'#7b5fc4',sdr:'#3aa38b',ae:'#2e9bb5',cs:'#e0922d',mkt:'#c4553a',cos:'#5a6b7d',vp:'#2b2f3a',mgr:'#8a6d3b'};
+var ROLECOL={eng:'#4c78c9',design:'#e0597a',pm:'#7b5fc4',sdr:'#3aa38b',ae:'#2e9bb5',cs:'#e0922d',mkt:'#c4553a',cos:'#5a6b7d',vp:'#2b2f3a',mgr:'#8a6d3b',ml:'#1f8f8a'};
 function pctS(x,d){ return SU.pct(x,d||0); }
 
 /* ------------------------------------------------------------ small building blocks */
@@ -172,7 +172,7 @@ function pProduct(g){
   } else {
     h+='<div class="sec"><h4>Building now <span class="muted xs">'+g.queue.length+' of 6</span></h4>'+(g.queue.length?'<div class="rmap">'+g.queue.map(function(q){ var pc=q.scope?q.progress/q.scope*100:0; return '<div class="rm-i"><div class="top2"><b>'+esc(q.name)+'</b><span class="mono xs">'+q.progress.toFixed(1)+' / '+q.scope+'</span></div>'+bar(pc,'')+'</div>'; }).join('')+'</div>':empty('Nothing in the queue. Pick a feature.'))+'</div>';
     h+='<div class="sec"><h4>Shipped</h4>'+(g.shipped.length?'<div class="row">'+g.shipped.slice(-12).map(function(s){ return '<span class="chip static '+(s.good!==0||s.plat?'ok':'')+'" title="'+esc(s.name)+'">'+esc(s.name)+'</span>'; }).join('')+'</div>':empty('Nothing shipped yet.'))+'</div>';
-    h+=tiles(['refactor','compliance','pivot']);
+    h+=tiles(g.flavor==='ai'?['train','optimize','redteam','refactor','compliance','pivot']:['refactor','compliance','pivot']);
   }
   return h;
 }
@@ -245,9 +245,9 @@ function pYou(g){
 /* ------------------------------------------------------------ SHOP */
 function pShop(g){
   var sp=SU.Shop.space(g), over=SU.Shop.over(g), idx=SU.SPACE_ORDER.indexOf(g.space||'garage');
-  var h='<div class="sec"><h4>Your building <span class="muted xs">it grows when you move up</span></h4><canvas class="bldBig" data-tier="'+(g.space||'garage')+'"></canvas><div class="bstrip">'+SU.SPACE_ORDER.map(function(id,i){ var cur=id===(g.space||'garage'), locked=i>idx, c=SU.Shop.canMove(g,id), sp2=SU.SPACES[id]; return '<button class="bcell'+(cur?' cur':'')+(locked?' lock':'')+'" data-act="move" data-id="'+id+'"'+(cur||!c.ok?' disabled':'')+' title="'+esc(cur?'You are here':(c.ok?'Move here':c.why))+'"><canvas data-tier="'+id+'"></canvas><b>'+esc(sp2.name.replace('The ',''))+'</b><span>'+(cur?'here now':sp2.seats+' seats')+'</span></button>'; }).join('')+'</div></div>';
+  var h='<div class="sec"><h4>Your building <span class="muted xs">it grows when you move up</span></h4><canvas class="bldBig" data-tier="'+(g.space||'garage')+'"></canvas><div class="bstrip">'+SU.SPACE_ORDER.map(function(id,i){ var cur=id===(g.space||'garage'), locked=i>idx, c=SU.Shop.canMove(g,id), sp2=SU.SPACES[id]; return '<button class="bcell'+(cur?' cur':'')+(locked?' lock':'')+'" data-act="move" data-id="'+id+'"'+(cur||!c.ok?' disabled':'')+' title="'+esc(cur?'You are here':(c.ok?'Move here':c.why))+'"><canvas data-tier="'+id+'"></canvas><b>'+esc(SU.spaceName(g,id).replace('The ',''))+'</b><span>'+(cur?'here now':sp2.seats+' seats')+'</span></button>'; }).join('')+'</div></div>';
   h+='<div class="sec"><h4>Your space <span class="pill">'+esc(sp.name)+'</span></h4><div class="row" style="justify-content:space-between"><span class="sm">'+SU.headcount(g)+' of '+sp.seats+' seats used</span><span class="xs muted">rent '+fm(sp.rent)+'/mo</span></div>'+bar(SU.headcount(g)/sp.seats*100,over?'bad':(SU.headcount(g)/sp.seats>0.8?'warn':'good'))+(over?'<div class="xs" style="color:var(--bad)">Cramped: morale and speed are dropping.</div>':'')+'<div class="rows">';
-  SU.SPACE_ORDER.forEach(function(id,i){ if(id===g.space) return; var s=SU.SPACES[id], c=SU.Shop.canMove(g,id); h+='<div class="rw"><div class="rm"><b>'+esc(s.name)+'</b><div class="rs">'+s.seats+' seats &middot; rent '+fm(s.rent)+'/mo'+(i>idx?' &middot; deposit '+fm(s.deposit):'')+'</div></div><button class="btn sm '+(i>idx?'primary':'ghost')+'" data-act="move" data-id="'+id+'"'+(c.ok?'':' disabled title="'+esc(c.why)+'"')+'>'+(i>idx?'Move in':'Move down')+'</button></div>'; });
+  SU.SPACE_ORDER.forEach(function(id,i){ if(id===g.space) return; var s=SU.SPACES[id], c=SU.Shop.canMove(g,id); h+='<div class="rw"><div class="rm"><b>'+esc(SU.spaceName(g,id))+'</b><div class="rs">'+s.seats+' seats &middot; rent '+fm(s.rent)+'/mo'+(i>idx?' &middot; deposit '+fm(s.deposit):'')+'</div></div><button class="btn sm '+(i>idx?'primary':'ghost')+'" data-act="move" data-id="'+id+'"'+(c.ok?'':' disabled title="'+esc(c.why)+'"')+'>'+(i>idx?'Move in':'Move down')+'</button></div>'; });
   h+='</div></div><div class="sec"><h4>Upgrades <span class="muted xs">they show up in the office</span></h4><div class="tilegrid">';
   SU.UPGRADES.forEach(function(u){ var owned=SU.Shop.has(g,u.id), c=SU.Shop.canBuy(g,u.id);
     h+='<button class="tile'+(owned?' done':(c.ok?'':' no'))+'" data-act="buy" data-id="'+u.id+'"><span class="tt">'+esc(u.name)+'</span><span class="tf">'+(owned?'owned':fm(u.cost))+'</span>'+(u.needs?'<span class="tag plat" style="position:absolute;right:8px;bottom:6px">Level 2</span>':'')+'<span class="tb2">'+esc(owned?u.text:(c.ok||c.why.indexOf('Need ')!==0&&c.why.indexOf('Needs ')!==0?u.text:c.why))+'</span></button>'; });

@@ -13,6 +13,7 @@ SU.ROLES = {
   cs:    {name:'Customer success',sal:{junior:70e3, mid:90e3,  senior:115e3, staff:135e3}, ramp:{junior:2,mid:2,senior:2,staff:2}, eq:{junior:0.0003,mid:0.0005,senior:0.001,staff:0.0015}},
   mkt:   {name:'Marketer',        sal:{junior:80e3, mid:120e3, senior:150e3, staff:180e3}, ramp:{junior:3,mid:3,senior:3,staff:3}, eq:{junior:0.0005,mid:0.001,senior:0.002,staff:0.003}},
   mgr:   {name:'Manager',          sal:{junior:95e3, mid:125e3, senior:155e3, staff:185e3}, ramp:{junior:2,mid:2,senior:2,staff:2}, eq:{junior:0.0004,mid:0.0008,senior:0.0015,staff:0.0025}},
+  ml:    {name:'ML researcher',     sal:{junior:150e3,mid:230e3, senior:320e3, staff:450e3}, ramp:{junior:4,mid:4,senior:4,staff:4}, eq:{junior:0.001,mid:0.002,senior:0.004,staff:0.007}},
   cos:   {name:'Chief of staff',  sal:{junior:160e3,mid:160e3, senior:180e3, staff:200e3}, ramp:{junior:3,mid:3,senior:3,staff:3}, eq:{junior:0.005,mid:0.005,senior:0.006,staff:0.007}},
   vp:    {name:'VP',              sal:{junior:250e3,mid:250e3, senior:280e3, staff:320e3}, ramp:{junior:4,mid:4,senior:4,staff:4}, eq:{junior:0.01,mid:0.01,senior:0.012,staff:0.015}}
 };
@@ -51,6 +52,24 @@ SU.SEG = {
     needs:[need('close','month-end close',['close','month-end','month end','reconcil']),need('appr','approvals',['approval','workflow','sign-off']),need('audit','audit trail',['audit','trail','compliance']),need('erp','ERP sync',['erp','netsuite','sync','integrat']),need('multi','multi-entity',['multi-entity','entities','consolidat'])],
     herrings:[need('dash','dashboards',['dashboard','chart'])],
     quote:'Show me the audit trail or show me the door.', quoteName:'Hal, CFO', skeptic:'Where is your SOC 2?'},
+  lawfirm:{id:'lawfirm',arch:'smb',name:'Law firms',who:'partners and associates at law firms',words:['lawyer','lawyers','attorney','attorneys','law firm','law firms','partner','associates','paralegal','paralegals','counsel'],
+    priceSens:0.35, qualityBar:0.85, wtp:700, defaultPrice:450, churnMo:0.02, reply:0.04, cpc:11, adCap:8000, salesCycle:3,
+    aff:{outbound:0.7,ads:0.3,content:0.7,social:0.15,events:0.7,referral:0.6,launch:0.3},
+    needs:[need('redline','redlining and suggestions',['redline','suggest','markup','track changes']),need('clause','a clause library',['clause','playbook','template']),need('cite','citations you can check',['citation','source','cite','verify']),need('conf','client confidentiality',['confidential','privilege','private','secure']),need('batch','reviewing a whole deal room',['batch','deal room','bulk','diligence'])],
+    herrings:[need('chat','a friendly chatbot',['chatbot','chat bot','assistant']),need('voice','voice dictation',['voice','dictate'])],
+    quote:'If it makes up one case, I am done. Show me the source for every claim.', quoteName:'Priya, litigation partner', skeptic:'Does anything you train on touch our client documents?'},
+  ecom:{id:'ecom',arch:'smb',name:'Online stores',who:'online store owners',words:['ecommerce','e-commerce','online store','online stores','shopify','store owner','store owners','merchant','merchants','dtc','brand','brands'],
+    priceSens:0.8, qualityBar:0.55, wtp:180, defaultPrice:129, churnMo:0.05, reply:0.05, cpc:3.6, adCap:5000, salesCycle:0,
+    aff:{outbound:0.5,ads:0.7,content:0.4,social:0.5,events:0.2,referral:0.6,launch:0.4},
+    needs:[need('defl','answering the common tickets',['ticket','faq','deflect','answer']),need('order','order lookup and tracking',['order','tracking','shipment','status']),need('ret','handling returns',['return','refund','exchange']),need('tone','matching your brand voice',['tone','voice','brand']),need('lang','other languages',['language','multilingual','translate'])],
+    herrings:[need('phone','a phone line',['phone','call center']),need('avatar','an animated avatar',['avatar','mascot'])],
+    quote:'I do not want a demo. I want my inbox to empty itself by Friday.', quoteName:'Jonah, runs a candle shop', skeptic:'What happens when it says something wrong to my customer?'},
+  creators:{id:'creators',arch:'consumer',name:'Creators',who:'hobbyist artists and creators',words:['creators','artists','designers','illustrators','makers','hobbyists','streamers'],
+    priceSens:0.85, qualityBar:0.7, wtp:12, defaultPrice:9.99,
+    aff:{outbound:0.05,ads:0.5,content:0.5,social:0.9,events:0.2,referral:0.8,launch:0.6},
+    needs:[need('style','consistent styles',['style','consistent','same look','character']),need('speed','fast results',['fast','speed','quick','instant']),need('edit','editing the result',['edit','tweak','inpaint','adjust']),need('lic','a license you can sell with',['license','commercial','copyright','sell']),need('hd','print-quality output',['resolution','print','hd','upscale'])],
+    herrings:[need('feed','a public feed',['feed','gallery']),need('coin','paying in tokens',['token','credits','coin'])],
+    quote:'I would pay today if I could sell what it makes without a lawyer.', quoteName:'Mina, illustrator', skeptic:'Did you train this on my art?'},
   genz:{id:'genz',arch:'consumer',name:'Group chat',who:'Gen Z friend groups',words:['gen z','teen','teens','students','college','friends','roommates','group chat'],
     priceSens:0.95, qualityBar:0.5, wtp:6, defaultPrice:4.99, priceSensConsumer:1,
     aff:{outbound:0.05,ads:0.5,content:0.3,social:0.9,events:0.1,referral:0.9,launch:0.5},
@@ -100,6 +119,9 @@ SU.IDEAS = [
   {id:'gutterly',name:'Gutterly',tag:'A CRM and quoting app for roofers',arch:'smb',segId:'owner',ai:false},
   {id:'closekit',name:'CloseKit',tag:'Month-end close for mid-market finance teams',arch:'smb',segId:'finance',ai:false},
   {id:'ledgerlark',name:'LedgerLark',tag:'AI bookkeeping copilot for finance teams (a wrapper, a bit)',arch:'smb',segId:'finance',ai:true,twist:'A model maker may ship your feature'},
+  {id:'counsel',name:'Counsel',tag:'AI contract review for law firms. Accuracy is everything.',arch:'smb',segId:'lawfirm',ai:true,biz:'ai',twist:'One made-up case can end you'},
+  {id:'helpbot',name:'HelpBot',tag:'An AI agent that answers support tickets for online stores',arch:'smb',segId:'ecom',ai:true,biz:'ai',twist:'Inference costs eat your margin'},
+  {id:'prism',name:'Prism',tag:'AI image studio for hobbyist creators',arch:'consumer',segId:'creators',ai:true,biz:'ai',twist:'Copyright fights and a model race'},
   {id:'splitsy',name:'Splitsy',tag:'Group-chat bill splitting for friends',arch:'consumer',segId:'genz',ai:false},
   {id:'streakbook',name:'Streakbook',tag:'Reading streaks with your friends',arch:'consumer',segId:'genz',ai:false},
   {id:'ghostgym',name:'GhostGym',tag:'Workout accountability with friends',arch:'consumer',segId:'genz',ai:false},
@@ -107,6 +129,13 @@ SU.IDEAS = [
   {id:'supperclub',name:'Supper Club',tag:'Home cooks sell dinners to their neighbors',arch:'market',segId:'cooks',ai:false},
   {id:'tutorloop',name:'TutorLoop',tag:'Vetted tutors for anxious parents',arch:'market',segId:'tutors',ai:false},
   {id:'fixitsat',name:'Fixit Saturday',tag:'Handymen and homeowners, same week',arch:'market',segId:'handy',ai:false}
+];
+SU.IDEAS.forEach(function(i){ if(!i.biz) i.biz=i.ai?'ai':({smb:'tech',consumer:'consumer',market:'market'})[i.arch]; });
+SU.BIZ = [
+  {id:'tech',name:'Tech startup',icon:'T',blurb:'Sell software to businesses. Real money per customer. Slow to win, hard to kill.',diff:'Steady grind'},
+  {id:'ai',name:'AI company',icon:'AI',blurb:'Models, GPUs and hype. Your product decays unless you keep training, and every customer costs real compute.',diff:'Arms race'},
+  {id:'consumer',name:'Consumer app',icon:'C',blurb:'Tiny price, huge volume. Needs a viral loop.',diff:'Lottery ticket'},
+  {id:'market',name:'Marketplace',icon:'M',blurb:'Two sides to grow at once. Brutal at first.',diff:'Chicken and egg'}
 ];
 SU.ARCH_NAME = {smb:'SMB software',consumer:'Consumer subscription',market:'Marketplace'};
 SU.ARCH_START = {
@@ -141,6 +170,7 @@ SU.ROLE_GUIDE = {
   ae:    {tag:'Closes the deals outreach finds', does:['Raises your close rate about 12% per account exec (first 3 count), scaled by their skill.','Only matters when you sell to businesses (SMB). Does nothing for consumer apps or marketplaces.'], best:'You get replies and meetings but too few customers.', limit:'Without leads to close they do nothing.', pair:'SDRs and outreach.'},
   cs:    {tag:'Keeps customers from leaving', does:['You can handle about 300 customers yourself. Each support person adds capacity for 150 more.','Past that capacity, churn jumps 20%.'], best:'You are near 250 customers, or churn is climbing.', limit:'Below the capacity limit an extra hire adds nothing.', pair:'Everyone who sells.'},
   mkt:   {tag:'Makes marketing spend work harder', does:['Each marketer makes your ads, content, social and events bring in about 15% more (first 3 count), scaled by skill and ramp-up.','Only helps if you are actually spending on those channels.'], best:'You already have a marketing channel that works.', limit:'No spend, no effect.', pair:'Marketing spend on the Sales tab.'},
+  ml:    {tag:'Makes every training run stronger', does:['Each researcher makes your training runs about 25% stronger (first 3 count).','Slows the model decay: your product falls behind the frontier more slowly.','Pricey: $230K or more a year, with real equity.'], best:'You are an AI company and you keep training models.', limit:'No effect unless you are an AI company.', pair:'Training runs and GPUs.'},
   mgr:   {tag:'Handles the small stuff for you', does:['Adds 1 focus every month: a whole extra move, because they take the small jobs off your plate.','Runs up to 2 of your pinned (repeat) moves for free. Pin outreach, marketing or anything else, and it costs you no focus.','Keeps the team rested: +1 energy for everyone every month.'], best:'You are running out of focus, or you keep repeating the same moves every month.', limit:'The first 2 managers count. Pinned moves are the ones with the repeat icon.', pair:'Anything you can pin.'},
   cos:   {tag:'Gives you your time back', does:['Adds 2 focus every month, for as long as they stay.','That is two more moves per month: the strongest hire for a busy founder.'], best:'You keep running out of focus.', limit:'Only one is needed. Available from Act 3.', pair:'Everyone.'},
   vp:    {tag:'Runs a whole department', does:['Halves the slowdown a big team causes (the penalty above 8 people).','Counts as a key hire when investors size you up.'], best:'You have 10 or more people, or you are about to raise.', limit:'Very expensive: $250K or more and 1% or more in equity. Available from Act 3.', pair:'A big team.'}

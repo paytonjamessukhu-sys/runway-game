@@ -70,7 +70,7 @@ UI.sfx=function(n){
 
 /* ------------------------------------------------------------ copy */
 var DIFF={smb:['Steady grind','Real money per customer. Slow to win, hard to kill.'],consumer:['Lottery ticket','Tiny price, huge volume. Needs a viral loop.'],market:['Chicken and egg','Two sides to grow at once. Brutal at first.']};
-var GROUPS=[['smb','Sell software to businesses'],['consumer','Consumer apps'],['market','Marketplaces']];
+var GROUPS=SU.BIZ.map(function(b){ return [b.id,b.name]; });
 var TABS=[['inbox','Inbox','inbox'],['customers','Clients','users'],['product','Build','cube'],['sales','Sales','mega'],['team','Team','team'],['money','Money','coin'],['you','You','heart'],['shop','Shop','bag'],['goals','Goals','flag'],['dash','Stats','chart']];
 UI.TABS=TABS;
 
@@ -108,7 +108,7 @@ function renderSetup(){
 }
 function ideaCard(i){
   var on=S.setup.idea===i.id;
-  return '<button class="opt'+(on?' on':'')+'" data-act="pick-idea" data-id="'+i.id+'"><b>'+esc(i.name)+'</b><span class="tg">'+esc(i.tag)+'</span>'+(i.ai?'<span class="meta"><span class="pill blue">AI idea</span></span>':'')+'</button>';
+  return '<button class="opt'+(on?' on':'')+'" data-act="pick-idea" data-id="'+i.id+'"><b>'+esc(i.name)+'</b><span class="tg">'+esc(i.tag)+'</span>'+(i.twist?'<span class="meta"><span class="pill blue">'+esc(i.twist)+'</span></span>':'')+'</button>';
 }
 function renderWiz(){
   var st=S.setup, step=S.wiz, idea=SU.IDEAS.filter(function(i){ return i.id===st.idea; })[0]||SU.IDEAS[0];
@@ -117,10 +117,10 @@ function renderWiz(){
   $('#sum').innerHTML='<span class="pill blue">'+esc(idea.name)+'</span><span class="pill">'+esc(SU.START_INFO[st.era].name)+'</span><span class="pill">'+(co?esc(co.name.split(' ')[0]):'Solo')+'</span><span class="pill">'+esc(bg.name)+'</span>';
   var h='';
   if(step===0){
-    h+='<h3>Pick an idea</h3><p class="muted sm" style="margin-bottom:6px">Each one plays differently.</p>';
-    GROUPS.forEach(function(g){ h+='<div class="sec" style="margin-bottom:8px"><div class="row"><b class="k">'+g[1]+'</b><span class="pill '+(g[0]==='smb'?'good':'warn')+'">'+DIFF[g[0]][0]+'</span></div><div class="ideas">'+SU.IDEAS.filter(function(i){ return i.arch===g[0]; }).map(ideaCard).join('')+'</div></div>'; });
+    h+='<h3>What kind of company?</h3><p class="muted sm" style="margin-bottom:6px">Each kind plays differently: different money, different jobs, a different office.</p>';
+    SU.BIZ.forEach(function(g){ var ideas=SU.IDEAS.filter(function(i){ return i.biz===g.id; }); if(!ideas.length) return; h+='<div class="sec" style="margin-bottom:8px"><div class="row"><b class="k">'+esc(g.name)+'</b><span class="pill '+(g.id==='tech'?'good':'warn')+'">'+esc(g.diff)+'</span></div><div class="xs muted">'+esc(g.blurb)+'</div><div class="ideas">'+ideas.map(ideaCard).join('')+'</div></div>'; });
   } else if(step===1){
-    h+='<h3>Pick the year</h3><p class="muted sm" style="margin-bottom:8px">The money, the hiring market and the hype change with it.</p><div class="opts">'+['1999','2008','2021','2024'].map(function(k){ var i=SU.START_INFO[k]; return '<button class="opt'+(st.era===k?' on':'')+'" data-act="pick-era" data-id="'+k+'"><b>'+esc(i.name)+'</b><span class="tg">'+esc(i.blurb)+'</span></button>'; }).join('')+'</div>';
+    h+='<h3>Pick the year</h3><p class="muted sm" style="margin-bottom:8px">The money, the hiring market and the hype change with it.</p><div class="opts">'+['1999','2008','2021','2024'].map(function(k){ var i=SU.START_INFO[k]; return '<button class="opt'+(st.era===k?' on':'')+'" '+((idea.biz==='ai'&&(k==='1999'||k==='2008'))?'disabled title="Nobody can rent GPUs yet" style="opacity:.45" ':'')+'data-act="pick-era" data-id="'+k+'"><b>'+esc(i.name)+'</b><span class="tg">'+esc(i.blurb)+'</span></button>'; }).join('')+'</div>';
   } else if(step===2){
     h+='<h3>Pick a cofounder</h3><p class="muted sm" style="margin-bottom:8px">Or go solo. Solo is harder to fund.</p><div class="opts">'+SU.COFOUNDERS.map(function(c){ return '<button class="opt'+(st.co===c.id?' on':'')+'" data-act="pick-co" data-id="'+c.id+'"><b>'+esc(c.name)+'</b><span class="meta"><span class="pill">'+esc(c.arch)+'</span></span><span class="tg">'+esc(c.trait)+'</span><span class="tg">Wants: '+esc(c.wants)+'</span></button>'; }).join('')+'<button class="opt'+(!st.co?' on':'')+'" data-act="pick-co" data-id=""><b>Solo</b><span class="tg">All the equity, all the work, all the 3am. Investors want a team.</span></button></div>';
   } else {
@@ -425,7 +425,7 @@ function onClick(e){
     case 'close-modal': UI.closeModal(); break;
     case 'close-pop': $('#pop').hidden=true; break;
     case 'wiz': S.wiz=+t.getAttribute('data-i'); renderWiz(); break;
-    case 'pick-idea': S.setup.idea=t.getAttribute('data-id'); renderWiz(); heroSync(); break;
+    case 'pick-idea': S.setup.idea=t.getAttribute('data-id'); (function(){ var ii=SU.IDEAS.filter(function(x){ return x.id===S.setup.idea; })[0]; if(ii&&ii.biz==='ai'&&(S.setup.era==='1999'||S.setup.era==='2008')) S.setup.era='2021'; })(); renderWiz(); heroSync(); break;
     case 'pick-era': S.setup.era=t.getAttribute('data-id'); renderWiz(); heroSync(); break;
     case 'pick-co': S.setup.co=t.getAttribute('data-id')||null; renderWiz(); heroSync(); break;
     case 'pick-bg': S.setup.bg=t.getAttribute('data-id'); renderWiz(); break;
