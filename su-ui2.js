@@ -470,7 +470,7 @@ UI.onAct=function(a,t,e){
     case 'more-inbox': S.page.inbox=1; UI.renderPane(); break;
     case 'person': { S.tab='team'; S.drawer={type:'person',id:t.getAttribute('data-id')}; $('#pop').hidden=true; UI.setTab('team'); S.drawer={type:'person',id:t.getAttribute('data-id')}; renderDrawer(); break; }
     case 'pquick': { var e2=g.team.filter(function(x){ return x.id===t.getAttribute('data-id'); })[0]; if(!e2) return; var spec=CAT.personActions(g,e2)[+t.getAttribute('data-i')]; if(spec&&UI.addItem({aid:'quick',spec:spec.spec})){ S.drawer=null; renderDrawer(); UI.toast('Added to your plan.',1200); } break; }
-    case 'view': S.drawer={type:'view',id:t.getAttribute('data-id')}; renderDrawer(); break;
+    case 'view': S.drawer={type:'view',id:t.getAttribute('data-id')}; renderDrawer(); if(UI.pocket) UI.setSheet(true); break;
     case 'policy': { var kind=t.getAttribute('data-kind'); if(UI.addItem({aid:'culture',values:{kind:kind,off:CAT.policyOn(g,kind)}})){ S.drawer=null; renderDrawer(); UI.toast('Added to your plan.',1200); } break; }
     case 'stopch': { if(UI.addItem({aid:'marketStop',values:{channel:t.getAttribute('data-k')}})) UI.toast('Added to your plan.',1200); break; }
     case 'chip': UI.addText(t.getAttribute('data-text')); break;

@@ -5,12 +5,17 @@ var SU = window.SU, Iso = SU.Iso, CAT = SU.CAT, fm = SU.fmtMoney;
 var UI = (SU.UI = window.UI = {});
 var G = null;
 var S = UI.S = {sheet:true,view:'setup',tab:'customers',sub:{},drawer:null,receipt:null,setup:null,wiz:0,mute:false,plan:[],cfg:{},uid:0,auto:{on:false,speed:1},busy:false,ticker:[],seenIid:0,mview:'office',aiOk:false,page:{}};
-function isPhone(){ return window.innerWidth<=760; }
-function setSheet(open){ S.sheet=open; document.body.setAttribute('data-sheet',open?'open':'closed'); }
+function isPhone(){ return !!UI.pocket; }
+UI.pocketNow=function(){ var w=window.innerWidth,h=window.innerHeight; return w<=760||(h<=520&&w<=980&&('ontouchstart' in window)); };
+UI.pocket=UI.pocketNow();
+function syncPocket(){ var p=UI.pocketNow(); if(p!==UI.pocket){ UI.pocket=p; document.body.classList.toggle('pocket',p); if(S.view==='game'&&G){ if(UI.pocketBuild) UI.pocketBuild(); setSheet(!p); refreshAll(); setTimeout(function(){ Iso.resize(); },30); } } }
+window.addEventListener('resize',syncPocket);
+function setSheet(open){ S.sheet=open; document.body.setAttribute('data-sheet',open?'open':'closed'); if(open){ var pp=document.getElementById('pop'); if(pp) pp.hidden=true; } if(UI.pocket&&UI.pocketLayout) UI.pocketLayout(); }
 UI.setSheet=setSheet;
 /* the office is centred in the part of the screen the floating panels leave free */
 function insets(){
-  var st=$('.office .stage'), sd=$('.rcol'); if(!st||!sd||isPhone()) return {l:0,t:0,r:0,b:0};
+  if(UI.pocket&&UI.pocketInsets) return UI.pocketInsets();
+  var st=$('.office .stage'), sd=$('.rcol'); if(!st||!sd) return {l:0,t:0,r:0,b:0};
   var a=st.getBoundingClientRect(), b=sd.getBoundingClientRect();
   var pl=$('#plan'); var pb=pl?Math.max(0,a.bottom-pl.getBoundingClientRect().top):0; return {l:0,t:34,r:Math.max(0,a.right-b.left+6),b:Math.min(pb,170)+4};
 }
@@ -31,6 +36,7 @@ UI.recordRun=function(g){
   store('career',JSON.stringify(c)); try{ SU.save(g); }catch(e){} return {career:c,newBest:nb,newEnding:ne};
 };
 UI.G=function(){ return G; };
+UI.S=S;
 UI.setG=function(g){ G=g; };
 var ICON={
   inbox:'M3 7h18v11H3z M3 8l9 6 9-6', users:'M4 5h16v11H10l-4 4v-4H4z', cube:'M12 3l8 4.5v9L12 21l-8-4.5v-9z M12 12l8-4.5 M12 12v9 M12 12L4 7.5',
@@ -154,7 +160,7 @@ function startGame(){
 function begin(g,fresh){
   G=g; S.view='game'; S.receipt=G.last||null; S.plan=[]; S.cfg={}; S.drawer=null; S.auto.on=false; S.busy=false; S.ticker=[]; S.sub={}; S.page={}; S.seenIid=G.iid;
   S.tab=fresh?'customers':(G.inbox.some(function(i){ return i.open&&(i.action||i.kind==='crisis'); })?'inbox':'customers');
-  S.sheet=true; buildShell(); Iso.reset(); Iso.setInsetFn(insets); Iso.attach($('#officeCv')); Iso.start(); Iso.sync(G,{initial:true}); Iso.setHandlers({hover:onIsoHover,pick:onIsoPick});
+  UI.pocket=UI.pocketNow(); document.body.classList.toggle('pocket',UI.pocket); S.sheet=!UI.pocket; buildShell(); if(UI.pocketBuild) UI.pocketBuild(); Iso.reset(); Iso.setInsetFn(insets); Iso.setGestures(UI.pocket); Iso.attach($('#officeCv')); Iso.start(); Iso.sync(G,{initial:true}); Iso.setHandlers({hover:onIsoHover,pick:onIsoPick,empty:onIsoEmpty});
   setTimeout(function(){ Iso.resize(); Iso.sync(G,{initial:true}); },40);
   refreshAll(); document.title=G.name+' | Runway';
   if(G.over){ UI.showEnd(); return; }
@@ -196,7 +202,7 @@ function renderHeader(over){
    '<div class="m"><span class="l">'+custLabel+'</span><span class="v" id="mCust">'+SU.fmtNum(cust)+'</span><span class="d '+(b&&SU.custCount(G)>=b.cust?'up':'dn')+'">'+(b&&!over?delta(SU.custCount(G),b.cust,false):'&nbsp;')+'</span></div>'+
    '<div class="m" title="Product-market fit. A range, because you cannot see it exactly. Talking to customers narrows it."><span class="l">Product fit</span><span class="v">'+band.lo+'-'+band.hi+'</span><span class="d">of 100</span></div>'+
    '<div class="m" title="Your energy. At zero you burn out."><span class="l">Sanity</span><span class="v">'+Math.round(G.founder.sanity)+'</span><span class="d">team '+Math.round(G.morale)+'</span></div>'+
-   '</div><div class="hb"><button class="hbtn" data-act="help">?</button><button class="hbtn" data-act="menu">Menu</button></div>';
+   '</div><div class="hb"><button class="hbtn" data-act="help">?</button><button class="hbtn" data-act="menu">'+(UI.pocket?'\u22ef':'Menu')+'</button></div>';
 }
 function tweenHeader(b,a,dur){
   var ec=$('#mCash'), em=$('#mMrr'), eu=$('#mCust'); if(!ec) return; var t0=performance.now();
@@ -255,7 +261,7 @@ function renderPlan(){
   S.ideas=ideas.slice(0,4); renderCoach();
   var lbl=tm===3?'Run next quarter':'Run '+SU.MONTHS[G.month-1];
   el.innerHTML='<div class="plan-h"><h2>'+(tm===3?'This quarter':SU.dateStr(G))+'</h2><span class="muted sm">Your plan</span><div class="focus"><span class="k">Focus</span><div class="dots" title="You can only give real attention to so much each period">'+dots+'</div><b>'+Math.round(used*2)/2+'/'+total+'</b></div></div>'+
-    '<div class="plan-body"><div class="plan-list">'+(items||'<span class="hint">Nothing planned yet. Pick moves from the menus, or just run the month.</span>')+'</div>'+
+    '<div class="plan-body"><div class="plan-list">'+(items||'<span class="hint">'+(UI.pocket?'Tap things in the office to plan your month.':'Nothing planned yet. Pick moves from the menus, or just run the month.')+'</span>')+'</div>'+
     '<div class="bqs"><div class="k">Building'+(G.queue.length?' ('+G.queue.length+')':'')+'</div>'+(bq||'<span class="hint">Nothing in the build queue. Pick a feature on the Build tab.</span>')+'</div></div>'+
     (ideas.length?'<div class="plan-ideas"><span class="k">Try</span>'+ideas.map(function(c,i){ return '<button class="chip idea" data-act="coach-add" data-i="'+i+'" title="'+esc(c.why)+'">+ '+esc(c.label)+'</button>'; }).join('')+'</div>':'')+
     '<div class="plan-run"><button class="btn primary big runfill" id="runBtn" data-act="run"'+(S.busy||G.over?' disabled':'')+'><i id="runFill"></i><span id="runLbl">'+(S.busy?'Running...':lbl+' '+UI.icon('play'))+'</span></button>'+
@@ -290,7 +296,7 @@ UI.run=function(){
   S.used=S.used||{}; S.plan.forEach(function(it){ if(!it.repeat&&CAT.actions[it.aid]&&CAT.actions[it.aid].repeat) S.used[it.aid]=(S.used[it.aid]||0)+1; });
   S.receipt=rec; S.plan=S.plan.filter(function(it){ return it.repeat; });
   /* the office reacts while the numbers tick */
-  S.busy=true; var dur=Math.round(2600/S.auto.speed); if(isPhone()) setSheet(false);
+  document.body.classList.add('running'); S.busy=true; var dur=Math.round(2600/S.auto.speed); if(isPhone()) setSheet(false);
   renderHeader({cash:rec.before.cash,mrr:rec.before.mrr,cust:rec.before.cust}); tweenHeader(rec.before,rec.after,dur);
   renderPlan(); Iso.sync(G); Iso.afterTurn(G,rec);
   var rl=$('#runFill'); if(rl){ rl.style.transition='width '+dur+'ms linear'; rl.style.width='100%'; } var hb=$('#hudBar'); if(hb){ hb.style.transition='none'; hb.style.width='0'; void hb.offsetWidth; hb.style.transition='width '+dur+'ms linear'; hb.style.width='100%'; }
@@ -299,7 +305,7 @@ UI.run=function(){
   setTimeout(function(){ finishRun(rec); },dur);
 };
 function finishRun(rec){
-  S.busy=false; if(isPhone()&&!S.auto.on) setSheet(true); var hb=$('#hudBar'); if(hb){ hb.style.transition='none'; hb.style.width='0'; }
+  S.busy=false; document.body.classList.remove('running'); var hb=$('#hudBar'); if(hb){ hb.style.transition='none'; hb.style.width='0'; }
   /* ticker lines */
   if(rec.reactions&&rec.reactions.headline) pushTicker(rec.reactions.headline,'');
   var b=rec.before, a=rec.after; var dm=a.mrr-b.mrr; pushTicker('Revenue '+fm(a.mrr)+' a month ('+(dm>=0?'+':'-')+fm(Math.abs(dm))+')',dm>=0?'money':'bad');
@@ -317,7 +323,7 @@ function finishRun(rec){
     if(blk.length){ S.auto.on=false; renderPlan(); UI.toast('Paused: '+blk[0],4200); S.tab=blk.tab||'inbox'; UI.renderTabs(); }
     else setTimeout(function(){ if(S.auto.on) UI.run(); },Math.round(300/S.auto.speed));
   } else {
-    if(blk.length){ S.tab=blk.tab||'inbox'; UI.renderTabs(); }
+    if(blk.length){ S.tab=blk.tab||'inbox'; UI.renderTabs(); if(isPhone()) setSheet(true); }
     UI.showReport();
   }
 }
@@ -368,6 +374,7 @@ function isoLabel(info){
   if(info.kind==='desk') return info.mine?'<b>Your desk</b>':'<b>A desk</b>';
   return null;
 }
+function onIsoEmpty(){ var p=$('#pop'); if(p&&!p.hidden){ p.hidden=true; return; } if(UI.pocket&&S.sheet){ setSheet(false); if(UI.pocketLayout) UI.pocketLayout(); } }
 function onIsoPick(info,x,y){
   var tip=$('#tip'); if(tip) tip.hidden=true; var k=info.kind;
   if(k==='board'){ UI.setTab('customers'); return; } if(k==='roadmap'){ UI.setTab('product'); return; } if(k==='tv'){ UI.setTab(G.feat&&G.feat.dashboard?'dash':'money'); return; } if(k==='door'){ UI.setTab('inbox'); return; }

@@ -355,37 +355,9 @@ input[type=range]{width:100%;accent-color:var(--ink)}
 .toast{position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);background:var(--asphalt);color:#fff;padding:9px 16px;border-radius:11px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:80;max-width:min(92vw,520px);text-align:center;font-size:13px}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-/* ---------- phones: the office on top, a tab dock and a slide-up sheet below it. Everything is on one screen ---------- */
+/* ---------- phones: wizard and end screens (the game itself is in the pocket block at the bottom) ---------- */
 @media (max-width:760px){
   :root{--side:100%}
-  .top{height:auto;flex-wrap:wrap;padding:6px 10px;gap:4px 10px}
-  .who{display:none}
-  .brand{order:1}.hb{order:2;margin-left:auto}
-  .meters{order:3;flex:1 1 100%;justify-content:space-between;gap:4px 8px}
-  .runway{width:130px}
-  .game{display:flex;flex-direction:column}
-  .rcol{display:contents}
-  .office{position:relative;inset:auto;flex:1 1 0;min-height:90px}
-  .hud{left:8px;top:8px;max-width:92%}
-  .hud-cap #capL,.plan-ideas{display:none}
-  .plan{position:relative;left:auto;bottom:auto;width:auto;flex:none;border-radius:0;border-width:1px 0 0;padding:6px 10px;gap:4px;box-shadow:none;display:flex;flex-direction:column}
-  .plan-h h2{font-size:14px}.plan-h .muted{display:none}
-  .plan-body{gap:4px}
-  .plan-body{grid-template-columns:minmax(0,1fr)}
-  .plan-list .qrow{width:auto;max-width:100%}
-  .plan-list{min-height:0;max-height:96px}.plan-list .hint,.bqs .hint,.qsub,.bqs .k,.bq .xs{display:none}
-  .qrow{padding:2px 2px 2px 5px}.qn{width:18px;height:18px}
-  .bqs{border-left:0;padding-left:0;max-height:none;flex-direction:row;gap:10px;overflow:hidden}.bq{flex:1;min-width:0}.bq-t b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .plan-run{gap:6px}.plan-run .seg{display:none}
-  .hud-bar{display:none}.hud .btn{display:none}
-  .plan-run .btn.big{min-width:0;flex:1;min-height:36px;font-size:14px}
-  .side{position:relative;right:auto;top:auto;width:auto;max-height:none;min-height:0;flex:none;flex-direction:column-reverse;border-radius:0;border-width:1px 0 0;box-shadow:none}
-  .side:has(.drawer){height:auto}
-  .pn{flex:none;height:min(38dvh,320px)}
-  body[data-sheet=closed] .pn{display:none}
-  .icontabs{border-bottom:0;border-top:1px solid var(--line);padding:0 4px calc(2px + env(safe-area-inset-bottom,0px))}
-  .tb{border-radius:0 0 9px 9px}
-  .tb.on{box-shadow:inset 0 3px 0 var(--amber)}
   .wiz,.endbox{grid-template-columns:minmax(0,1fr);overflow:auto}
   .wiz-l .vis,.endbox .vis2{min-height:120px;flex:none;height:150px}
   .ideas{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -445,7 +417,7 @@ input[type=range]{width:100%;accent-color:var(--ink)}
 .coach .cw{color:#6b5a2a;font-size:11.5px}
 .coach.calm{background:rgba(255,255,255,.85);border-color:var(--line)}
 .coach .btn{pointer-events:auto;background:var(--amber);border-color:var(--asphalt);color:var(--amber-ink);min-height:28px}
-@media (max-width:760px){ .coach{display:none} }
+
 
 .hl{border:1px solid var(--line);border-left:5px solid var(--line);border-radius:9px;padding:7px 10px;margin-top:7px;background:var(--panel);display:flex;flex-direction:column;gap:2px}
 .hl.bad{border-left-color:var(--bad);background:#fff8f8}.hl.warn{border-left-color:var(--amber);background:#fffbef}.hl.good{border-left-color:#1f9d6a}
@@ -459,3 +431,91 @@ input[type=range]{width:100%;accent-color:var(--ink)}
 .rolebtn:hover{border-color:var(--ink);box-shadow:0 2px 0 var(--ink)}
 .rolebtn.no{opacity:.55}
 .hud .btn.hirebtn{background:var(--amber);border-color:var(--asphalt);color:var(--amber-ink)}
+
+/* ======================================================================
+   POCKET MODE: on a phone the office IS the game. Full screen, everything is a thing in the room.
+   ====================================================================== */
+.pk-pins,#pkCoachWrap,.pk-sh{display:none}
+body.pocket{--hdr:auto}
+body.pocket .top{position:absolute;left:0;right:0;top:0;z-index:7;height:auto;padding:max(6px,env(safe-area-inset-top)) 10px 6px;gap:8px;flex-wrap:nowrap;background:linear-gradient(180deg,rgba(17,26,45,.97),rgba(17,26,45,.84));border-bottom:2px solid var(--amber)}
+body.pocket .who,body.pocket .brand{display:none}
+body.pocket .meters{flex:1;justify-content:space-between;gap:8px;min-width:0}
+body.pocket .meters .m:nth-child(n+4){display:none}
+body.pocket .m .d{display:none}
+body.pocket .m .v{font-size:17px}
+body.pocket .runway{flex:1;width:auto;max-width:150px;min-width:70px}
+body.pocket .hbtn[data-act=help]{display:none}
+body.pocket .hbtn{min-height:34px;min-width:34px;padding:2px 9px;font-size:18px;line-height:1}
+body.pocket .game{position:absolute;inset:0;display:block;flex:none}
+body.pocket .office{position:absolute;inset:0;min-height:0}
+body.pocket .office canvas{touch-action:none}
+body.pocket .hud{left:8px;right:8px;top:calc(var(--hdrh,58px) + 6px);max-width:none;flex-direction:column;gap:5px}
+body.pocket .hud-top{padding:3px 9px;gap:6px}
+body.pocket .hud-top .btn:not(#hudHealth),body.pocket .hud-bar,body.pocket .hud-cap #capL{display:none}
+body.pocket .hud-top .btn{min-height:24px;font-size:11.5px}
+body.pocket .coach{display:flex}
+body.pocket .ticker{font-size:12px}
+body.pocket .plan{position:absolute;left:0;right:0;bottom:0;width:auto;z-index:6;border-radius:18px 18px 0 0;border:0;padding:7px 10px calc(8px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:6px;background:rgba(255,255,255,.97);box-shadow:0 -6px 20px rgba(0,0,0,.16)}
+body.pocket .plan-h{order:0;display:flex;gap:8px}
+body.pocket .plan-h h2,body.pocket .plan-h .muted{display:none}
+body.pocket .plan-h .focus{margin:0}
+body.pocket .plan-body{order:1;display:block}
+body.pocket .plan-list{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;max-height:none;height:36px;min-height:36px;align-items:center;gap:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+body.pocket .plan-list::-webkit-scrollbar{display:none}
+body.pocket .plan-list .qrow{width:auto;flex:none;max-width:190px;padding:4px 4px 4px 11px;border-radius:99px;min-height:32px}
+body.pocket .plan-list .hint{width:auto;white-space:nowrap;padding:0;font-size:12.5px}
+body.pocket .qrow .qn,body.pocket .qrow .qsub,body.pocket .qrow .pf,body.pocket .qrow .pb[data-act=pin]{display:none}
+body.pocket .qrow .pb{min-width:28px;min-height:28px}
+body.pocket .bqs,body.pocket .plan-ideas,body.pocket .plan-run .seg,body.pocket .plan-run .btn.ghost{display:none}
+body.pocket .plan-run{order:2;flex-wrap:nowrap;gap:8px}
+body.pocket .plan-run .btn.big{flex:1;min-width:0;min-height:52px;font-size:18px}
+body.pocket .plan-run #autoBtn{min-height:52px;padding:0 14px}
+body.pocket .rcol{position:absolute;left:0;right:0;top:auto;bottom:var(--dock,150px);width:auto;height:min(46dvh,400px);z-index:5;transition:transform .24s cubic-bezier(.2,.8,.2,1)}
+body.pocket[data-sheet=closed] .rcol{transform:translateY(calc(100% + var(--dock,150px)));pointer-events:none;visibility:hidden;transition:transform .24s cubic-bezier(.2,.8,.2,1),visibility 0s .24s}
+body.pocket .side{flex:1;min-height:0;border-radius:18px 18px 0 0;border:0;box-shadow:0 -4px 20px rgba(0,0,0,.2);flex-direction:column}
+body.pocket .icontabs{display:none}
+body.pocket .pn{flex:1;min-height:0;height:auto}
+body.pocket .pk-sh{display:flex;align-items:center;justify-content:space-between;padding:7px 10px 3px 16px;border-bottom:1px solid var(--line);position:relative;flex:none}
+body.pocket .pk-sh::before{content:"";position:absolute;left:50%;top:5px;width:38px;height:4px;margin-left:-19px;border-radius:3px;background:#cfd5e3}
+body.pocket .pk-sh b{font-family:var(--f-display);font-size:17px;padding-top:6px}
+body.pocket .pk-x{background:var(--panel2);border:0;border-radius:99px;width:38px;height:38px;font-size:22px;line-height:1;color:var(--ink)}
+body.pocket #pkCoachWrap{display:block;position:absolute;left:8px;right:8px;bottom:calc(var(--dock,150px) + 8px);z-index:4;pointer-events:none}
+body.pocket[data-sheet=open] #pkCoachWrap{display:none}
+body.pocket .coach{max-width:none;pointer-events:auto;padding:5px 6px 5px 11px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+body.pocket .coach .cw{display:none}
+body.pocket .coach .cm b{font-size:13.5px}
+body.pocket .pk-pins{display:block;position:absolute;inset:0;pointer-events:none;z-index:3;overflow:hidden}
+.pk-pin{position:absolute;left:0;top:0;pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;min-width:56px;min-height:38px;padding:2px 6px 3px;background:#fff;border:2px solid var(--asphalt);border-radius:13px;box-shadow:0 3px 0 rgba(17,26,45,.85),0 8px 14px rgba(0,0,0,.18);font-family:var(--f-body);color:var(--ink);transition:opacity .2s,filter .2s;will-change:transform;cursor:pointer}
+.pk-pin .pkl{font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:800;color:var(--muted);line-height:1.1;display:flex;gap:3px;align-items:center}
+.pk-pin .pkl .ico{display:none}
+.pk-pin .pkv{font-family:var(--f-mono);font-weight:600;font-size:13px;line-height:1.15;white-space:nowrap}
+.pk-pin::after{content:"";position:absolute;left:50%;bottom:-9px;margin-left:-5px;border:5px solid transparent;border-top:6px solid var(--asphalt)}
+.pk-pin.hot{background:var(--amber);animation:pkpulse 1.4s ease-in-out infinite}
+.pk-pin.hot .pkl{color:var(--amber-ink)}
+.pk-pin .bdg{position:absolute;right:-7px;top:-8px;min-width:19px;height:19px;border-radius:99px;background:#d6336c;color:#fff;font:700 11px/19px var(--f-mono);text-align:center;padding:0 4px;border:2px solid #fff}
+.pk-pin.hire{background:var(--amber);min-width:46px}
+.pk-pin.hire .pkv{font-size:20px;line-height:1}
+.pk-pin.off{opacity:0;pointer-events:none}
+@keyframes pkpulse{0%,100%{transform-origin:center}50%{filter:brightness(1.08) drop-shadow(0 0 8px rgba(255,183,3,.9))}}
+
+@media (max-height:520px) and (orientation:landscape){
+  body.pocket .top{padding:max(4px,env(safe-area-inset-top)) 12px 4px}
+  body.pocket .m .v{font-size:15px}
+  body.pocket .m .l,body.pocket .runway .rt{font-size:8.5px}
+  body.pocket .runway .dashes{height:7px}
+  body.pocket .hud{top:calc(var(--hdrh,44px) + 4px);left:8px;right:auto;max-width:60%}
+  body.pocket .hud-cap{display:none}
+  body.pocket .plan{left:auto;right:0;top:var(--hdrh,44px);bottom:0;width:250px;border-radius:16px 0 0 0;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));justify-content:space-between;box-shadow:-6px 0 20px rgba(0,0,0,.16)}
+  body.pocket .plan-list{flex-wrap:wrap;height:auto;max-height:110px;overflow-y:auto;min-height:36px;align-content:flex-start}
+  body.pocket .plan-list .qrow{max-width:100%}
+  body.pocket .plan-list .hint{white-space:normal}
+  body.pocket[data-sheet=open] .pk-pins{display:none}
+  body.pocket .plan-run{flex-direction:column;align-items:stretch;gap:6px}
+  body.pocket .plan-run .btn.big{min-height:48px;font-size:17px}
+  body.pocket .plan-run #autoBtn{min-height:38px}
+  body.pocket .rcol{left:auto;right:250px;top:var(--hdrh,44px);bottom:0;width:min(54vw,420px);height:auto}
+  body.pocket .side{border-radius:16px 0 0 0}
+  body.pocket[data-sheet=closed] .rcol{transform:translateX(105%)}
+  body.pocket #pkCoachWrap{left:8px;right:auto;bottom:8px;width:min(430px,calc(100vw - 270px))}
+}
+body.pocket[data-sheet=open] .pk-pin{transform-origin:50% 100%}
