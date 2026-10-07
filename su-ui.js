@@ -160,7 +160,7 @@ function buildShell(){
   '<header class="top" id="hdr"></header>'+
   '<main class="game">'+
     '<section class="office"><div class="stage"><canvas id="officeCv"></canvas>'+
-      '<div class="hud"><div class="hud-top"><b id="hudDate"></b><div class="hud-bar"><i id="hudBar"></i></div><span class="lvl" id="hudLvl" data-act="golvl" role="button"></span><button class="btn sm" data-act="report">Last month</button></div><div class="hud-cap"><span id="capR"></span><span id="capL"></span></div><div class="ticker" id="ticker"></div></div>'+
+      '<div class="hud"><div class="hud-top"><b id="hudDate"></b><div class="hud-bar"><i id="hudBar"></i></div><span class="lvl" id="hudLvl" data-act="golvl" role="button"></span><button class="btn sm" data-act="report">Last month</button></div><div class="hud-cap"><span id="capR"></span><span id="capL"></span></div><div class="coach" id="coach"></div><div class="ticker" id="ticker"></div></div>'+
       '<div class="tip" id="tip" hidden></div><div class="pop" id="pop" hidden></div></div></section>'+
     '<section class="card plan" id="plan"></section>'+
     '<div class="rcol"><aside class="card side"><div class="icontabs" id="tabs" role="tablist"></div><div class="pn" id="pn"><div class="pn-in" id="pnIn"></div><div id="drawer"></div></div></aside></div>'+
@@ -237,7 +237,7 @@ function renderPlan(){
   var pend=S.plan.filter(function(it){ return it.aid==='build'&&it.values; }).map(function(it){ var f=CAT.featureByKey(G,it.values.fk); return f?'<div class="bq pend"><div class="bq-t"><b>'+esc(f.name)+'</b><span class="xs muted">when you run</span></div><span class="xs muted">Starts this month. About '+CAT.eta(G,f.scope).toFixed(1)+' months of work.</span></div>':''; }).join('');
   bq=bq+pend;
   var ideas=CAT.coach(G).filter(function(c){ return !S.plan.some(function(it){ return it.aid===c.aid && JSON.stringify(it.values)===JSON.stringify(c.values); }); }).slice(0,3);
-  S.ideas=ideas;
+  S.ideas=ideas; renderCoach();
   var lbl=tm===3?'Run next quarter':'Run '+SU.MONTHS[G.month-1];
   el.innerHTML='<div class="plan-h"><h2>'+(tm===3?'This quarter':SU.dateStr(G))+'</h2><span class="muted sm">Your plan</span><div class="focus"><span class="k">Focus</span><div class="dots" title="You can only give real attention to so much each period">'+dots+'</div><b>'+Math.round(used*2)/2+'/'+total+'</b></div></div>'+
     '<div class="plan-body"><div class="plan-list">'+(items||'<span class="hint">Nothing planned yet. Pick moves from the menus, or just run the month.</span>')+'</div>'+
@@ -249,6 +249,13 @@ function renderPlan(){
   var rb=$('#runB2'); if(rb){ rb.textContent=S.busy?'Running...':(tm===3?'Run quarter':'Run '+SU.MONTHS[G.month-1]); rb.disabled=!!(S.busy||G.over); }
 }
 UI.renderPlan=renderPlan;
+function renderCoach(){
+  var el=$('#coach'); if(!el||!G) return; var c=S.ideas&&S.ideas[0];
+  if(G.over){ el.innerHTML=''; return; }
+  if(!c){ el.innerHTML='<span class="k">Next</span><span class="cm">'+(S.plan.length?'Looks good. Press Run.':'Nothing urgent. Run the month, or pick a move.')+'</span>'; el.classList.toggle('calm',true); return; }
+  el.classList.toggle('calm',false);
+  el.innerHTML='<span class="k">Next move</span><div class="cm"><b>'+esc(c.label)+'</b><span class="cw">'+esc(c.why)+'</span></div><button class="btn sm primary" data-act="coach-add" data-i="0">Add</button>';
+}
 
 /* ------------------------------------------------------------ run a month */
 function planToCommit(){

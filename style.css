@@ -437,3 +437,12 @@ input[type=range]{width:100%;accent-color:var(--ink)}
 .rg{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:8px;display:flex;flex-direction:column;gap:3px;background:var(--panel)}
 .rgl{margin:0;padding-left:18px;font-size:12.5px;line-height:1.4}
 .pv.job a{color:#1b3c9c;font-weight:600;font-size:12px}
+
+.coach{pointer-events:auto;display:flex;align-items:center;gap:8px;background:rgba(255,248,225,.96);border:1.5px solid #e3b23a;border-radius:10px;padding:5px 6px 5px 10px;max-width:420px;box-shadow:var(--shadow)}
+.coach .k{color:#8a6a00;white-space:nowrap}
+.coach .cm{display:flex;flex-direction:column;line-height:1.25;min-width:0;font-size:12.5px}
+.coach .cm b{font-size:13px}
+.coach .cw{color:#6b5a2a;font-size:11.5px}
+.coach.calm{background:rgba(255,255,255,.85);border-color:var(--line)}
+.coach .btn{pointer-events:auto;background:var(--amber);border-color:var(--asphalt);color:var(--amber-ink);min-height:28px}
+@media (max-width:760px){ .coach{display:none} }
