@@ -138,9 +138,9 @@ SU.segFromText = function(t){
 /* ------------------------------------------------------------ ideas */
 SU.IDEAS = [
   {id:'molarity',name:'Molarity',tag:'Insurance verification and reminders for dental practices',arch:'smb',segId:'practice',ai:false},
-  {id:'vetdesk',name:'VetDesk',tag:'Scheduling and reminders for vet clinics',arch:'smb',segId:'practice',ai:false},
+  {id:'vetdesk',name:'VetDesk',tag:'Scheduling and reminders for vet clinics',arch:'smb',segId:'practice',ai:false,mod:{pool:0.55,price:0.85,reply:1.15,churn:0.9}},
   {id:'prepline',name:'PrepLine',tag:'Prep lists and waste tracking for restaurants',arch:'smb',segId:'owner',ai:false},
-  {id:'gutterly',name:'Gutterly',tag:'A CRM and quoting app for roofers',arch:'smb',segId:'owner',ai:false},
+  {id:'gutterly',name:'Gutterly',tag:'A CRM and quoting app for roofers',arch:'smb',segId:'owner',ai:false,mod:{pool:0.5,price:0.85,reply:0.9,churn:1.15}},
   {id:'closekit',name:'CloseKit',tag:'Month-end close for mid-market finance teams',arch:'smb',segId:'finance',ai:false},
   {id:'ledgerlark',name:'LedgerLark',tag:'AI bookkeeping copilot for finance teams (a wrapper, a bit)',arch:'smb',segId:'finance',ai:true,twist:'A model maker may ship your feature'},
   {id:'counsel',name:'Counsel',tag:'AI contract review for law firms. Accuracy is everything.',arch:'smb',segId:'lawfirm',ai:true,biz:'ai',twist:'One made-up case can end you'},

@@ -199,6 +199,7 @@ M.closeRoundFail=function(G,why){
 M.step=function(G,E){
   var r=G.round; if(!r) return;
   r.age++;
+  if(r.age>=9 && !r.sheets.some(function(s){ return s.state==='live'; })){ M.closeRoundFail(G,'Nine months and nobody committed. Investors drifted away.'); return; }
   var eraSpeed=clamp(3/((E.close[0]+E.close[1])/2),0.4,1.6);
   var stale=r.age>((E.close[0]+E.close[1])/2)*1.5+2;
   r.pipe.forEach(function(p){

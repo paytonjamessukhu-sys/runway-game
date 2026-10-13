@@ -68,11 +68,17 @@ function moneyMapCard(g){
   return '<div class="sec mmap '+m.stage+'"><div class="row" style="justify-content:space-between"><h4>How you make money</h4><span class="pill '+(m.stage==='idea'?'warn':m.stage==='beta'?'blue':'good')+'">'+(m.stage==='idea'?'before launch':m.stage==='beta'?'beta':'live')+'</span></div><div class="mm-flow">'+flow+'</div>'+
     '<div class="mm-why"><b>'+esc(m.headline)+'</b><ul>'+m.why.map(function(w){ return '<li>'+esc(w)+'</li>'; }).join('')+'</ul>'+(m.fix.length?'<div class="row" style="gap:6px;flex-wrap:wrap">'+m.fix.map(function(f,i){ return '<button class="chip idea" data-act="mm-add" data-i="'+i+'">'+(f.tab?esc(f.go||'Open')+': ':'+ ')+esc(f.label)+'</button>'; }).join('')+'</div>':'')+'</div></div>';
 }
+function fitCard(g){
+  if(g.arch==='venue') return ''; var b=SU.fitBreakdown(g);
+  var rows=b.parts.map(function(p){ return '<div class="fb-r"><span class="fb-l">'+esc(p.label)+' <em>'+p.w+'</em></span><div class="fb-bar">'+(p.val===null?'<i class="unk" style="width:100%"></i>':'<i style="width:'+Math.max(2,p.val)+'%"></i>')+'</div><span class="mono xs">'+(p.val===null?'?':p.val)+'</span><div class="fb-n">'+esc(p.note)+'</div></div>'; }).join('');
+  var pen=[]; if(b.clutter>0.4) pen.push('Clutter: -'+b.clutter.toFixed(0)+' (features nobody asked for. It fades slowly.)'); if(b.whip>0) pen.push('Flip-flopping: -'+b.whip+' (you changed price or plans too often. It fades every 3 months.)');
+  return '<div class="sec fitcard"><h4>What product fit is made of <span class="muted xs">the exact number stays hidden</span></h4>'+rows+(pen.length?'<div class="fb-pen">'+pen.map(esc).join('<br>')+'</div>':'')+'</div>';
+}
 function pCustomers(g){
   var S0=SU.seg(g), band=SU.pmfBand(g), churn=g.stat.churnRate||0;
   var label=g.arch==='consumer'?'Subscribers':(g.arch==='market'?'Both sides':(g.arch==='venue'?'Regulars':'Customers'));
   var h='<div class="strip">'+stat(label,SU.fmtNum(SU.custCount(g)),'+'+Math.round(g.stat.newLast||0)+' / -'+Math.round(g.stat.churnLast||0)+' last month')+stat('Churn / month',pctS(churn,1),churn>0.08?'Too high':churn>0.04?'Watch it':'Healthy',churn>0.08?'bad':'')+stat('Product fit',band.lo+'-'+band.hi,'of 100')+'</div>';
-  h+=moneyMapCard(g);
+  h+=moneyMapCard(g); h+=fitCard(g);
   h+='<div class="sec"><div class="row" style="justify-content:space-between"><b class="sm">How well you know them</b><span class="mono xs">'+Math.round(g.insight)+' / 100</span></div>'+bar(g.insight,'')+'</div>';
   var real=g.needs.filter(function(n){ return n.real&&n.revealed; }), herr=g.needs.filter(function(n){ return n.herring&&n.revealed; }), hidden=g.needs.filter(function(n){ return n.real&&!n.revealed; }).length;
   h+='<div class="sec"><h4>What '+esc(S0.who)+' pay for</h4>';
@@ -80,7 +86,7 @@ function pCustomers(g){
   real.forEach(function(n){ var built=n.cov>=0.3; h+='<div class="rw"><div class="rm"><div class="row" style="gap:6px"><b>'+esc(n.name)+'</b><span class="pill blue">matters '+'●'.repeat(n.w)+'○'.repeat(3-n.w)+'</span></div>'+bar(n.cov*100,n.cov>0.6?'good':'')+'</div>'+(built?'<span class="pill good">built</span>':'<button class="btn sm" data-act="build-need" data-id="'+n.id+'">Build it</button>')+'</div>'; });
   herr.forEach(function(n){ h+='<div class="rw"><div class="rm"><b>'+esc(n.name)+'</b></div><span class="pill warn">asked for, will not pay</span></div>'; });
   if(hidden>0) h+='<div class="xs muted">'+(real.length?'There are more needs you have not found.':'Some of what they want is still hidden.')+'</div>';
-  h+='</div>'+tiles(['talk','survey','townhall','promise']);
+  h+='</div><button class="tile" data-act="view" data-id="market"><span class="tt">See the market map</span><span class="tf">free</span><span class="tb2">Where you are, how much of your market is left, and where a pivot could go.</span></button>'+tiles(['talk','survey','townhall','promise']);
   return h;
 }
 
@@ -327,7 +333,7 @@ function pDash(g){
   h+='<div class="charts"><div class="chart"><div class="ch-t"><b>Revenue / mo</b><span>'+fm(last.mrr)+'</span></div>'+lineChart(hi.map(function(x){ return x.mrr; }),'#2a58d6',fm)+'</div>'+
     '<div class="chart"><div class="ch-t"><b>Customers</b><span>'+SU.fmtNum(last.cust)+'</span></div>'+lineChart(hi.map(function(x){ return x.cust; }),'#0f7a54',SU.fmtNum)+'</div>'+
     '<div class="chart"><div class="ch-t"><b>Cash</b><span>'+fm(last.cash)+'</span></div>'+lineChart(hi.map(function(x){ return x.cash; }),'#9a6200',fm)+'</div>'+
-    '<div class="chart"><div class="ch-t"><b>Product fit</b><span>'+last.pmf+'</span></div>'+lineChart(hi.map(function(x){ return x.pmf; }),'#7048e8',function(v){ return Math.round(v); })+'</div></div>';
+    '<div class="chart"><div class="ch-t"><b>Product fit</b><span>about '+(Math.round(last.pmf/5)*5)+'</span></div>'+lineChart(hi.map(function(x){ return Math.round(x.pmf/5)*5; }),'#7048e8',function(v){ return Math.round(v); })+'</div></div>';
   h+='<div class="xs muted">Unlocked because you built the analytics dashboard.</div>';
   return h;
 }
@@ -458,6 +464,7 @@ function drawerView(id){
   if(id==='rivals'){ title='Your rivals'; h=rivalsView(g); }
   else if(id==='health'){ title='Health check'; h=healthView(g); }
   else if(id==='roles'){ title='What each job does'; h=rolesGuide(g); }
+  else if(id==='market'){ title='The market map'; h=UI.mapView(g); }
   else if(id==='policy'){
     title='Work policies'; h='<div class="dr-b"><div class="muted sm">Policies change how people feel and how fast they build. Each change is one move in your plan.</div><div class="rows">'+CAT.policyList(g).map(function(p){ var on=CAT.policyOn(g,p.id); return '<div class="rw"><div class="rm"><b>'+esc(p.name)+'</b></div><span class="pill '+(on?'good':'')+'">'+(on?'on':'off')+'</span><button class="btn sm" data-act="policy" data-kind="'+p.id+'">'+(on?'Turn off':'Turn on')+'</button></div>'; }).join('')+'</div></div>';
   } else if(id==='loans'){

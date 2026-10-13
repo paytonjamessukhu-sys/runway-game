@@ -132,11 +132,7 @@ function renderWiz(){
   $('#sum').innerHTML='<span class="pill blue">'+esc(idea.name)+'</span><span class="pill">'+esc(SU.START_INFO[st.era].name)+'</span><span class="pill">'+(co?esc(co.name.split(' ')[0]):'Solo')+'</span><span class="pill">'+esc(bg.name)+'</span>';
   var h='';
   if(step===0){
-    h+='<h3>What kind of company?</h3><p class="muted sm" style="margin-bottom:6px">Each kind plays differently: different money, different jobs, a different office.</p>';
-    var grp=function(g){ var ideas=SU.IDEAS.filter(function(i){ return i.biz===g.id; }); if(!ideas.length) return ''; return '<div class="sec" style="margin-bottom:8px"><div class="row"><b class="k">'+esc(g.name)+'</b><span class="pill '+(g.id==='tech'?'good':'warn')+'">'+esc(g.id==='tech'?'The polished one':g.diff)+'</span></div><div class="xs muted">'+esc(g.blurb)+'</div><div class="ideas">'+ideas.map(ideaCard).join('')+'</div></div>'; };
-    var techG=SU.BIZ.filter(function(g){ return g.id==='tech'; }), otherG=SU.BIZ.filter(function(g){ return g.id!=='tech'; });
-    h+=techG.map(grp).join('');
-    h+='<details class="more"'+(idea.biz!=='tech'?' open':'')+'><summary>More company types <span class="muted xs">(rougher drafts: fun, but the tech startup is the one we are polishing)</span></summary>'+otherG.map(grp).join('')+'</details>';
+    h+=UI.mapStart();
   } else if(step===1){
     h+='<h3>Pick the year</h3><p class="muted sm" style="margin-bottom:8px">The money, the hiring market and the hype change with it.</p><div class="opts">'+['1999','2008','2021','2024'].map(function(k){ var i=SU.START_INFO[k]; return '<button class="opt'+(st.era===k?' on':'')+'" '+((idea.biz==='ai'&&(k==='1999'||k==='2008'))?'disabled title="Nobody can rent GPUs yet" style="opacity:.45" ':'')+'data-act="pick-era" data-id="'+k+'"><b>'+esc(i.name)+'</b><span class="tg">'+esc(i.blurb)+'</span></button>'; }).join('')+'</div>';
   } else if(step===2){
@@ -248,7 +244,8 @@ function delegated(){ var slots=Math.min(4,2*SU.count(G,'mgr')), set={}, n=0; S.
 UI.delegated=delegated;
 UI.planFocus=function(){ var u=0, d=delegated(); S.plan.forEach(function(it){ if(!d[it.uid]) u+=CAT.item(G,it).focus; }); return u; };
 UI.addItem=function(it){
-  var a=CAT.actions[it.aid]; var item=CAT.item(G,it);
+  var a=CAT.actions[it.aid]; if(a&&it.aid!=='quick'&&it.aid!=='text'){ var okv=CAT.validate(G,it.aid,it.values); if(!okv.ok){ UI.toast(okv.why||'You cannot do that right now.'); return false; } }
+  var item=CAT.item(G,it);
   if(a && a.unique){ var key=a.unique===true?'':String((it.values||{})[a.unique]); S.plan=S.plan.filter(function(x){ if(x.aid!==it.aid) return true; if(a.unique===true) return false; return String((x.values||{})[a.unique])!==key; }); }
   if(it.aid==='quick'){ var spec=it.spec; S.plan=S.plan.filter(function(x){ return !(x.aid==='quick'&&x.spec.text===spec.text); }); }
   var budget=SU.focusBudget(G).budget, used=UI.planFocus();
@@ -309,7 +306,7 @@ function planToCommit(quiet){
 UI.forecast=function(){
   try{ var pc=planToCommit(true), outs=[];
     for(var k=0;k<4;k++){ var c=SU.clone(G); Object.keys(c.rs).forEach(function(n){ c.rs[n]=(c.rs[n]+k*104729+17)|0; });
-      SU.commit(c,'',null,{clauses:pc.clauses,claims:pc.claims||undefined,promises:pc.promises.length?pc.promises:undefined}); outs.push({cash:c.cash,mrr:c.mrr||0,burn:SU.fin(c).burn}); }
+      SU.commit(c,'',null,{nosave:true,clauses:pc.clauses,claims:pc.claims||undefined,promises:pc.promises.length?pc.promises:undefined}); outs.push({cash:c.cash,mrr:c.mrr||0,burn:SU.fin(c).burn}); }
     var avg=function(f){ return outs.reduce(function(a,o){ return a+o[f]; },0)/outs.length; };
     return {cash:avg('cash'),mrr:avg('mrr'),dCash:avg('cash')-G.cash,lo:Math.min.apply(null,outs.map(function(o){ return o.cash; })),hi:Math.max.apply(null,outs.map(function(o){ return o.cash; }))};
   }catch(e){ return null; }
@@ -483,6 +480,8 @@ function onClick(e){
     case 'clear-plan': S.plan=[]; renderPlan(); break;
     case 'unplan': var u=+t.getAttribute('data-uid'); S.plan=S.plan.filter(function(x){ return x.uid!==u; }); renderPlan(); break;
     case 'pin': var u2=+t.getAttribute('data-uid'); S.plan.forEach(function(x){ if(x.uid===u2) x.repeat=!x.repeat; }); renderPlan(); UI.toast('Repeats every month until you remove it.',1800); break;
+    case 'map-node': { var mid=t.getAttribute('data-id'); S.mapSel=mid; if(S.view==='setup'||!G){ var ii=UI.mapIdeasIn(mid); if(ii.length&&!ii.some(function(x){ return x.id===S.setup.idea; })){ S.setup.idea=ii[0].id; if(ii[0].biz==='ai'&&(S.setup.era==='1999'||S.setup.era==='2008')) S.setup.era='2021'; } renderWiz(); heroSync(); } else { UI.renderDrawer(); } break; }
+    case 'map-pivot': { var pid=t.getAttribute('data-id'); if(UI.addItem({aid:'pivot',values:{seg:pid}})) UI.toast('Pivot planned. It happens when you press Run.'); break; }
     case 'mm-add': var mf=S.mmFix&&S.mmFix[+t.getAttribute('data-i')]; if(mf){ if(mf.quick){ UI.openShortlist(mf.quick.role,mf.quick.level); } else if(mf.tab){ UI.setTab(mf.tab); } else { UI.addItem({aid:mf.aid,values:JSON.parse(JSON.stringify(mf.values||{})),repeat:false}); } } break;
     case 'coach-add': var c=S.ideas&&S.ideas[+t.getAttribute('data-i')]; if(c){ if(c.quick){ UI.openShortlist(c.quick.role,c.quick.level); } else if(c.tab){ UI.setTab(c.tab); } else { if(c.repeat){ S.pinTold=S.pinTold||{}; S.pinTold[c.aid]=1; } UI.addItem({aid:c.aid,values:JSON.parse(JSON.stringify(c.values)),repeat:!!c.repeat}); } } break;
     case 'labels': S.labels=(S.labels===false); Iso.setLabels(S.labels!==false); t.textContent='Labels: '+(S.labels!==false?'on':'off'); break;

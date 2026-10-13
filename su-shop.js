@@ -161,7 +161,7 @@ SU.GOALS = [
   {id:'g_cust10',title:'Reach 10 customers',desc:'It is not a fluke.',prog:function(G){ return lvl(SU.custCount(G),10); },reward:{focus:1}},
   {id:'g_mrr1k',title:'Make $1K a month',desc:'Revenue is real.',prog:function(G){ return lvl(G.mrr||0,1000,true); },reward:{morale:5}},
   {id:'g_move',title:'Move out of the garage',desc:'Buy a bigger space in the Shop.',prog:function(G){ return lvl(G.space!=='garage'?1:0,1); },reward:{morale:5}},
-  {id:'g_fit',title:'Reach product fit of 60',desc:'Customers pull the product out of your hands.',prog:function(G){ return lvl(Math.round(G.pmf),60); },reward:{focus:1}},
+  {id:'g_fit',title:'Reach product fit of 60',desc:'Customers pull the product out of your hands.',prog:function(G){ var b=SU.pmfBand(G); return lvl(Math.round((b.lo+b.hi)/2),60); },reward:{focus:1}},
   {id:'g_year',title:'Survive a year',desc:'Most startups do not.',prog:function(G){ return lvl(G.mi,12); },reward:{sanity:5}},
   {id:'g_raise',title:'Raise your first round',desc:'Someone bets on you.',prog:function(G){ return lvl(G.rounds.length,1); },reward:{sanity:8}},
   {id:'g_team5',title:'Grow to 5 people',desc:'A real team.',prog:function(G){ return lvl(SU.headcount(G),5); },reward:{focus:1}},
@@ -175,7 +175,7 @@ SU.GOALS = [
 ];
 SU.Goals = {
   list:function(G){ return SU.GOALS.map(function(g){ var p=g.prog(G); var done=!!(G.goals&&G.goals[g.id]); return {goal:g,cur:p.cur,max:p.max,money:p.money,done:done}; }); },
-  next:function(G,n){ return SU.Goals.list(G).filter(function(x){ return !x.done; }).slice(0,n||3); },
+  next:function(G,n){ var u=SU.Goals.list(G).filter(function(x){ return !x.done; }); var head=u.slice(0,4).sort(function(a,b){ return (b.cur/b.max)-(a.cur/a.max); }); var rest=u.slice(4); return head.concat(rest).slice(0,n||3); },
   rewardText:function(r){ var a=[]; if(r.focus) a.push('+'+r.focus+' focus every month, for good'); if(r.sanity) a.push('Sanity +'+r.sanity); if(r.morale) a.push('Morale +'+r.morale); if(r.hype) a.push('Buzz +'+r.hype); return a.join(', '); },
   check:function(G,rec){
     G.goals=G.goals||{}; var out=[];

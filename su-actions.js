@@ -67,7 +67,7 @@ CAT.moneyMap=function(G){
     return {stage:stage,nodes:nodes,headline:'You cannot sell what you have not built',why:why,fix:fix.slice(0,3)};
   }
   var leads=Math.round(st.leadsLast||0), churn=st.churnRate||0, rev=G.mrr||0;
-  nodes=[{l:'New leads',v:String(leads),s:'meetings last month'},{l:'Customers',v:SU.fmtNum(n),s:'+'+Math.round(st.newLast||0)+' / -'+Math.round(st.churnLast||0)},{l:'Price',v:money(c.price||0),s:'per month'},{l:'Revenue',v:money(rev),s:'per month'+(gigIn?' (+'+money(gigIn)+' contracts)':'')}];
+  var pl=SU.pool(G); nodes=[{l:'New leads',v:String(leads),s:(G.stat.pipeNext?Math.round(G.stat.pipeNext)+' signing next month':'meetings last month')+(pl?' · '+Math.max(0,Math.round(pl.total-pl.mined))+' prospects left':'')},{l:'Customers',v:SU.fmtNum(n),s:'+'+Math.round(st.newLast||0)+' / -'+Math.round(st.churnLast||0)},{l:'Price',v:money(c.price||0),s:'per month'},{l:'Revenue',v:money(rev),s:'per month'+(gigIn?' (+'+money(gigIn)+' contracts)':'')}];
   var head='Money is flowing';
   if(stage==='beta'){ why.push('You are in beta: customers pay about 40% less, leave more often and sign up slower. Finish the first version to get full price.'); head='Beta: earning at a discount'; }
   if(n===0){ head='You have a product but no customers'; why.push('Nobody knows it exists yet, or nobody who knows it wants it. Reach out, run ads, or ask people what is missing.'); fix.push({aid:'outbound',values:{ch:'email',n:600},label:'Reach out to 600 prospects'}); }
@@ -75,7 +75,7 @@ CAT.moneyMap=function(G){
     if(churn>0.08){ head='Customers leave as fast as you win them'; why.push('You lose '+Math.round(churn*100)+'% of customers a month. Fix quality, support or fit before buying more leads.'); fix.push({tab:'product',label:'Improve the product',go:'Open'}); }
     var cs=SU.count(G,'cs'), ld=n/(300+150*cs); if(ld>1){ why.push('Support is overloaded: '+n+' customers for '+cs+' support people. That also slows your engineers.'); fix.push({quick:{role:'cs',level:'mid'},label:'Hire support'}); }
     var pf=SU.priceF(G); if(pf<0.6){ why.push('Your price is high for what customers think it is worth. Many look, few buy.'); fix.push({tab:'sales',label:'Check your price',go:'Open'}); }
-    if(G.pmf<35){ why.push('Product fit is low ('+Math.round(G.pmf)+'). Customers do not love it enough yet: interview them and build what they ask for.'); fix.push({aid:'talk',values:{n:8},label:'Interview 8 customers'}); }
+    if(G.pmf<35){ why.push('Product fit looks low (about '+Math.round((SU.pmfBand(G).lo+SU.pmfBand(G).hi)/2)+', a guess until you interview more). Customers do not love it enough yet: interview them and build what they ask for.'); fix.push({aid:'talk',values:{n:8},label:'Interview 8 customers'}); }
     if(SU.compF(G)<0.8){ why.push('A rival is taking about '+Math.round((1-SU.compF(G))*100)+'% of your demand.'); }
     if(leads<3 && n<30){ why.push('Few new leads: you are not telling enough people. Outreach and ads feed the top of the funnel.'); fix.push({aid:'outbound',values:{ch:'email',n:600},label:'Reach out to 600 prospects'}); }
   }
@@ -148,12 +148,12 @@ def({id:'price',group:'sales',title:'Set your price',blurb:'Too high and nobody 
     if(rise<-0.05) out.push('A cut brings more signups, but each customer pays '+R(-rise*100)+'% less.');
     return out; }});
 def({id:'contract',group:'sales',title:'Take contract work',blurb:'Get paid now to build something custom for a customer. You learn their world, but your product moves slower.',
-  ok:function(G){ if(G.arch==='venue') return {ok:false,why:'Bars do not take contract work.'}; if((G.gigs||[]).length>=2) return {ok:false,why:'You already have two contracts running.'}; return {ok:true}; },
+  ok:function(G){ if(G.arch==='venue') return {ok:false,why:'Bars do not take contract work.'}; if((G.gigs||[]).length>=2) return {ok:false,why:'You already have two contracts running.'}; if((G.gigsSigned||0)>=3) return {ok:false,why:'You have taken your three contracts. Now it is about the product.'}; var own=SU.velocity(G)-SU.devPts(G); if(own-SU.GIGS.small.load<1) return {ok:false,why:'You do not have the spare build capacity: you build '+own.toFixed(1)+' points a month on your own. Hire an engineer or bring in a cofounder first.'}; return {ok:true}; },
   ctl:function(G){ var V=SU.velocity(G); return [{k:'kind',label:'How big a job',kind:'cards',opts:['small','med','big'].map(function(k){ var g=SU.GIGS[k]; return opt(k,g.name.charAt(0).toUpperCase()+g.name.slice(1),fm(g.pay)+' over '+g.months+' months, uses '+g.load.toFixed(1)+' of your '+V.toFixed(1)+' build points'); }),def:'small'}]; },
   make:function(G,v){ return mk(G,'contract',{kind:v.kind},'Take a '+v.kind+' contract'); },
   preview:function(G,v){ var g=SU.GIGS[v.kind]||SU.GIGS.small, V=SU.velocity(G); var out=['Pays '+fm(g.pay/g.months)+' a month for '+g.months+' months. Cash, not recurring revenue.','Your build speed drops from '+V.toFixed(1)+' to '+Math.max(0.3,V-g.load).toFixed(1)+' points a month while it runs.','You learn how a real customer works: insight +'+g.learn+' when it is done.']; if(V-g.load<1) out.push('Too big for your team right now. Take a smaller job or hire an engineer.'); return out; }});
 def({id:'devshop',group:'product',title:'Rent a developer',blurb:'Pay a freelancer or an agency by the month. The fastest way to build if you cannot code, and cheaper than a full-time hire.',
-  ok:function(G){ if(G.arch==='venue') return {ok:false,why:'Bars do not need developers.'}; if((G.devs||[]).length>=2) return {ok:false,why:'You already rent both kinds.'}; return {ok:true}; },
+  ok:function(G){ if(G.arch==='venue') return {ok:false,why:'Bars do not need developers.'}; if((G.devs||[]).length>=2) return {ok:false,why:'You already rent both kinds.'}; if(G.cash<SU.DEVS.freelancer.cost*SU.DEVS.freelancer.months) return {ok:false,why:'You cannot afford even a freelancer for three months.'}; return {ok:true}; },
   ctl:function(G){ return [{k:'kind',label:'Who',kind:'cards',opts:['freelancer','agency'].map(function(k){ var d=SU.DEVS[k]; return opt(k,SU.cap1?SU.cap1(d.name.replace(/^a /,'')):d.name,fm(d.cost)+' a month for '+d.months+' months, +'+d.pts+' build points a month'); }),def:'freelancer'}]; },
   make:function(G,v){ return mk(G,'devshop',{kind:v.kind},'Rent '+v.kind); },
   preview:function(G,v){ var d=SU.DEVS[v.kind]||SU.DEVS.freelancer, V=SU.velocity(G); var mv=G.queue.filter(function(q){ return /mvp/i.test(q.name); })[0]; var rest=mv?mv.scope-mv.progress:18; var out=['Costs '+fm(d.cost)+' a month for '+d.months+' months ('+fm(d.cost*d.months)+' in all).','Build speed '+V.toFixed(1)+' to '+(V+d.pts).toFixed(1)+' points a month.']; if(!G.shipped.length) out.push('The first version goes from about '+Math.ceil(rest/Math.max(0.3,V))+' months to about '+Math.ceil(rest/(V+d.pts))+'.'); return out; }});
@@ -170,7 +170,7 @@ def({id:'outbound',group:'sales',title:'Reach out to customers',blurb:'Emails, c
     if(G.arch==='market'){ var S=SU.seg(G); c.push({k:'side',label:'Who',kind:'choice',opts:[opt('supply',cap(S.supplyNoun||'sellers')),opt('demand',cap(S.demandNoun||'buyers'))],def:'supply'}); }
     return c; },
   make:function(G,v){ return mk(G,'outbound',{n:v.n,channel:v.ch,seg:null,side:G.arch==='market'?v.side:null},'Reach out to '+v.n); },
-  preview:function(G,v){ var f=SU.outboundFunnel(G,v.n,G.segId,0.85,SU.era(G),false); var out=['Costs about '+fm(0.05*v.n)+' in tools.']; if(G.arch==='smb'||G.arch==='market') out.push('Expect about '+f.replies.toFixed(1)+' replies, '+f.meetings.toFixed(1)+' meetings and '+f.closes.toFixed(1)+' customers'+(G.arch==='smb'?' next month':'')+'.'); if(v.n<=200) out.push('This is a test, not a channel.'); return out; }});
+  preview:function(G,v){ var f=SU.outboundFunnel(G,v.n,G.segId,0.85,SU.era(G),false,v.ch); var out=['Costs about '+fm(0.05*v.n)+' in tools.']; if(G.arch==='smb'||G.arch==='market') out.push('Expect about '+f.replies.toFixed(1)+' replies, '+f.meetings.toFixed(1)+' meetings and '+f.closes.toFixed(1)+' customers'+(G.arch==='smb'?' next month':'')+'.'); if(v.n<=200) out.push('This is a test, not a channel.'); return out; }});
 function channelsFor(G){
   var S=SU.seg(G), all={ads:'Search ads',content:'Content and SEO',social:'Creators and social',events:'Events and sponsorships',referral:'Referral rewards',ua:'App install ads'};
   var ids=G.arch==='consumer'?['ua','social','content','referral']:['ads','content','social','events','referral'];
@@ -436,11 +436,11 @@ CAT.health=function(G){
 };
 CAT.coach=function(G){
   var out=[], f=SU.fin(G), seg=SU.seg(G), w=seg.words[0], runway=f.runway, mrr=G.mrr||0;
-  function add(aid,values,label,why){ out.push({aid:aid,values:CAT.defaults(G,aid,values),label:label,why:why}); }
+  function add(aid,values,label,why){ var vv=CAT.defaults(G,aid,values); var okc=CAT.validate(G,aid,vv); if(okc&&okc.ok===false) return; out.push({aid:aid,values:vv,label:label,why:why}); }
   var inPlan=function(aid){ return false; };
   var Vc=SU.velocity(G), mvc=G.queue.filter(function(q){ return /mvp/i.test(q.name); })[0];
   if(!G.shipped.length && G.arch!=='venue' && Vc<2.5){ var rest=mvc?mvc.scope-mvc.progress:18; add('devshop',{kind:'freelancer'},'Rent a developer','You build '+Vc.toFixed(1)+' points a month, so the first version would take about '+Math.ceil(rest/Vc)+' months. A freelancer makes it about '+Math.ceil(rest/(Vc+SU.DEVS.freelancer.pts))+'.'); }
-  if(G.t===0){ add('talk',{n:8},'Interview 8 customers','Learn what they pay for before you spend months building.'); add('build',{fk:'mvp',care:1},G.arch==='venue'?'Open the doors':'Build the MVP',G.arch==='venue'?'You cannot sell a drink until the doors are open.':'Nothing sells until something exists.'); if(G.arch!=='venue') add('contract',{kind:'small'},'Take a small contract','Paid work now. It funds the build and teaches you how a real customer works.'); return out; }
+  if(G.t===0){ add('build',{fk:'mvp',care:1},G.arch==='venue'?'Open the doors':'Build the first version',G.arch==='venue'?'You cannot sell a drink until the doors are open.':'Nothing sells until something exists. Start now, and talk to customers while it gets built.'); add('talk',{n:8},'Interview 8 customers','Learn what they will pay for while the first version gets built.'); if(G.arch!=='venue') add('contract',{kind:'small'},'Take a small contract','Paid work now. It funds the build and teaches you how a real customer works.'); return out; }
   if(G.insight<35) add('talk',{n:8},'Interview 8 customers','You still know little about what customers pay for. Insight '+R(G.insight)+' of 100.');
   var need=G.needs.filter(function(n){ return n.real&&n.revealed&&n.cov<0.3&&!G.queue.some(function(q){ return q.tags&&q.tags.indexOf(n.id)>=0; }); })[0];
   if(need) add('build',{fk:'need:'+need.id,care:1},'Build '+need.name,'Customers told you they need this. It raises product fit.');
@@ -469,7 +469,7 @@ CAT.coach=function(G){
   }
   /* AI companies live and die by model quality */
   if(G.flavor==='ai'){
-    if(G.Q<50 && G.cash>=120000+3*Math.max(0,f.burn)) add('train',{size:'medium'},'Train a medium model','Your model has decayed to '+R(G.Q)+'. Rivals keep improving, so you must keep training.');
+    if(G.Q<50 && G.cash>=120000+9*Math.max(0,f.burn)) add('train',{size:'medium'},'Train a medium model','Your model has decayed to '+R(G.Q)+'. Rivals keep improving, so you must keep training.');
     else if(G.Q<35 && G.cash>=30000) add('train',{size:'small'},'Train a small model','Quality is '+R(G.Q)+' and cash is tight. A small run is cheap and still helps.');
     if(SU.count(G,'ml')===0 && (G.ai.runs||0)>=2 && G.cash>500000 && !G.reqs.length) addQ('ml','senior','Hire an ML researcher','Every training run gets about 25% stronger, and the model decays more slowly.');
     if((G.ai.eff||0)<0.2 && mrr>=3000 && G.cash>=60000) add('optimize',{},'Optimize serving costs','Serving eats a big share of every dollar you earn. This wins some of it back.');

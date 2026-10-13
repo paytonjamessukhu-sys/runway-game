@@ -108,16 +108,16 @@ Story.takeHome=function(G,o){
 };
 Story.score=function(G,o){
   var th=o.takeHome||0, s=th>0? 100*Math.log10(1+th/1e5) : 0;
-  s+=Math.min(80,G.mi*0.6); s+=Math.min(60,G.moments.length*3); s+=G.achv.length*4; s-=Math.min(60,G.ethics*0.6);
+  s+=((G.mrr||0)>0||G.mi<6)?Math.min(80,G.mi*0.6):Math.min(20,G.mi*0.2); s+=Math.min(60,G.moments.length*3); s+=G.achv.length*4; s-=Math.min(60,G.ethics*0.6);
   if(o.type==='sale'||o.type==='bell') s+=40;
   if(o.type==='fraud') s=Math.min(s,20);
   return Math.max(0,Math.round(s));
 };
 Story.finalize=function(G){
   var o=G.over; if(!o||o.done) return;
-  if(o.type==='sale'){ var last=G.flags.lastPost||0; if(o.offer.kind==='acquihire'||o.offer.price<last*0.999) o.type='acquihire'; }
-  if(o.type==='sale' || o.type==='acquihire'){ if(o.offer) o.offer=o.offer; }
+  var soft=false; if(o.type==='sale'){ var last=G.flags.lastPost||0; soft=(o.offer.kind==='acquihire'||o.offer.price<last*0.999); }
   Story.takeHome(G,o);
+  if(soft) o.type='acquihire';
   o.title=SU.endTitle(o); o.score=Story.score(G,o); o.autopsy=Story.autopsy(G); o.raised=totalRaised(G);
   SU.checkAchv(G,null);
   o.artifacts=Story.artifacts(G,o); o.done=true;

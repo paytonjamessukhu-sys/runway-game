@@ -81,7 +81,7 @@ A.price=function(G,cl,ctx,r){
   if(p.annual){ c.annual=true; note(r,'Annual plans lock customers in: churn drops a lot.'); }
   var rise=old>0? (np-old)/old : 0;
   if(rise>0.02 && (G.arch==='smb'?c.n:c.payers)>0){ var shock=0.5*rise*S.priceSens*(p.grandfather?0.2:1); c.shock=(c.shock||0)+shock; G.trust.cust=clamp(G.trust.cust-4*(p.grandfather?0.3:1),0,100); note(r,'Existing customers feel the increase: churn +'+(shock*100).toFixed(1)+' points this month'+(p.grandfather?' (grandfathered, so far less)':'')+'.'); }
-  note(r,'Price is now '+(np<10?'$'+np.toFixed(2):'$'+Math.round(np))+'/mo. Customers would pay about $'+(G.wtpMed*(1-G.wtpBand)).toFixed(0)+' to $'+(G.wtpMed*(1+G.wtpBand)).toFixed(0)+' (you are '+(G.insight<20?'still guessing':'narrowing it down')+').');
+  note(r,'Price is now '+(np<10?'$'+np.toFixed(2):'$'+Math.round(np))+'/mo. Customers would pay about $'+(G.wtpMed*(1+G.pmfOff*G.wtpBand*0.5)*(1-G.wtpBand)).toFixed(0)+' to $'+(G.wtpMed*(1+G.pmfOff*G.wtpBand*0.5)*(1+G.wtpBand)).toFixed(0)+' (you are '+(G.insight<20?'still guessing':'narrowing it down')+').');
   if(np<G.wtpMed*0.25 && S.qualityBar>0.6){ note(r,'Warning: this reads as a toy for '+S.who+'. Trust drops.'); G.trust.cust=clamp(G.trust.cust-3,0,100); r.status='warn'; }
   if(rise<-0.05) note(r,'A price cut changes conversion by about '+Math.round((Math.pow(old/Math.max(0.01,np),0.4+1.4*S.priceSens)-1)*100)+'%, but revenue per customer falls '+Math.round(-rise*100)+'%.');
   var kr=G.rivals.filter(function(x){ return x.id==='krellix'&&x.active; })[0]; if(kr && rise<=-0.2){ G.flags.priceWar=G.mi; note(r,'Krellix noticed your price cut. Expect a price war.'); }
@@ -103,11 +103,13 @@ A.market=function(G,cl,ctx,r){
 A.outbound=function(G,cl,ctx,r){
   var p=cl.params, n=Math.round(p.n*ctx.ff), S=seg(G), E=SU.era(G);
   if(n<=0){ note(r,'No time left for it.'); return; }
-  var spam=n>6000; if(spam){ G.flags.spamUntil=G.mi+6; note(r,'Warning: that volume got your domain flagged. Replies drop by 70% for 6 months.'); r.status='warn'; }
+  var spam=n>6000; 
+  if(SU.pool(G)){ var pl=SU.pool(G); note(r,'Prospects left in your market: about '+Math.max(0,Math.round(pl.total-pl.mined))+' of '+pl.total+'.'); } if(spam){ G.flags.spamUntil=G.mi+6; note(r,'Warning: that volume got your domain flagged. Replies drop by 70% for 6 months.'); r.status='warn'; }
   spend(G,0.05*n,'Outreach tools');
   var segId=p.seg||G.segId; var side=p.side;
   G.pend.outbound.push({n:n,seg:segId,spec:cl.spec,side:side,ch:p.channel});
-  var f=SU.outboundFunnel(G,n,segId,cl.spec,E,spam||(G.flags.spamUntil||0)>G.mi);
+  G.flags.sentThisTurn=(G.flags.sentThisTurn||0)+n; if(!spam && G.flags.sentThisTurn>6000){ G.flags.spamUntil=G.mi+6; note(r,'Warning: that much outreach in one month got your domain flagged. Replies drop by 70% for 6 months.'); r.status='warn'; spam=true; }
+  var f=SU.outboundFunnel(G,n,segId,cl.spec,E,spam||(G.flags.spamUntil||0)>G.mi,p.channel);
   if(G.arch==='smb'||G.arch==='market') note(r,'Funnel (expected): '+n+' contacts -> about '+f.replies.toFixed(1)+' replies -> '+f.meetings.toFixed(1)+' meetings -> '+f.closes.toFixed(1)+' customers'+(G.arch==='smb'?' (lands next month)':'')+'.');
   else note(r,'Outbound does not suit a consumer audience; expect almost nothing.');
   if(segId!==G.segId){ note(r,'Warning: you contacted '+SU.SEG[segId].who+' but you sell to '+S.who+'.'); r.status='warn'; }
@@ -194,6 +196,7 @@ A.fundraise=function(G,cl,ctx,r){
   var p=cl.params;
   if(p.act){
     var rd=G.round; if(!rd){ note(r,'There is no open round.'); r.status='warn'; return; }
+    if(p.act==='decline'){ M.declineAll(G); note(r,'You walked away from the table.'); return; }
     var live=rd.sheets.filter(function(s){ return s.state==='live'; });
     if(!live.length){ note(r,'No live term sheets right now.'); r.status='warn'; return; }
     if(p.act==='accept'){ var best=live.slice().sort(function(a,b){ return (b.pre||b.cap)-(a.pre||a.cap); })[0]; var rec=M.accept(G,best.id); note(r,'Accepted '+SU.investor(best.inv).name+"'s offer: "+fm(best.amount)+'. Money arrives now.'); SU.fx&&SU.fx.confetti&&SU.fx.confetti(G); }
@@ -318,8 +321,10 @@ A.contract=function(G,cl,ctx,r){
   if(G.arch==='venue'){ note(r,'Bars do not take contract work.'); r.status='warn'; return; }
   var g0=SU.GIGS[cl.params.kind]||SU.GIGS.small; G.gigs=G.gigs||[];
   if(G.gigs.length>=2){ note(r,'You already have two contracts running.'); r.status='warn'; return; }
-  var V=SU.velocity(G); if(V-g0.load<1){ note(r,'You do not have the spare build capacity for that (it needs '+g0.load.toFixed(1)+' points a month and you have '+V.toFixed(1)+'). Take a smaller job or hire an engineer.'); r.status='warn'; return; }
+  if((G.gigsSigned||0)>=3){ note(r,'You have taken your three contracts. The rest of the game is about the product.'); r.status='warn'; return; }
+  var V=SU.velocity(G)-SU.devPts(G); if(V-g0.load<1){ note(r,'You do not have the spare build capacity for that (it needs '+g0.load.toFixed(1)+' points a month and you have '+V.toFixed(1)+'). Take a smaller job or hire an engineer.'); r.status='warn'; return; }
   var client=SU.GIG_CLIENTS[(G.mi*3+G.gigs.length+(G.fid||0))%SU.GIG_CLIENTS.length];
+  G.gigsSigned=(G.gigsSigned||0)+1;
   G.gigs.push({id:'c'+(++G.fid),client:client,kind:cl.params.kind,pay:g0.pay,months:g0.months,left:g0.months,load:g0.load,learn:g0.learn});
   note(r,'Signed '+g0.name+' for '+client+': '+fm(g0.pay)+' over '+g0.months+' months. It takes '+g0.load.toFixed(1)+' points a month of build time, so the product moves slower until it is done.');
   why(r,'Contract work pays right away and teaches you how a real customer works, but it competes with your product for engineering time.');
@@ -434,7 +439,7 @@ SU.commit=function(G,text,announce,opts){
   rec.reactions=SU.Events.media(G,rec);
   G.rec=rec; G.last=rec;
   if(G.cash<-1e9) G.cash=-1e9;
-  SU.save(G);
+  if(!opts.nosave) SU.save(G);
   return rec;
 };
 
@@ -443,8 +448,8 @@ SU.kpiLines=function(G,b,a){
   var out=[]; var drv={}; (G.drv||[]).forEach(function(d){ var k=d.m+'|'+d.c; drv[k]=(drv[k]||0)+d.d; });
   function top(m){ var arr=[]; for(var k in drv){ if(k.split('|')[0]===m) arr.push([k.split('|')[1],drv[k]]); } arr.sort(function(x,y){ return Math.abs(y[1])-Math.abs(x[1]); }); return arr.slice(0,4).map(function(x){ return x[0]+' '+(x[1]>=0?'+':'')+fm(x[1]); }); }
   out.push({k:'cash',label:'Cash',from:fm(b.cash),to:fm(a.cash),bad:a.cash<b.cash,drivers:top('cash')});
-  out.push({k:'mrr',label:'Monthly revenue',from:fm(b.mrr),to:fm(a.mrr),bad:a.mrr<b.mrr,drivers:[]});
-  out.push({k:'cust',label:G.arch==='market'?'Providers + buyers':G.arch==='consumer'?'Paying subscribers':'Customers',from:String(b.cust),to:String(a.cust),bad:a.cust<b.cust,drivers:G.stat.newLast!==undefined?['+'+Math.round(G.stat.newLast)+' new, -'+Math.round(G.stat.churnLast||0)+' churned']:[]});
+  out.push({k:'mrr',label:'Monthly revenue',from:fm(b.mrr),to:fm(a.mrr),bad:a.mrr<b.mrr,drivers:(G.stat.gigRev?['Contract work '+fm(G.stat.gigRev)+' (cash, not monthly revenue)']:[]).concat(G.cust&&G.cust.n?['New customers pay half in their first month']:[])});
+  out.push({k:'cust',label:G.arch==='market'?'Providers + buyers':G.arch==='consumer'?'Paying subscribers':'Customers',from:String(b.cust),to:String(a.cust),bad:a.cust<b.cust,drivers:G.stat.newLast!==undefined?(SU.srcText(G).concat(['-'+Math.round(G.stat.churnLast||0)+' churned'])).concat(G.stat.pipeNext?[Math.round(G.stat.pipeNext)+' more signing next month']:[]):[]});
   out.push({k:'pmf',label:'Product-market fit',from:b.pmfLo+'-'+b.pmfHi,to:a.pmfLo+'-'+a.pmfHi,bad:(a.pmfLo+a.pmfHi)<(b.pmfLo+b.pmfHi),drivers:[]});
   out.push({k:'sanity',label:'Your sanity',from:String(Math.round(b.sanity)),to:String(Math.round(a.sanity)),bad:a.sanity<b.sanity,drivers:[]});
   out.push({k:'morale',label:'Team morale',from:String(Math.round(b.morale)),to:String(Math.round(a.morale)),bad:a.morale<b.morale,drivers:[]});

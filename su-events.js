@@ -6,7 +6,7 @@ var Ev = (SU.Events = {});
 var DEFS = SU.EV = {};
 var LIST = SU.EVLIST = [];
 
-var VENUE_NO={scalingWall:1,priceWar:1,copycat:1,gargantua:1,rugpull:1,whale:1,viral:1,featureStorm:1,forumFront:1,techpulse:1,chirp3am:1,ev_dark:1,ev_data:1,tourist:1,covenant:1,ledger:1,aihalluc:1,tokencut:1};
+var VENUE_NO={partner:1,fireSale:1,scalingWall:1,priceWar:1,copycat:1,gargantua:1,rugpull:1,whale:1,viral:1,featureStorm:1,forumFront:1,techpulse:1,chirp3am:1,ev_dark:1,ev_data:1,tourist:1,covenant:1,ledger:1,aihalluc:1,tokencut:1};
 function def(o){ if(VENUE_NO[o.id]){ var c0=o.cond; o.cond=function(G){ if(G.arch==='venue') return false; return c0.apply(this,arguments); }; } DEFS[o.id]=o; LIST.push(o); }
 function P(G,id){ if(id==='co') return G.co; for(var i=0;i<G.team.length;i++) if(G.team[i].id===id) return G.team[i]; return null; }
 function first(n){ return n? n.split(' ')[0] : 'them'; }
