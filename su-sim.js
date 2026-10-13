@@ -193,7 +193,7 @@ SU.velocity = function(G){
   if(G.arch==='venue'){ var fs=G.founder.skills; return 3.2+0.35*(fs.s+fs.t)/2+1.2*Math.min(2,count(G,'mgr'))+0.8*Math.min(2,count(G,'design')); }
   var E=0, moraleF=0.55+0.6*G.morale/100, debtF=1-G.D/200, flags=G.founder.bg.flags||{};
   SU._vshare={}; G.team.forEach(function(e){ if(e.role!=='eng') return; var c=SU.empVel(G,e); SU._vshare[e.id]=c; E+=c; });
-  var fb=0.35*G.founder.skills.t*(1+(flags.buildBonus||0))*(flags.buildMult||1); E+=fb;
+  var fb=Math.max(0.5,0.35*G.founder.skills.t*(1+(flags.buildBonus||0))*(flags.buildMult||1)); E+=fb;
   if(G.co&&G.co.flags.cto) E+=1.5*G.co.skills.t/5*1.4; else if(G.co) E+=0.2*G.co.skills.t;
   var des=Math.min(count(G,'design'),3), pm=Math.min(count(G,'pm'),2); E*=1+0.1*des+0.05*pm;
   var reports=G.team.length; var orgF=1-0.03*Math.max(0,reports-8)*(count(G,'vp')>0?0.5:1);
@@ -202,7 +202,7 @@ SU.velocity = function(G){
   var shopV=SU.Shop?SU.Shop.vel(G):1, cramp=SU.Shop?SU.Shop.crampedVel(G):1;
   var drag=1; if(G.arch==='smb'||G.arch==='consumer'){ var cs=count(G,'cs'), ld=SU.custCount(G)/(300+150*cs); drag=1-Math.min(0.4,0.25*ld); }
   SU._supDrag=1-drag;
-  return Math.max(0.3,2*E*moraleF*debtF*orgF*crunch*whip*vm*shopV*cramp*drag-SU.gigLoad(G));   /* points per month */
+  return Math.max(0.3,2*E*moraleF*debtF*orgF*crunch*whip*vm*shopV*cramp*drag+SU.devPts(G)-SU.gigLoad(G));   /* points per month */
 };
 function moraleBase(G){
   var E=SU.era(G), payVs=0, n=0;
@@ -282,8 +282,9 @@ function expenses(G,E,rev){
   var o=G.orders, mk=o.ads+o.content+o.social+o.events+o.referral+o.ua;
   var outCost=(G.pend&&G.pend.outbound||[]).reduce(function(a,x){ return a+0.05*x.n; },0)+count(G,'sdr')*1200*0.05;
   var cogs=0, gm=G.arch==='smb'?0.78:G.arch==='consumer'?0.88:G.arch==='venue'?(0.72+0.015*featN(G,'pos')+0.01*Math.min(1,(G.flags.menuQ||0))-((G.flags.supplierUp||0)>G.mi?0.02:0)):0.97; if(G.arch==='venue'){ infra=500+0.012*rev; } if(G.flavor==='ai'){ gm=Math.max(0.35,gm-0.18+0.25*(G.ai.eff||0)-0.012*(G.ai.size||0)); infra+=1500+250*(G.ai.size||0); } cogs=rev*(1-gm);
-  var fixed=G.fixed*(1+0.25*Math.max(0,G.act-1))+(G.act>=2?60*Math.max(0,heads-3):0)+(SU.Shop?SU.Shop.rent(G)*(G.rentMult||1):0);
-  var other=(o.therapy?400:0)+(o.culture.perks?150*heads:0)+(G.arch==='venue'?(0.012*rev+(Math.max(0,(G.cust.nights||5)-5))*900):0);
+  var soloF=G.team.length?1:(G.shipped.length?0.5:0.25);   /* a founder alone in a garage has no real overhead: legal and bookkeeping grow with the team */
+  var fixed=G.fixed*soloF*(1+0.25*Math.max(0,G.act-1))+(G.act>=2?60*Math.max(0,heads-3):0)+(SU.Shop?SU.Shop.rent(G)*(G.rentMult||1):0);
+  var other=SU.devCost(G)+(o.therapy?400:0)+(o.culture.perks?150*heads:0)+(G.arch==='venue'?(0.012*rev+(Math.max(0,(G.cust.nights||5)-5))*900):0);
   var rbf=(G.loans.rbf&&G.loans.rbf.left>0)?Math.min(G.loans.rbf.left,0.06*rev):0;
   var debt=(G.loans.debt&&G.loans.debt.bal>0)?G.loans.debt.bal*0.11/12:0;
   var owed=G.owed||0;
@@ -553,6 +554,12 @@ function gigStep(G){
     }
   });
 }
+
+/* rented developers: the way a founder who cannot code builds the first version */
+SU.DEVS={freelancer:{name:'a freelance developer',cost:3500,pts:2.5,months:3},agency:{name:'a dev agency',cost:9000,pts:6,months:3}};
+SU.devPts=function(G){ var p=0; (G.devs||[]).forEach(function(d){ p+=d.pts; }); return p; };
+SU.devCost=function(G){ var c=0; (G.devs||[]).forEach(function(d){ c+=d.cost; }); return c; };
+function devStep(G){ if(!G.devs||!G.devs.length) return; G.devs.forEach(function(d){ d.left--; }); var done=G.devs.filter(function(d){ return d.left<=0; }); G.devs=G.devs.filter(function(d){ return d.left>0; }); done.forEach(function(d){ SU.inbox(G,{kind:'opp',title:'Your contract ended',body:SU.DEVS[d.kind].name.replace(/^a /,'The ')+' finished their '+d.months+' months. Rent again from the Build tab if you still need them.'}); }); }
 SU.step = function(G){
   var E=SU.era(G); SU.pmfRefresh(G);
   G.mi++; G.month++; if(G.month>12){ G.month=1; G.year++; }
@@ -561,7 +568,7 @@ SU.step = function(G){
   /* PMF drifts toward target (takes 2-3 months) */
   var star=SU.pmfStar(G); G.pmf+=0.4*(star-G.pmf); G.pmf=clamp(G.pmf,0,100);
   /* demand */
-  gigStep(G);
+  gigStep(G); devStep(G);
   var pre=!G.shipped.length && G.arch!=='venue', snap=pre?SU.clone(G.cust):null, n0=pre?SU.custCount(G):0;
   var d = G.arch==='smb'? demandSMB(G,E,S) : G.arch==='consumer'? demandConsumer(G,E,S) : G.arch==='venue'? demandVenue(G,E,S) : demandMarket(G,E,S);
   if(pre){ /* nothing to sell yet: interest piles up as a waitlist and pays out on launch day */

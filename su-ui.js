@@ -121,6 +121,10 @@ function ideaCard(i){
   var on=S.setup.idea===i.id;
   return '<button class="opt'+(on?' on':'')+'" data-act="pick-idea" data-id="'+i.id+'"><b>'+esc(i.name)+'</b><span class="tg">'+esc(i.tag)+'</span>'+(i.twist?'<span class="meta"><span class="pill blue">'+esc(i.twist)+'</span></span>':'')+'</button>';
 }
+function buildHint(b){
+  try{ var g=SU.newGame({ideaId:S.setup.idea,startKey:S.setup.era,cofounder:S.setup.co||null,bgId:b.id,name:'x',company:'x',seed:3,split:0.5}); var v=SU.velocity(g), mo=Math.ceil((g.arch==='venue'?8:18)/Math.max(0.3,v));
+    return 'First version: about '+mo+' month'+(mo===1?'':'s')+(mo>8?' (plan to rent a developer or hire)':'')+'.'; }catch(e){ return ''; }
+}
 function renderWiz(){
   var st=S.setup, step=S.wiz, idea=SU.IDEAS.filter(function(i){ return i.id===st.idea; })[0]||SU.IDEAS[0];
   $('#stepper').innerHTML=WSTEPS.map(function(n,i){ return '<button class="'+(i===step?'on':(i<step?'done':''))+'" data-act="wiz" data-i="'+i+'"><b>'+(i+1)+'</b>'+n+'</button>'; }).join('');
@@ -138,7 +142,7 @@ function renderWiz(){
   } else if(step===2){
     h+='<h3>Pick a cofounder</h3><p class="muted sm" style="margin-bottom:8px">Or go solo. Solo is harder to fund.</p><div class="opts">'+SU.COFOUNDERS.map(function(c){ return '<button class="opt'+(st.co===c.id?' on':'')+'" data-act="pick-co" data-id="'+c.id+'"><b>'+esc(c.name)+'</b><span class="meta"><span class="pill">'+esc(c.arch)+'</span></span><span class="tg">'+esc(c.trait)+'</span><span class="tg">Wants: '+esc(c.wants)+'</span></button>'; }).join('')+'<button class="opt'+(!st.co?' on':'')+'" data-act="pick-co" data-id=""><b>Solo</b><span class="tg">All the equity, all the work, all the 3am. Investors want a team.</span></button></div>';
   } else {
-    h+='<h3>Who are you?</h3><div class="opts" style="margin:6px 0 10px">'+SU.BACKGROUNDS.map(function(b){ return '<button class="opt'+(st.bg===b.id?' on':'')+'" data-act="pick-bg" data-id="'+b.id+'"><b>'+esc(b.name)+'</b><span class="tg">Starts with '+fm(b.cash)+' of savings.</span><span class="meta"><span class="pill good">+ '+esc(b.perk)+'</span><span class="pill bad">- '+esc(b.flaw)+'</span></span></button>'; }).join('')+'</div>'+
+    h+='<h3>Who are you?</h3><div class="opts" style="margin:6px 0 10px">'+SU.BACKGROUNDS.map(function(b){ return '<button class="opt'+(st.bg===b.id?' on':'')+'" data-act="pick-bg" data-id="'+b.id+'"><b>'+esc(b.name)+'</b><span class="tg">Starts with '+fm(b.cash)+' of savings.</span><span class="tg">'+buildHint(b)+'</span><span class="meta"><span class="pill good">+ '+esc(b.perk)+'</span><span class="pill bad">- '+esc(b.flaw)+'</span></span></button>'; }).join('')+'</div>'+
       '<div class="opts"><div class="field"><label for="f-name">Your name</label><input id="f-name" type="text" maxlength="24" placeholder="You" value="'+esc(st.name)+'"></div><div class="field"><label for="f-co">Company name</label><input id="f-co" type="text" maxlength="24" placeholder="'+esc(idea.name)+'" value="'+esc(st.company)+'"></div>'+
       (st.co?'<div class="field"><label>Equity split with your cofounder</label><div class="seg wrap">'+[[0.5,'50 / 50'],[0.6,'60 / 40'],[0.7,'70 / 30'],[0.8,'80 / 20']].map(function(o){ return '<button class="sg'+(st.split===o[0]?' on':'')+'" data-act="pick-split" data-v="'+o[0]+'">'+o[1]+'</button>'; }).join('')+'</div></div>':'')+
       '<div class="field"><label>Same market as everyone today?</label><button class="tgl'+(st.daily?' on':'')+'" data-act="daily"><span class="bx">✓</span>Use today\'s shared seed</button></div></div>';

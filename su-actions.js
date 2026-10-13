@@ -57,8 +57,10 @@ CAT.moneyMap=function(G){
     nodes=[{l:'Waitlist',v:String(Math.round(G.waitlist||0)),s:'waiting for launch'},{l:'Customers',v:'0',s:'nothing to buy yet'},{l:'Price',v:money(c.price||0),s:'per month'},{l:'Revenue',v:money(gigIn),s:gigIn?'contract work':'$0'}];
     var pct=mvp?Math.round(mvp.progress/mvp.scope*100):0;
     why.push('Nobody can pay for a product that does not exist. '+(mvp?'Your first version is '+pct+'% built, about '+Math.max(1,Math.ceil((mvp.scope-mvp.progress)/Math.max(0.3,V)))+' more month(s).':'You have not started building it.'));
+    if(V<2.5) why.push('You build only '+V.toFixed(1)+' points a month, so '+(mvp?'the rest of the first version':'a first version')+' would take about '+Math.ceil((mvp?mvp.scope-mvp.progress:18)/V)+' months alone. Rent a developer, hire an engineer or bring in a cofounder.');
     why.push('Until it ships, cash comes from your savings ('+money(G.cash)+' left) and any contract work.');
     if(!mvp) fix.push({aid:'build',values:{fk:'mvp',care:1},label:'Build the first version'});
+    if(V<2.5) fix.unshift({aid:'devshop',values:{kind:'freelancer'},label:'Rent a developer ('+money(SU.DEVS.freelancer.cost)+'/mo)'});
     if(gigs.length<2 && V-SU.GIGS.small.load>=1) fix.push({aid:'contract',values:{kind:'small'},label:'Take a small contract ('+money(SU.GIGS.small.pay)+')'});
     if(mvp && mvp.progress/mvp.scope>=0.4) fix.push({aid:'launchearly',values:{},label:'Launch a rough beta now'});
     fix.push({aid:'outbound',values:{ch:'email',n:300},label:'Build a waitlist (300 emails)'});
@@ -150,6 +152,11 @@ def({id:'contract',group:'sales',title:'Take contract work',blurb:'Get paid now 
   ctl:function(G){ var V=SU.velocity(G); return [{k:'kind',label:'How big a job',kind:'cards',opts:['small','med','big'].map(function(k){ var g=SU.GIGS[k]; return opt(k,g.name.charAt(0).toUpperCase()+g.name.slice(1),fm(g.pay)+' over '+g.months+' months, uses '+g.load.toFixed(1)+' of your '+V.toFixed(1)+' build points'); }),def:'small'}]; },
   make:function(G,v){ return mk(G,'contract',{kind:v.kind},'Take a '+v.kind+' contract'); },
   preview:function(G,v){ var g=SU.GIGS[v.kind]||SU.GIGS.small, V=SU.velocity(G); var out=['Pays '+fm(g.pay/g.months)+' a month for '+g.months+' months. Cash, not recurring revenue.','Your build speed drops from '+V.toFixed(1)+' to '+Math.max(0.3,V-g.load).toFixed(1)+' points a month while it runs.','You learn how a real customer works: insight +'+g.learn+' when it is done.']; if(V-g.load<1) out.push('Too big for your team right now. Take a smaller job or hire an engineer.'); return out; }});
+def({id:'devshop',group:'product',title:'Rent a developer',blurb:'Pay a freelancer or an agency by the month. The fastest way to build if you cannot code, and cheaper than a full-time hire.',
+  ok:function(G){ if(G.arch==='venue') return {ok:false,why:'Bars do not need developers.'}; if((G.devs||[]).length>=2) return {ok:false,why:'You already rent both kinds.'}; return {ok:true}; },
+  ctl:function(G){ return [{k:'kind',label:'Who',kind:'cards',opts:['freelancer','agency'].map(function(k){ var d=SU.DEVS[k]; return opt(k,SU.cap1?SU.cap1(d.name.replace(/^a /,'')):d.name,fm(d.cost)+' a month for '+d.months+' months, +'+d.pts+' build points a month'); }),def:'freelancer'}]; },
+  make:function(G,v){ return mk(G,'devshop',{kind:v.kind},'Rent '+v.kind); },
+  preview:function(G,v){ var d=SU.DEVS[v.kind]||SU.DEVS.freelancer, V=SU.velocity(G); var mv=G.queue.filter(function(q){ return /mvp/i.test(q.name); })[0]; var rest=mv?mv.scope-mv.progress:18; var out=['Costs '+fm(d.cost)+' a month for '+d.months+' months ('+fm(d.cost*d.months)+' in all).','Build speed '+V.toFixed(1)+' to '+(V+d.pts).toFixed(1)+' points a month.']; if(!G.shipped.length) out.push('The first version goes from about '+Math.ceil(rest/Math.max(0.3,V))+' months to about '+Math.ceil(rest/(V+d.pts))+'.'); return out; }});
 def({id:'launchearly',group:'product',title:'Launch a rough beta now',blurb:'Ship the unfinished first version to your waitlist. Money and real feedback start sooner, at a price.',
   ok:function(G){ var f=G.queue.filter(function(q){ return /mvp/i.test(q.name)&&!q.polish; })[0]; if(!f) return {ok:false,why:G.shipped.length?'You already launched.':'Queue the first version first.'}; var r=f.progress/f.scope; return r>=0.4?{ok:true}:{ok:false,why:'Wait until the first version is 40% built. It is '+Math.round(r*100)+'%.'}; },
   ctl:function(){ return []; }, make:function(G){ return mk(G,'launchearly',{},'Launch a rough beta'); },
@@ -431,6 +438,8 @@ CAT.coach=function(G){
   var out=[], f=SU.fin(G), seg=SU.seg(G), w=seg.words[0], runway=f.runway, mrr=G.mrr||0;
   function add(aid,values,label,why){ out.push({aid:aid,values:CAT.defaults(G,aid,values),label:label,why:why}); }
   var inPlan=function(aid){ return false; };
+  var Vc=SU.velocity(G), mvc=G.queue.filter(function(q){ return /mvp/i.test(q.name); })[0];
+  if(!G.shipped.length && G.arch!=='venue' && Vc<2.5){ var rest=mvc?mvc.scope-mvc.progress:18; add('devshop',{kind:'freelancer'},'Rent a developer','You build '+Vc.toFixed(1)+' points a month, so the first version would take about '+Math.ceil(rest/Vc)+' months. A freelancer makes it about '+Math.ceil(rest/(Vc+SU.DEVS.freelancer.pts))+'.'); }
   if(G.t===0){ add('talk',{n:8},'Interview 8 customers','Learn what they pay for before you spend months building.'); add('build',{fk:'mvp',care:1},G.arch==='venue'?'Open the doors':'Build the MVP',G.arch==='venue'?'You cannot sell a drink until the doors are open.':'Nothing sells until something exists.'); if(G.arch!=='venue') add('contract',{kind:'small'},'Take a small contract','Paid work now. It funds the build and teaches you how a real customer works.'); return out; }
   if(G.insight<35) add('talk',{n:8},'Interview 8 customers','You still know little about what customers pay for. Insight '+R(G.insight)+' of 100.');
   var need=G.needs.filter(function(n){ return n.real&&n.revealed&&n.cov<0.3&&!G.queue.some(function(q){ return q.tags&&q.tags.indexOf(n.id)>=0; }); })[0];

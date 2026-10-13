@@ -196,7 +196,7 @@ function pProduct(g){
   } else {
     h+='<div class="sec"><h4>Building now <span class="muted xs">'+g.queue.length+' of 6</span></h4>'+(g.queue.length?'<div class="rmap">'+g.queue.map(function(q){ var pc=q.scope?q.progress/q.scope*100:0; return '<div class="rm-i"><div class="top2"><b>'+esc(q.name)+'</b><span class="mono xs">'+q.progress.toFixed(1)+' / '+q.scope+'</span></div>'+bar(pc,'')+'</div>'; }).join('')+'</div>':empty('Nothing in the queue. Pick a feature.'))+'</div>';
     h+='<div class="sec"><h4>Shipped</h4>'+(g.shipped.length?'<div class="row">'+g.shipped.slice(-12).map(function(s){ return '<span class="chip static '+(s.good!==0||s.plat?'ok':'')+'" title="'+esc(s.name)+'">'+esc(s.name)+'</span>'; }).join('')+'</div>':empty('Nothing shipped yet.'))+'</div>';
-    h+=tiles(g.flavor==='ai'?['train','optimize','redteam','refactor','compliance','pivot']:(g.arch==='venue'?['menu','renovate','hours','refactor','pivot']:['launchearly','refactor','compliance','pivot']));
+    h+=tiles(g.flavor==='ai'?['train','optimize','redteam','refactor','compliance','pivot']:(g.arch==='venue'?['menu','renovate','hours','refactor','pivot']:['devshop','launchearly','refactor','compliance','pivot']));
   }
   return h;
 }

@@ -306,6 +306,14 @@ A.redteam=function(G,cl,ctx,r){
 /* contract work and the early beta launch: ways around "no product, no money" */
 SU.GIGS={small:{name:'a small fix-it job',pay:6000,months:2,load:1.2,learn:4},med:{name:'a custom integration',pay:18000,months:3,load:2.6,learn:7},big:{name:'a full custom build',pay:48000,months:4,load:5,learn:12}};
 SU.GIG_CLIENTS=['Harbor Dental Group','Pruitt Family Dental','Northwind Vet Clinics','Cobalt Roofing','Alder and Finch Accounting','Lumen Clinics','Brightwater Foods','Redwood Property Mgmt','Kestrel Logistics','Summit Physio','Maple Street Pharmacy','Ironclad Insurance'];
+A.devshop=function(G,cl,ctx,r){
+  var d0=SU.DEVS[cl.params.kind]||SU.DEVS.freelancer; G.devs=G.devs||[];
+  if(G.devs.some(function(d){ return d.kind===cl.params.kind; })){ note(r,'You already have '+d0.name+' working for you.'); r.status='warn'; return; }
+  if(G.cash<d0.cost*d0.months){ note(r,'You need '+fm(d0.cost*d0.months-G.cash)+' more to cover '+d0.months+' months of them.'); r.status='warn'; return; }
+  G.devs.push({kind:cl.params.kind,left:d0.months,months:d0.months,pts:d0.pts,cost:d0.cost});
+  note(r,'You rented '+d0.name+' for '+d0.months+' months: '+fm(d0.cost)+' a month, +'+d0.pts+' build points a month. Your build speed is now '+SU.velocity(G).toFixed(1)+'.');
+  why(r,'Rented developers add build speed for a fixed monthly fee. It is the fastest way for a founder who cannot code to get a first version out.');
+};
 A.contract=function(G,cl,ctx,r){
   if(G.arch==='venue'){ note(r,'Bars do not take contract work.'); r.status='warn'; return; }
   var g0=SU.GIGS[cl.params.kind]||SU.GIGS.small; G.gigs=G.gigs||[];
