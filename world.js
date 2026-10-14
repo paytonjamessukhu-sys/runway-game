@@ -5,14 +5,14 @@
 
   // [ISO date, headline, effect shown under it (the game rule tied to the date, or '')]
   W.news = [
-    ['2020-01-23', 'OpenAI researchers publish "Scaling Laws for Neural Language Models": test loss falls as a smooth power law in model size, data and compute.', 'The line on your chart. Investors now count dots that land on it.'],
+    ['2020-01-23', 'OpenAI researchers publish "Scaling Laws for Neural Language Models": test loss falls as a smooth power law in model size, data and compute.', 'The line on your chart. Investors now count saved models that land on it.'],
     ['2020-01-28', 'Google unveils Meena, a 2.6-billion-parameter chatbot.', ''],
     ['2020-02-10', 'Microsoft announces Turing-NLG, a 17-billion-parameter language model and the largest published to date, and open-sources DeepSpeed with ZeRO.', ''],
     ['2020-03-11', 'The WHO declares COVID-19 a pandemic.', ''],
-    ['2020-03-16', 'The Dow falls 12.9% in a day, its worst day since 1987, and six Bay Area counties order residents to shelter in place.', 'Venture market closed until 15 Jun. Term sheets in diligence are withdrawn. Hardware orders take 4 weeks longer until 30 Jun; hangs cost a day more without an infra person.'],
+    ['2020-03-16', 'The Dow falls 12.9% in a day, its worst day since 1987, and six Bay Area counties order residents to shelter in place.', 'Venture market closed until 15 Jun. Investors who were checking you walk away. Hardware orders take 4 weeks longer until 30 Jun; drops cost a day more without an infra person.'],
     ['2020-05-14', 'NVIDIA announces the A100 GPU and the DGX A100 at $199,000.', 'DGX A100 now on the market: 2.5x a V100 per card.'],
     ['2020-05-19', 'Microsoft says it has built a supercomputer for OpenAI with 285,000 CPU cores and 10,000 GPUs.', ''],
-    ['2020-05-28', 'OpenAI publishes the GPT-3 paper: 175 billion parameters, 300 billion tokens, about 3.14e23 training FLOPs.', 'The frontier is now 3.14e23. Staying relevant needs a published result of 3.1e21 or more. Rental capacity halves; hardware lead times +4 weeks and prices +15%.'],
+    ['2020-05-28', 'OpenAI publishes the GPT-3 paper: 175 billion parameters, 300 billion tokens, about 3.14e23 training FLOPs.', 'The frontier is now 3.14e23. Staying remembered needs a published result of about 1/100 of GPT-3. Rental capacity halves; hardware lead times +4 weeks and prices +15%.'],
     ['2020-06-11', 'OpenAI opens its API to developers in private beta.', 'Shipping an API is now possible. Cloud rent rises to $3.50; capacity falls to 64; some renewals are refused. Meridian starts queueing.'],
     ['2020-06-30', 'Google researchers publish GShard, a 600-billion-parameter mixture-of-experts translation model.', 'COVID order delays and hang penalties end.'],
     ['2020-07-07', 'Google Cloud announces A2 virtual machines with NVIDIA A100 GPUs, in alpha.', ''],
@@ -51,27 +51,27 @@
     kofi: { name: 'Kofi Mensah', first: 'Kofi', role: 'infra', skill: 4, salary: 26000, ego: 2, from: '2020-08-01',
       pitch: 'At a thousand cards something breaks every night. I write the thing that restarts it.' }
   };
-  W.roles = { data: 'Data', systems: 'Systems', scaling: 'Scaling', infra: 'Infra', evals: 'Evals & red-team', optim: 'Optimization' };
+  W.roles = { data: 'Data', systems: 'Systems', scaling: 'Scaling', infra: 'Infra', evals: 'Evals and safety', optim: 'Optimization' };
 
   // what each role changes, written on the card (filled live with the person's numbers)
   W.effects = {
-    data: 'Filter jobs: {days} days each, clean tokens x1.86. Reviews every landing for junk, which narrows the wall estimate.',
-    systems: 'With the team, splits one model across up to {split} cards: memory limit {mem} parameters on V100s.',
-    scaling: 'Measured horizon 100x your farthest clean dot (not 10x). Blind runs past it go wrong {blind}% of the time, not 30%.',
-    infra: 'Hangs x{mult} as often, and each costs ~{lost} h instead of ~19 h.',
-    evals: 'Catches leaked test sets at every landing. Red-teams a release in {rt} days: no scandal risk.',
-    optim: '{state} every run lands 2.5% under the line (worth ~1.7x compute). Halves NaNs.'
+    data: 'Cleans the crawl in {days} days a job (+86% fresh text, a bit less each time). Checks every landing for junk, which narrows the data wall estimate.',
+    systems: 'With the team, one model can spread over up to {split} cards: the biggest that fits is {mem} parameters on V100s.',
+    scaling: 'Sees 100x past your biggest result (not 10x). A blind run goes wrong {blind}% of the time, not 30%.',
+    infra: 'Cards drop out x{mult} as often, and each drop costs about {lost} hours instead of about 19.',
+    evals: 'Catches test sets that leaked into the crawl at every landing. Safety-tests a release in {rt} days: no scandal risk.',
+    optim: '{state} every run lands 2.5% better than the line (worth ~1.7x compute). Halves blow-ups (NaN).'
   };
 
   W.decisions = {
     acqui: { from: 'HALCYON', title: 'Halcyon wants to buy the team',
       body: 'We’ll buy the team: $4M a head, {total} in all. Your people get rich. FRONTIER disappears.' },
     strategic: { from: 'HALCYON', title: 'Halcyon makes an offer for the company',
-      body: 'Your {C} result got our attention. {price} for all of FRONTIER, cash. Your people keep their jobs, under us.' },
+      body: 'Your best model, {C} short of GPT-3, got our attention. {price} for all of FRONTIER, cash. Your people keep their jobs, under us.' },
     boardNote: 'You own {stake}: below 50%, the board decides. It has accepted.',
-    termA: { from: 'LEAD INVESTOR (FICTIONAL)', title: 'Series A term sheet', body: 'Two dots, one line. {cash} at a {post} post.' },
-    termB: { from: 'GROWTH INVESTOR (FICTIONAL)', title: 'Series B term sheet', body: 'A dot past 3e22 after the API boom. {cash} at a {post} post.' },
-    bridge: { from: 'ANGEL SYNDICATE (FICTIONAL)', title: 'Bridge note', body: '{cash} now for {pct} of the company. No dots required.' },
+    termA: { from: 'LEAD INVESTOR (FICTIONAL)', title: 'Series A term sheet', body: 'Two saved models on one line. {cash} at a {post} post.' },
+    termB: { from: 'GROWTH INVESTOR (FICTIONAL)', title: 'Series B term sheet', body: 'A model within 10x of GPT-3 after the API boom. {cash} at a {post} post.' },
+    bridge: { from: 'ANGEL SYNDICATE (FICTIONAL)', title: 'Bridge note', body: '{cash} now for {pct} of the company. No proof required.' },
     meridian: { from: 'MERIDIAN CLOUD (FICTIONAL)', title: 'Meridian: $50M in compute credits',
       body: '{n} V100s reserved for you, ready in {weeks} weeks, paid from $50M of credits, never from your bank. Our cloud only. We see every checkpoint 7 days before anyone else, and we decide about open weights.' },
     meridian2: { from: 'MERIDIAN CLOUD (FICTIONAL)', title: 'Meridian, second offer', body: '{n} V100s, ready in {weeks} weeks, for 10% of FRONTIER. Same terms: our cloud only, first look.' },
@@ -83,7 +83,7 @@
     demandTom: { title: 'Tom needs a week off', body: '“I’ve been up every night. I need a week off.”' },
     demandSunhee: { title: 'Sun-hee wants to publish the schedule trick', body: '“The schedule trick is mine. I want to publish it.”' },
     scandal: { title: 'Scandal: {what}', body: '{detail}' },
-    open: { from: 'THE FIELD', title: 'Open the weights?', body: 'Grad students want the weights of your published {C} model.' },
+    open: { from: 'THE FIELD', title: 'Open the weights?', body: 'Grad students want the weights of your published model ({C} short of GPT-3).' },
     december: { from: 'PRIYA RAMAN', title: 'Priya is leaving to start something safer', body: '“{names} and I want to start something safer. We’re telling you first.”' },
     landing: { title: 'Run {id} landed' }
   };

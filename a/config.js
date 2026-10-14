@@ -40,10 +40,14 @@
     rentCap: [['2020-01-01', 64], ['2020-02-01', 128], ['2020-03-01', 256], ['2020-05-28', 128], ['2020-06-11', 64], ['2020-09-01', 128]],
     renewRefuseFrom: '2020-06-11', renewRefuseShare: 0.35,   // after the API boom some renewals are refused
     buy: {
-      dgx1: { cards: 8, type: 'v100', price: 149000, leadDays: 42, from: '2020-01-01', label: 'DGX-1 (8 V100)' },
-      dgxa100: { cards: 8, type: 'a100', price: 199000, leadDays: 70, from: '2020-05-14', label: 'DGX A100 (8 A100)' }
+      dgx1: { cards: 8, type: 'v100', price: 149000, leadDays: 42, from: '2020-01-01', label: 'DGX-1 (8 V100)', short: 'DGX-1', yearCap: 64 },
+      dgxa100: { cards: 8, type: 'a100', price: 199000, leadDays: 70, from: '2020-05-14', label: 'DGX A100 (8 A100)', short: 'DGX A100', yearCap: 64 }
     },
-    buyMaxUnits: 64,
+    buyMaxUnits: 64,               // per order; the reseller also caps each item per year for a startup (yearCap)
+    shelfUnits: [1, 8, 32, 64],    // the grey shelf item on the Cluster row: the first of these that costs more than your cash
+    cardLifeDays: 912,             // an owned card is written off over two and a half years: the "about $25 a day owned" line
+    labValue: { v100: 18625, a100: 24875, v100Day: 59.52 },   // "your lab owns": a V100 is $18,625 (a DGX-1 / 8), an A100 $24,875, a V100-day of saved work is January's $2.48 x 24
+    desperation: { months: 6, floor: 0.6 },                   // under 6 months until broke, Series A and B post-money x (0.6 + 0.4 x months / 6)
     covidOrderFrom: '2020-03-01', covidOrderTo: '2020-06-30', covidLeadExtra: 28,
     boomFrom: '2020-05-28', boomLeadExtra: 28, boomPriceMult: 1.15,
     rentOutPerHour: { v100: 1.90, a100: 3.80 }, rentOutDays: 30,
@@ -53,7 +57,7 @@
     meridian: {
       credits: 50000000, rate: 2.48, cards: 768, leadDays: 56, needC: 1e21, from: '2020-04-01',
       firstLookDays: 7, queueFrom: '2020-06-11', queueFull: 1.5, queueHalf: 10,
-      second: { from: '2020-06-15', cards: 384, stakeMult: 0.9 },
+      second: { from: '2020-06-15', share: 0.5, stakeMult: 0.9 },
       priorityPerCardMonth: 2500     // pay from the bank to stay at the front of the queue
     },
 
@@ -94,7 +98,18 @@
     W_lo: 14e9, W_hi: 45e9, passes: 4,         // unique clean tokens; up to four passes count as clean
     rawCrawl: 1.0e12,                          // tokens of raw web crawl on disk
     cleanR: 0.62, frayStep: 0.076, frayMax: 5, // samples fray from 62% of the wall, in amounts 1 to 5
-    filter: { mult: 1.862, cost: 150000, costGrowth: 2, daysBase: 30, daysPerSkill: 3, pairMult: 0.6 },
+    // each filter job multiplies the clean tokens; the gain shrinks as the easy junk is gone (x1.86, x1.69, x1.55, ...)
+    filter: { mult: 1.862, decay: 0.8, cost: 150000, costGrowth: 2, daysBase: 30, daysPerSkill: 3, pairMult: 0.6 },
+
+    /* ---------- the year's luck (drawn per year from the seed, each one readable on screen when it matters) ---------- */
+    variety: {
+      rentCapMult: [0.5, 1.5],       // the broker's year: rental capacity x0.5 to x1.5 (Cluster: "broker has N")
+      merCards: [512, 768, 1024],    // the size of Meridian's offer (Cluster: Meridian line)
+      merLead: [35, 63],             // days until Meridian's cards are live
+      heat: [0.7, 1.4],              // investor heat: every round's post-money (Money: fundraising cards)
+      supply: [0, 28],               // supply chain: extra days on every hardware order (Cluster: arrive dates)
+      hangMult: [0.6, 1.6]           // a stable or a flaky year for hangs (Cluster: hangs per 1,000 card-days)
+    },
 
     /* ---------- capabilities ---------- */
     caps: [['paragraph', 2e21, 0.2], ['arithmetic', 1e22, 0.3], ['translation', 6e22, 0.3], ['code', 2.5e23, 0.3]],
@@ -142,7 +157,8 @@
     strategicNeedC: 1e22, strategicMult: 1.5,
 
     /* ---------- score (shown with every ending) ---------- */
-    score: { modelMax: 600, lossTop: 3.0, repMult: 2, revenuePer: 10000, perPerson: 25 },
+    // model: 1,000 at GPT-3's loss, 0 at 3.0 nats, up to 1,150 past it; each decade of compute on the line is worth ~190
+    score: { modelMax: 1000, lossTop: 3.0, modelCap: 1.15, repMult: 2, revenuePer: 20000, perPerson: 10 },
 
     /* ---------- chart ---------- */
     chart: { xMin: 17, xMax: 24.3, yMin: 1.6, yMax: 11.5 },

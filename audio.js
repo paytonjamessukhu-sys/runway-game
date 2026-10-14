@@ -58,6 +58,8 @@ window.FrontierAudio = (function () {
   A.land = function (clean) { if (clean) { tone(660, 260, 0.07, 'sine'); setTimeout(function () { tone(990, 420, 0.06, 'sine'); }, 140); } else { tone(196, 500, 0.09, 'sawtooth'); } };
   A.knock = function () { if (!gate('knock', 200)) return; tone(320, 70, 0.1, 'sine'); setTimeout(function () { tone(300, 80, 0.09, 'sine'); }, 120); };
   A.word = function () { if (!gate('word', 35)) return; tone(2200 + Math.random() * 300, 8, 0.02, 'square'); };
+  A.thunk = function () { tone(92, 220, 0.2, 'sine', 0.004); setTimeout(function () { tone(61, 260, 0.14, 'triangle', 0.004); }, 40); };
+  A.slip = function () { if (!gate('slip', 400)) return; tone(520, 90, 0.035, 'sine', 0.01); setTimeout(function () { tone(780, 140, 0.03, 'sine', 0.01); }, 80); };
   A.bad = function () { tone(150, 600, 0.14, 'sawtooth', 0.01); };
   A.vibrate = function (ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} };
   return A;

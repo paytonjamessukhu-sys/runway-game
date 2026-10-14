@@ -16,7 +16,7 @@
     var s = x < 0 ? '−' : (keepSign && x > 0 ? '+' : ''), a = Math.abs(x);
     if (a >= 1e9) return s + '$' + (a / 1e9).toFixed(a >= 1e10 ? 1 : 2).replace(/\.?0+$/, '') + 'B';
     if (a >= 1e6) return s + '$' + (a / 1e6).toFixed(a >= 1e8 ? 0 : a >= 1e7 ? 1 : 2).replace(/\.0+$/, '').replace(/(\.\d)0$/, '$1') + 'M';
-    if (a >= 1e3) return s + '$' + Math.round(a / 1e3) + 'K';
+    if (a >= 1e3) return s + '$' + Math.round(a / 1e3) + 'k';
     return s + '$' + Math.round(a);
   }
   function sci(C, digits) { if (!(C > 0)) return '0'; var e = Math.floor(log10(C) + 1e-9), m = C / Math.pow(10, e); var t = m.toFixed(digits == null ? 1 : digits); if (+t >= 10) { e++; t = (m / 10).toFixed(digits == null ? 1 : digits); } return t + 'e' + e; }
@@ -49,6 +49,22 @@
       poach: D(CFG.poach.from), seriesB: D(CFG.seriesB.after), open_w: D(CFG.openWeights.from), dec: D('2020-12-21')
     };
 
+    /* ---------------- plain English: the names the screen uses ---------------- */
+    function shortFmt(x) { if (!(x > 0)) return '—'; if (x >= 1000) return Math.round(x).toLocaleString('en-US') + 'x'; if (x >= 10) return Math.round(x) + 'x'; return x.toFixed(1) + 'x'; }
+    function grow(d) { var x = Math.pow(10, d); return (x >= 10 ? Math.round(x) : x.toFixed(1)) + 'x'; }
+    function modelName(run) { var b = bigNum(run.N), k = S.runs.filter(function (r) { return r.id < run.id && r.state !== 'aborted' && bigNum(r.N) === b; }).length; return 'FRONTIER-' + b + (k ? ' v' + (k + 1) : ''); }
+    function daysOfCluster(C) { var f = flopsPerDay(true); if (!(f > 0)) return 'a lot of days'; var d = C / f; return d < 1 ? 'less than a day' : d < 2 ? 'a day' : Math.round(d) + ' days'; }
+    function shortOf(C) { return C > 0 ? CFG.gpt3.C / C : null; }
+    var CAP_SAYS = { paragraph: 'writes a coherent paragraph', arithmetic: 'adds two-digit numbers', translation: 'translates passably', code: 'writes one-line functions, rarely' };
+    var CAP_NEWS = { paragraph: 'It now writes a coherent paragraph.', arithmetic: 'It now adds two-digit numbers.', translation: 'It now translates passably.', code: 'It now writes one-line functions, rarely.' };
+    function modelLine(run) {
+      if (!run.clean) return 'memorised web boilerplate';
+      var says = ['paragraph', 'arithmetic', 'translation', 'code'].filter(function (c) { return run.capsOn.indexOf(c) >= 0; }).map(function (c) { return CAP_SAYS[c]; });
+      if (!says.length) return run.loss > 6 ? 'only makes noise' : run.loss > 4.3 ? 'babbles words' : run.loss > 3.3 ? 'speaks in broken grammar' : 'writes sentences that wander';
+      if (says.length === 1) return says[0];
+      return says.slice(0, -1).join(', ') + ' and ' + says[says.length - 1];
+    }
+
     /* ---------------- physics ---------------- */
     function Lline(C) { return Math.pow(CFG.lineC / C, CFG.lineAlpha); }
     function Dopt(C) { return CFG.gpt3.D * Math.pow(C / CFG.gpt3.C, CFG.tokExp); }
@@ -71,13 +87,24 @@
     function noiseSigma(C) { var u = clamp((log10(C) - 18) / (log10(CFG.gpt3.C) - 18), 0, 1); return CFG.landNoise[0] + (CFG.landNoise[1] - CFG.landNoise[0]) * u; }
 
     /* ---------------- the year ---------------- */
-    var capC = CFG.caps.map(function (c) { return c[1] * Math.pow(10, U(-1, 1) * c[2]); }).sort(function (a, b) { return a - b; });
+    // the year's luck: its own dice, so it never shifts the other draws
+    var vrng = mulberry((Math.imul(seed, 7919) + 0x2545f491) >>> 0), V = CFG.variety;
+    function vU(r) { return r[0] + (r[1] - r[0]) * vrng(); }
+    var world = {
+      capMult: Math.round(vU(V.rentCapMult) * 8) / 8,
+      merCards: V.merCards[Math.floor(vrng() * V.merCards.length)],
+      merLead: Math.round(vU(V.merLead) / 7) * 7,
+      heat: Math.round(Math.exp(vU([Math.log(V.heat[0]), Math.log(V.heat[1])])) * 100) / 100,
+      supply: Math.round(vU(V.supply) / 7) * 7,
+      hangMult: Math.round(Math.exp(vU([Math.log(V.hangMult[0]), Math.log(V.hangMult[1])])) * 100) / 100
+    };
+    var capC =CFG.caps.map(function (c) { return c[1] * Math.pow(10, U(-1, 1) * c[2]); }).sort(function (a, b) { return a - b; });
     var Wtrue = Math.exp(U(Math.log(CFG.W_lo), Math.log(CFG.W_hi)));
     var S = {
-      seed: seed, day: 0, phase: 'play', end: null, started: false,
+      seed: seed, day: 0, phase: 'play', end: null, started: false, world: world, wallScale: 1,
       bank: CFG.seedCash - CFG.dgx1Start, stake: CFG.stakeStart, post: CFG.seedPost, rep: 10,
       team: [], cands: [], gone: [],
-      owned: { v100: CFG.startOwnedV100, a100: 0 }, orders: [], rentals: [], rentOut: [], mer: null,
+      owned: { v100: CFG.startOwnedV100, a100: 0 }, orders: [], bought: {}, rentals: [], rentOut: [], mer: null,
       merOffered: false, merPassed: false, mer2Offered: false, priority: false,
       runs: [], nextRun: 1, selRun: null,
       W: Wtrue * CFG.passes, wallLo: CFG.W_lo * CFG.passes, wallHi: CFG.W_hi * CFG.passes, filters: 0, filterJob: null, evidence: [],
@@ -95,6 +122,7 @@
       demands: {}, poachMonth: -1, hangsThisMonth: 0, hangsLastMonth: 0,
       stats: { hangs: 0, nans: 0, apiRevenue: 0, rentOutRevenue: 0, filters: 0, published: 0, shipped: 0, scandals: 0, hires: 0, peak: 0 },
       cashHist: [], computeHist: [], moodHist: [],
+      month: { in: {}, out: {} }, snap: null, slips: [], mile: [], lastHang: null, openedDay: null,
       flags: {}
     };
     var H = {};                // decision handlers by id (kept out of the plain state)
@@ -129,8 +157,8 @@
       if (!p || p.gone) return;
       p.gone = true; p.goneDay = S.day; p.goneWhy = why || 'left';
       if (toRival) { var rv = rivalBy(toRival); if (rv) { rv.extra += CFG.rivalPassBoost; rv.gained.push(p.first); } p.goneTo = rv ? rv.name : toRival; }
-      if (S.filterJob && S.filterJob.who === p.key) { S.filterJob = null; log('Filter job stopped: ' + p.first + ' left.'); }
-      if (S.redteam && p.role === 'evals') { var rt = S.redteam; S.redteam = null; log('Red-team stopped: ' + p.first + ' left. The release waits for your choice.'); landingDecision(runById(rt.runId), true); }
+      if (S.filterJob && S.filterJob.who === p.key) { S.filterJob = null; log('Cleaning the crawl stopped: ' + p.first + ' left.'); }
+      if (S.redteam && p.role === 'evals') { var rt = S.redteam; S.redteam = null; log('Safety test stopped: ' + p.first + ' left. The release waits for your choice.'); landingDecision(runById(rt.runId), true); }
       log(p.first + ' left' + (p.goneTo ? ' for ' + p.goneTo : '') + ': ' + p.goneWhy + '.', 'people');
       emit('leave', { key: p.key });
     }
@@ -143,6 +171,9 @@
     function hasInfra() { return byRole('infra').length > 0; }
     function hasScaling() { return byRole('scaling').length > 0; }
     function hasEvals() { return byRole('evals').length > 0; }
+    function hangRate() { return CFG.hangPerCardDay * S.world.hangMult; }
+    // the clean-token gain of the next filter job: x1.86, then less each time as the easy junk is gone
+    function filterMult(n) { if (n == null) n = S.filters + (S.filterJob ? 1 : 0); return 1 + (CFG.filter.mult - 1) * Math.pow(CFG.filter.decay, n); }
     function sunheeM() { var p = person('sunhee'); return p && effSkill(p) > 0 && S.day - p.joined >= CFG.sunheeDelay ? CFG.sunheeBend : 1; }
     function filterDays() {
       var ds = byRole('data'); if (!ds.length) return null;
@@ -180,15 +211,16 @@
       var f = 0; CFG.pools.forEach(function (pool) { var i = poolInfo(pool); f += (includeIdle ? i.total - i.serving - i.lent : i.training) * cardFlops(pool); }); return f;
     }
     function rentPrice() { return sched(CFG.rentPrice, S.day); }
-    function rentCap() { return sched(CFG.rentCap, S.day); }
+    function rentCap() { return Math.max(CFG.rentBlock, Math.round(sched(CFG.rentCap, S.day) * S.world.capMult / CFG.rentBlock) * CFG.rentBlock); }
     function rentedCount() { var n = 0; S.rentals.forEach(function (r) { if (S.day < r.end) n += r.n; }); return n; }
     function rentDaily() { var t = 0; S.rentals.forEach(function (r) { if (rentalLive(r)) t += r.n * r.price * 24; }); return t; }
     function leadFor(item, day) {
       var spec = CFG.buy[item], lead = spec.leadDays;
       if (day >= DAY.covidOrderFrom && day <= DAY.covidOrderTo) lead += CFG.covidLeadExtra;
       if (day >= DAY.boom) lead += CFG.boomLeadExtra;
-      return lead;
+      return lead + S.world.supply;
     }
+    function buyLeft(item) { return Math.max(0, CFG.buy[item].yearCap - (S.bought[item] || 0)); }
     function buyPrice(item, day) { return Math.round(CFG.buy[item].price * (day >= DAY.boom ? CFG.boomPriceMult : 1)); }
 
     /* ---------------- money ---------------- */
@@ -241,7 +273,7 @@
     /* ---------------- endings ---------------- */
     function score() {
       var b = bestRun(), sc = CFG.score, model = 0, Ltxt = 'no clean model';
-      if (b) { model = Math.round(sc.modelMax * clamp((sc.lossTop - b.loss) / (sc.lossTop - CFG.gpt3.L), 0, 1.2)); Ltxt = sci(b.Cland) + ' FLOPs at ' + b.loss.toFixed(3) + ' nats'; }
+      if (b) { model = Math.round(sc.modelMax * clamp((sc.lossTop - b.loss) / (sc.lossTop - CFG.gpt3.L), 0, sc.modelCap)); Ltxt = modelName(b) + ', ' + (b.Cland >= CFG.gpt3.C * CFG.gpt3.tolC ? 'GPT-3 size' : shortFmt(shortOf(b.Cland)) + ' short of GPT-3') + ', error score ' + b.loss.toFixed(2); }
       var rep = Math.round(S.rep * sc.repMult), rev = Math.round(S.stats.apiRevenue / sc.revenuePer), ppl = staff().length * sc.perPerson;
       var miracle = !!(b && b.Cland >= CFG.gpt3.C * CFG.gpt3.tolC && b.loss <= CFG.gpt3.L * CFG.gpt3.tolL);
       return { total: model + rep + rev + ppl, model: model, rep: rep, revenue: rev, people: ppl, best: Ltxt, miracle: miracle, bestC: b ? b.Cland : 0, bestL: b ? b.loss : null };
@@ -249,8 +281,8 @@
     function gapLine() {
       var b = bestRun(); if (!b) return 'You never landed a clean model.';
       var dec = log10(CFG.gpt3.C / b.Cland), dl = b.loss / CFG.gpt3.L - 1;
-      if (b.Cland >= CFG.gpt3.C * CFG.gpt3.tolC && b.loss <= CFG.gpt3.L * CFG.gpt3.tolL) return 'Your best model (' + sci(b.Cland) + ' FLOPs, ' + b.loss.toFixed(3) + ' nats) matches GPT-3 (' + CFG.gpt3.L + ' nats). The miracle.';
-      return 'Your best model: ' + sci(b.Cland) + ' FLOPs at ' + b.loss.toFixed(3) + ' nats, ' + (dec > 0 ? dec.toFixed(2) + ' decades of compute short of' : 'past') + ' GPT-3 and ' + (dl >= 0 ? pct(dl, 1) + ' above' : pct(-dl, 1) + ' below') + ' its loss (1.763).';
+      if (b.Cland >= CFG.gpt3.C * CFG.gpt3.tolC && b.loss <= CFG.gpt3.L * CFG.gpt3.tolL) return 'Your best model, ' + modelName(b) + ', matches GPT-3: error score ' + b.loss.toFixed(2) + ' against its ' + CFG.gpt3.L + '. The miracle.';
+      return 'Your best model: ' + modelName(b) + ', ' + (dec > 0 ? shortFmt(shortOf(b.Cland)) + ' short of' : 'past') + ' GPT-3, with an error score ' + (dl >= 0 ? pct(dl, 1) + ' above' : pct(-dl, 1) + ' below') + ' its 1.763.';
     }
     function endYear(kind, reason) {
       if (S.phase === 'over') return;
@@ -264,14 +296,14 @@
 
     /* ---------------- the wall estimate (evidence from read samples and data reviews) ---------------- */
     function addEvidence(amt, tokens, run, src) {
-      var k = Math.pow(CFG.filter.mult, S.filters - run.filtersAtLaunch);   // translate to today's wall
+      var k = S.wallScale / run.scaleAtLaunch;   // translate to today's wall
       var lo = S.wallLo, hi = S.wallHi, txt;
-      if (amt === 0) { lo = Math.max(lo, tokens / CFG.cleanR * k); txt = 'clean at ' + bigNum(tokens) + ' tokens'; }
-      else if (amt === CRAWL) { hi = Math.min(hi, tokens * k); txt = 'crawl at ' + bigNum(tokens) + ' tokens (past the wall)'; }
+      if (amt === 0) { lo = Math.max(lo, tokens / CFG.cleanR * k); txt = 'clean at ' + bigNum(tokens) + ' of text'; }
+      else if (amt === CRAWL) { hi = Math.min(hi, tokens * k); txt = 'web crawl at ' + bigNum(tokens) + ' of text (past the wall)'; }
       else {
         var rLo = CFG.cleanR + (amt - 1) * CFG.frayStep, rHi = amt >= CFG.frayMax ? 1 : CFG.cleanR + amt * CFG.frayStep;
         lo = Math.max(lo, tokens / rHi * k); hi = Math.min(hi, tokens / rLo * k);
-        txt = amt + ' junk fragment' + (amt > 1 ? 's' : '') + ' at ' + bigNum(tokens) + ' tokens';
+        txt = amt + ' junk fragment' + (amt > 1 ? 's' : '') + ' at ' + bigNum(tokens) + ' of text';
       }
       if (hi < lo) { var m = Math.sqrt(hi * lo); lo = m; hi = m; }
       var changed = lo > S.wallLo * 1.001 || hi < S.wallHi * 0.999;
@@ -371,7 +403,7 @@
       var free = poolFree(pool), cards = Math.max(0, Math.min(Math.round(o.gpus == null ? free : +o.gpus), free));
       var C = 6 * N * Dt, type = poolType(pool), eff = scaleEff(cards), perDay = cards * CFG.card[type].flops * eff;
       var days = perDay > 0 ? C / perDay : Infinity;
-      var eq = cards * CFG.card[type].eq, lam = CFG.hangPerCardDay * eq * infraMult(), lostPer = hasInfra() ? CFG.hangLost * 0 + CFG.hangLostInfra : CFG.hangLost + (S.day >= DAY.hangCovidFrom && S.day <= DAY.hangCovidTo ? CFG.hangCovidExtra : 0);
+      var eq = cards * CFG.card[type].eq, lam = hangRate() * eq * infraMult(), lostPer = hasInfra() ? CFG.hangLost * 0 + CFG.hangLostInfra : CFG.hangLost + (S.day >= DAY.hangCovidFrom && S.day <= DAY.hangCovidTo ? CFG.hangCovidExtra : 0);
       var rewind = hasInfra() ? CFG.hangRewindInfra : CFG.hangRewind;
       var expHangs = lam * days, expLost = expHangs * (lostPer + rewind);
       var nu = CFG.nanPerDay * Math.pow(N / 1e9, CFG.nanSizeExp) * (sunheeM() < 1 ? CFG.nanSunhee : 1), expNan = nu * days, expNanLost = expNan * CFG.nanRewind;
@@ -389,16 +421,16 @@
       var paydays = []; if (isFinite(land)) for (var d = Math.floor(S.day) + 1; d <= Math.min(land, CFG.yearDays); d++) if (dom(d) === 1) paydays.push(d);
       var warns = [], blockers = [];
       if (cards < 1) blockers.push(free < 1 ? 'No free cards in ' + CFG.poolNames[pool] + '.' : 'Pick at least one card.');
-      if (N > maxN * 1.0001) blockers.push('Memory: ' + bigNum(N) + ' parameters do not fit. Limit here is ' + bigNum(maxN) + (split() === 1 ? ' (one card holds ~1B with Adam). A systems person splits a model across cards.' : ' (' + Math.min(split(), cards) + ' cards x ' + bigNum(CFG.card[type].mem) + ').'));
+      if (N > maxN * 1.0001) blockers.push('Memory: ' + bigNum(N) + ' parameters do not fit. The biggest model that fits here is ' + bigNum(maxN) + (split() === 1 ? ' (one card holds ~1B with Adam). A systems person splits a model across cards.' : ' (' + Math.min(split(), cards) + ' cards x ' + bigNum(CFG.card[type].mem) + ').'));
       var wallR = Dt / S.W, wLo = Dt / S.wallHi, wHi = Dt / S.wallLo;
-      if (Dt > S.wallHi) warns.push({ lvl: 'bad', t: 'Data: ' + bigNum(Dt) + ' tokens is past the clean-data wall (at most ' + bigNum(S.wallHi) + '). The result will be junk and prove nothing.' });
-      else if (Dt > S.wallLo) warns.push({ lvl: 'warn', t: 'Data: ' + bigNum(Dt) + ' tokens may cross the wall (est. ' + bigNum(S.wallLo) + '–' + bigNum(S.wallHi) + '). Past it, the result proves nothing.' });
-      else if (Dt > S.wallLo * CFG.cleanR) warns.push({ lvl: 'note', t: 'Data: samples may start to fray (junk appears from ' + Math.round(CFG.cleanR * 100) + '% of the wall).' });
+      if (Dt > S.wallHi) warns.push({ lvl: 'bad', t: 'Data: ' + bigNum(Dt) + ' of text is past the data wall (at most ' + bigNum(S.wallHi) + '). The result will be junk and prove nothing.' });
+      else if (Dt > S.wallLo) warns.push({ lvl: 'warn', t: 'Data: ' + bigNum(Dt) + ' of text may cross the data wall (est. ' + bigNum(S.wallLo) + '–' + bigNum(S.wallHi) + '). Past it, the result proves nothing.' });
+      else if (Dt > S.wallLo * CFG.cleanR) warns.push({ lvl: 'note', t: 'Data: the model’s words may start to fray (junk appears from ' + Math.round(CFG.cleanR * 100) + '% of the wall).' });
       if (isFinite(land) && land > CFG.yearDays) warns.push({ lvl: 'bad', t: 'Calendar: lands ~' + (land >= CFG.yearDays + 365 ? 'next year or later' : fmtDay(land - 366) + ' 2021') + ', after 31 Dec. It will not count.' });
-      if (isFinite(runwayAtLand) && bankAtLand < 0) warns.push({ lvl: 'bad', t: 'Money: at today’s burn the bank hits zero before it lands.' });
-      else if (isFinite(runwayAtLand) && runwayAtLand < 3) warns.push({ lvl: 'warn', t: 'Money: ' + runwayAtLand.toFixed(1) + ' months of runway left when it lands.' });
-      if (beyond) warns.push({ lvl: 'warn', t: 'Projection: past your measured horizon (' + sci(hz) + '). ' + Math.round(bl * 100) + '% of blind runs land 2–5% above the line' + (hasScaling() ? '.' : '. A scaling person pushes the horizon 100x out.') });
-      if (pen > 1.004) warns.push({ lvl: 'note', t: 'Shape: ' + (N > rec.N ? 'too many parameters' : 'too many tokens') + ' for this compute (recipe: ' + bigNum(rec.N) + ' params on ' + bigNum(rec.D) + ' tokens). Costs +' + pct(pen - 1, 1) + ' loss.' });
+      if (isFinite(runwayAtLand) && bankAtLand < 0) warns.push({ lvl: 'bad', t: 'Money: at today’s spending the bank hits zero before it lands.' });
+      else if (isFinite(runwayAtLand) && runwayAtLand < 3) warns.push({ lvl: 'warn', t: 'Money: only ' + runwayAtLand.toFixed(1) + ' months until broke when it lands.' });
+      if (beyond) warns.push({ lvl: 'warn', t: 'Blind spot: this is more than ' + (hasScaling() ? 100 : 10) + 'x bigger than your biggest saved model, so ' + Math.round(bl * 100) + '% of runs like it land 2–5% worse than the line' + (hasScaling() ? '.' : '. A scaling person lets you see 100x ahead.') });
+      if (pen > 1.004) warns.push({ lvl: 'note', t: 'Shape: ' + (N > rec.N ? 'too big a model' : 'too much text') + ' for this compute (best mix: a ' + bigNum(rec.N) + '-parameter model reading ' + bigNum(rec.D) + '). Costs +' + pct(pen - 1, 1) + ' on the error score.' });
       if (expHangs >= 0.5) warns.push({ lvl: expLost > days * 0.15 ? 'warn' : 'note', t: 'Hangs: expect ~' + expHangs.toFixed(expHangs < 3 ? 1 : 0) + ', losing ~' + expLost.toFixed(1) + ' days' + (hasInfra() ? '.' : ' (an infra person cuts that by ~5x).') });
       if (pool === 'meridian' && S.mer && isFinite(land)) {
         var qd = Math.max(DAY.merQueue, Math.floor(S.day) + 1); while (qd < CFG.yearDays && dom(qd) !== 1) qd++;
@@ -417,6 +449,47 @@
         warns: warns, blockers: blockers, ok: blockers.length === 0 && S.phase === 'play'
       };
     }
+    // the best shape for a compute budget under the memory limit and a data cap: on recipe if it fits,
+    // otherwise as many parameters as fit and the rest in tokens (or the reverse when data is the limit)
+    function shape(C, maxN, dCap) {
+      var r = recipeForC(C), N = r.N, Dt = r.D;
+      if (N > maxN) { N = maxN; Dt = C / (6 * N); }
+      if (Dt > dCap) { Dt = dCap; N = Math.min(maxN, C / (6 * Dt)); }
+      return { N: clamp(N, CFG.designer.nMin, CFG.designer.nMax), D: clamp(Dt, CFG.designer.dMin, CFG.designer.dMax) };
+    }
+    // a suggested run: the biggest that trains in `days` (hangs included), fits memory, stays under the data cap
+    // (default: the safe end of the wall estimate) and lands before 31 Dec. Used by the quick-size buttons and the bots.
+    function suggest(o) {
+      o = o || {};
+      var pool = o.pool || 'office'; allocate();
+      var free = poolFree(pool), cards = Math.max(0, Math.min(o.cards == null ? free : Math.round(o.cards), free)); if (cards < 1) return null;
+      var perDay = cards * cardFlops(pool) * scaleEff(cards);
+      var daysLeft = Math.max(0.2, CFG.yearDays - 0.75 - S.day), days = Math.max(0.1, Math.min(o.days || daysLeft, daysLeft));
+      var maxN = maxParams(pool, cards) * 0.995, dCap = o.dataCap != null ? o.dataCap : S.wallLo * 0.97;
+      var C = Math.min(perDay * days, o.maxC || Infinity), p = null;
+      for (var it = 0; it < 6; it++) {
+        var sh = shape(C, maxN, dCap);
+        p = design({ pool: pool, gpus: cards, params: sh.N, tokens: sh.D });
+        if (!isFinite(p.daysAll) || p.daysAll <= 0) return p;
+        var Cnext = Math.min(p.C * days / p.daysAll, o.maxC || Infinity);
+        if (Math.abs(Cnext / p.C - 1) < 0.01 || (Cnext > p.C && 6 * maxN * dCap <= p.C * 1.001)) break;
+        C = Cnext;
+      }
+      if (p.daysAll > days * 1.02) { var sh2 = shape(p.C * days / p.daysAll * 0.98, maxN, dCap); p = design({ pool: pool, gpus: cards, params: sh2.N, tokens: sh2.D }); }
+      return p;
+    }
+    // where a training run meets the clean-data wall, from what you know now (the band, translated to the data it launched with)
+    function wallCross(run) {
+      var k = S.wallScale / run.scaleAtLaunch, lo = S.wallLo / k, hi = S.wallHi / k;
+      var qLo = lo / run.D, qHi = hi / run.D;
+      return { qLo: qLo, qHi: qHi, frayLo: CFG.cleanR * qLo, frayHi: CFG.cleanR * qHi, state: qLo >= 1 ? 'safe' : qHi <= run.q ? 'past' : qHi < 1 ? 'will' : 'may', wallLo: lo, wallHi: hi };
+    }
+    // what stopping a training run now would land: compute so far, loss on its curve, and whether you can be sure it is clean
+    function stopPreview(run) {
+      var q = Math.max(run.q, P0), k = S.wallScale / run.scaleAtLaunch, tok = q * run.D, loss = lossAt(run, q), C = q * run.C;
+      var sure = tok <= S.wallLo / k, past = tok > S.wallHi / k;
+      return { q: q, C: C, tokens: tok, loss: loss, clean: sure ? 'clean' : past ? 'past' : 'maybe', onLine: loss <= Lline(C) * CFG.seriesA.onLine, relevant: C >= relevanceNeed(), early: run.q < 0.01 };
+    }
     function launch(o) {
       var p = design(o);
       if (!p.ok) return { ok: false, msg: p.blockers[0] || 'cannot launch now' };
@@ -425,14 +498,14 @@
       var run = {
         id: S.nextRun++, N: p.N, D: p.D, C: p.C, pool: p.pool, want: p.cards, cards: p.cards, launchDay: S.day, state: 'train',
         done: 0, q: 0, pen: p.pen, m: p.m, b: b, eps: gauss() * noiseSigma(p.C), beyond: beyond, horizonAtLaunch: p.horizon,
-        wallAtLaunch: S.W, filtersAtLaunch: S.filters, projAtLaunch: p.proj, landEst: p.land,
+        wallAtLaunch: S.W, filtersAtLaunch: S.filters, scaleAtLaunch: S.wallScale, projAtLaunch: p.proj, landEst: p.land,
         hang: null, hangs: [], nans: [], hz: 0, hzNext: -Math.log(1 - rng()), nz: 0, nzNext: -Math.log(1 - rng()),
         ckNext: 0, ckpts: [], pts: [], lastPtQ: 0,
         landDay: null, Cland: null, loss: null, clean: null, r: null, amt: null, capsOn: [], evals: null,
         published: false, shipped: false, kept: false, pending: null, redteamed: false, scandal: null, firstAuthor: false
       };
       S.runs.push(run); S.selRun = run.id; S.started = true;
-      log('Launched run ' + run.id + ': ' + bigNum(run.N) + ' params on ' + bigNum(run.D) + ' tokens, ' + sci(run.C) + ' FLOPs, ' + run.cards + ' ' + CFG.card[p.type].label + 's, lands ~' + p.landTxt + '.', 'run');
+      log('Started run ' + run.id + ': a ' + bigNum(run.N) + '-parameter model reading ' + bigNum(run.D) + ' of text on ' + run.cards + ' ' + CFG.card[p.type].label + 's, ' + shortFmt(shortOf(run.C)) + ' short of GPT-3 if it lands clean. Lands ~' + p.landTxt + '.', 'run');
       emit('launch', { id: run.id });
       return { ok: true, id: run.id };
     }
@@ -454,7 +527,7 @@
       if (run.cards <= 0) return;
       var type = poolType(run.pool), eq = run.cards * CFG.card[type].eq, perDay = run.cards * CFG.card[type].flops * scaleEff(run.cards);
       // hangs: hazard accumulates with card-days; the dice are drawn once per event, so speed never changes the luck
-      run.hz += CFG.hangPerCardDay * eq * infraMult() * dt;
+      run.hz += hangRate() * eq * infraMult() * dt;
       if (run.hz >= run.hzNext) {
         run.hz = 0; run.hzNext = -Math.log(1 - rng());
         var infra = hasInfra(), covid = S.day >= DAY.hangCovidFrom && S.day <= DAY.hangCovidTo;
@@ -463,10 +536,12 @@
         run.done = Math.max(0, run.done - rew); run.q = run.done / run.C;
         var hour = Math.floor(U(0, 24)), mins = Math.floor(U(0, 60));
         run.hang = { left: lost, start: S.day, hour: hour, min: mins, lost: lost };
+        var node = 1 + Math.floor(wrng() * Math.max(1, Math.ceil(run.cards / 8))), rewD = infra ? CFG.hangRewindInfra : CFG.hangRewind, dollars = (lost + rewD) * run.cards * cardDayCost(run.pool), rewH = rewD * 24;
+        S.lastHang = { run: run.id, node: node, rewindH: rewH >= 10 ? Math.round(rewH) : Math.round(rewH * 10) / 10, dollars: dollars, day: S.day, lostH: Math.round(lost * 24), infra: infra };
         run.hangs.push({ day: S.day, lost: lost, rewind: (infra ? CFG.hangRewindInfra : CFG.hangRewind), q: run.q, infra: infra });
         S.stats.hangs++; S.hangsThisMonth++;
         byRole('infra').forEach(function (p) { moodAdd(p, -CFG.hangMood); });
-        log('Run ' + run.id + ' hung at ' + (hour < 10 ? '0' : '') + hour + ':' + (mins < 10 ? '0' : '') + mins + (infra ? ': auto-restart, ~' + Math.round(lost * 24) + ' h lost.' : ': nobody on call until morning, ~' + Math.round(lost * 24) + ' h lost' + (covid ? ' (building closed)' : '') + '.'), 'hang');
+        log('Node ' + node + ' dropped on run ' + run.id + ' at ' + (hour < 10 ? '0' : '') + hour + ':' + (mins < 10 ? '0' : '') + mins + ', rolled back ' + S.lastHang.rewindH + ' hours, ' + fmtMoney(dollars) + ' gone' + (infra ? ' (auto-restart).' : ' (nobody on call until morning' + (covid ? ', building closed' : '') + ').'), 'hang');
         emit('hang', { id: run.id, infra: infra });
         return;
       }
@@ -478,7 +553,7 @@
         run.done = Math.max(0, run.done - rw); run.q = run.done / run.C;
         run.nans.push({ day: S.day, q: run.q, loss: lossAt(run, Math.max(run.q, P0)) });
         S.stats.nans++;
-        log('Run ' + run.id + ': loss went NaN. Rewound to the last checkpoint, ' + CFG.nanRewind + ' day of training lost.', 'hang');
+        log('Run ' + run.id + ': the numbers blew up (NaN). Rolled back to the last saved point, ' + CFG.nanRewind + ' day of training lost.', 'hang');
         emit('nan', { id: run.id });
       }
       run.done += perDay * dt; run.q = Math.min(1, run.done / run.C);
@@ -499,7 +574,7 @@
         CFG.pools.forEach(function (p) { if (p === r.pool) return; var f = poolFree(p); if (f > 0 && maxParams(p, f) >= r.N && f * cardFlops(p) > bf) { bf = f * cardFlops(p); best = p; } });
         if (!best) { if (!r.stallLogged) { r.stallLogged = true; log('Run ' + r.id + ' is stalled: its ' + CFG.poolNames[r.pool] + ' are gone and no other pool can hold a ' + bigNum(r.N) + '-parameter model.', 'bad'); } return; }
         var from = r.pool, freeB = poolFree(best); r.pool = best; r.want = freeB; r.stallLogged = false; allocate();
-        log('Run ' + r.id + ' moved from ' + CFG.poolNames[from] + ' to ' + r.cards + ' ' + CFG.poolNames[best] + ', resuming from its last checkpoint.', 'run');
+        log('Run ' + r.id + ' moved from ' + CFG.poolNames[from] + ' to ' + r.cards + ' ' + CFG.poolNames[best] + ', resuming from its last saved point.', 'run');
       });
     }
     // move a run to a bigger pool: it resumes from its last checkpoint there (an hour's work, nothing lost but the hour)
@@ -512,12 +587,12 @@
       var r = runById(id); if (!r || r.state !== 'train') return { ok: false, msg: 'no such run in training' };
       var t = moveTarget(r); if (!t) return { ok: false, msg: 'No other pool is faster for this run.' };
       var from = r.pool; r.pool = t.pool; r.want = t.cards; allocate();
-      log('Run ' + r.id + ' moved from ' + CFG.poolNames[from] + ' to ' + r.cards + ' ' + CFG.poolNames[t.pool] + (t.speedup < 1e3 ? ' (x' + t.speedup.toFixed(1) + ' faster).' : ', resuming from its last checkpoint.'), 'run');
+      log('Run ' + r.id + ' moved from ' + CFG.poolNames[from] + ' to ' + r.cards + ' ' + CFG.poolNames[t.pool] + (t.speedup < 1e3 ? ' (x' + t.speedup.toFixed(1) + ' faster).' : ', resuming from its last saved point.'), 'run');
       return { ok: true };
     }
     function abort(id) {
       var run = runById(id); if (!run || run.state !== 'train') return { ok: false, msg: 'no such run in training' };
-      if (run.q < 0.01) { run.state = 'aborted'; run.landDay = S.day; log('Run ' + run.id + ' stopped before its first real checkpoint: nothing to show.', 'run'); staff().forEach(function (p) { moodAdd(p, -CFG.abortMood); }); emit('abort', { id: id }); return { ok: true }; }
+      if (run.q < 0.01) { run.state = 'aborted'; run.landDay = S.day; log('Run ' + run.id + ' stopped before its first real saved point: nothing to show.', 'run'); staff().forEach(function (p) { moodAdd(p, -CFG.abortMood); }); emit('abort', { id: id }); return { ok: true }; }
       land(run, true);
       staff().forEach(function (p) { moodAdd(p, -CFG.abortMood); });
       return { ok: true };
@@ -549,12 +624,13 @@
       });
       run.onLine = run.clean && onLine(run);
       run.newCaps = newCaps.map(function (c) { return c.id; });
-      if (newCaps.length) { staff().forEach(function (p) { moodAdd(p, CFG.capMood); }); S.rep = clamp(S.rep + CFG.capRep * newCaps.length, 0, 100); }
+      if (newCaps.length) { staff().forEach(function (p) { moodAdd(p, CFG.capMood); }); S.rep = clamp(S.rep + CFG.capRep * newCaps.length, 0, 100); newCaps.forEach(function (c) { mile('cap', CAP_NEWS[c.id].replace('It now', modelName(run) + ' now')); }); }
+      if (S.runs.filter(function (r) { return r.state === 'landed'; }).length === 1) mile('first', 'Your first saved model landed: ' + modelName(run) + (run.clean ? ', ' + shortFmt(shortOf(run.Cland)) + ' short of GPT-3.' : ', but it read junk: it proves nothing.'));
       if (byRole('data').length) { ck.read = true; ck.reviewed = true; } if (byRole('data').length) addEvidence(run.amt, run.Dland, run, byRole('data')[0].first + '’s review');
       // passing a rival's latest published result
-      if (run.clean) S.rivals.forEach(function (rv) { var lp = rv.pubs[rv.pubs.length - 1]; if (lp && run.Cland > lp.C && run.loss < lp.L) rv.passedBy = true; });
+      if (run.clean) S.rivals.forEach(function (rv) { var lp = rv.pubs[rv.pubs.length - 1]; if (lp && run.Cland > lp.C && run.loss < lp.L) { if (!rv.passedBy) mile('passed', 'You passed ' + rv.name + '.'); rv.passedBy = true; } });
       S.stats.peak = Math.max(S.stats.peak, run.Cland);
-      log('Run ' + run.id + ' landed' + (partial ? ' early (stopped at ' + Math.round(q * 100) + '%)' : '') + ': ' + sci(run.Cland) + ' FLOPs, loss ' + run.loss.toFixed(3) + (run.clean ? (run.onLine ? ', on the line' : ', above the line') : ', PAST THE WALL: junk') + (newCaps.length ? '. New: ' + newCaps.map(function (c) { return CFG.capNames[c.id]; }).join(', ') : '') + '.', 'run');
+      log(modelName(run) + ' saved' + (partial ? ' early (stopped at ' + Math.round(q * 100) + '%)' : '') + ': error score ' + run.loss.toFixed(2) + (run.clean ? (run.onLine ? ', on the line' : ', above the line') + ', ' + shortFmt(shortOf(run.Cland)) + ' short of GPT-3' : ', PAST THE DATA WALL: it read junk') + (newCaps.length ? '. New skill: ' + newCaps.map(function (c) { return CFG.capNames[c.id].toLowerCase(); }).join(', ') : '') + '.', 'run');
       emit('land', { id: run.id, clean: run.clean, caps: run.newCaps });
       readCheckpoint(run, ck, 'landing');
       // Priya's first-author promise: the next clean landing goes out with her name
@@ -586,31 +662,31 @@
       var opts = [], fl = S.mer ? CFG.meridian.firstLookDays : 0, firstLook = S.mer ? ' Meridian sees it first: it goes out in ' + fl + ' days.' : '';
       function late(delay) { return run.Cland >= relevanceNeed() && S.day + delay >= S.relevantUntil ? ' Too late for the forgotten clock: it runs out ' + fmtDay(S.relevantUntil) + ', before this goes out (' + fmtDay(S.day + delay) + ').' : ''; }
       var need = relevanceNeed(), rel = run.Cland >= need;
-      var relTxt = rel ? 'Resets the forgotten clock to ' + CFG.relevanceDays + ' days.' : 'Too small to keep you relevant (needs ' + sci(need) + ').';
+      var relTxt = rel ? 'Resets the forgotten clock to ' + CFG.relevanceDays + ' days.' : 'Too small to keep the world remembering you (it takes about ' + daysOfCluster(need) + ' of your cluster’s work).';
       if (run.clean) {
         var risk = scandalRisk(run, 'publish'), rep = publishRep(run.Cland);
         var below = S.rivals.filter(function (rv) { return rivalC(rv) < run.Cland; }).map(function (rv) { return rv.name; });
         var rtBusy = !!S.redteam, ev = hasEvals(), rtDays = S.shipped ? CFG.redTeamDaysApi : CFG.redTeamDays;
-        opts.push({ key: 'publish', label: 'Publish', detail: 'Reputation +' + rep + '. ' + relTxt + ' Morale +' + CFG.publishMood + ' for ego-3+ people.' + (below.length ? ' ' + below.join(', ') + ' learn from it: they gain ground in 14 days.' : '') + ' Scandal risk ' + pct(risk) + '.' + firstLook + late(fl),
+        opts.push({ key: 'publish', label: 'Publish', detail: 'Reputation +' + rep + '. ' + relTxt + ' Morale +' + CFG.publishMood + ' for your proudest people.' + (below.length ? ' ' + below.join(' and ') + ' will learn from it and catch up within 14 days.' : '') + ' Scandal risk ' + pct(risk) + '.' + firstLook + late(fl),
           risk: risk });
-        if (ev) opts.push({ key: 'rt_publish', label: 'Red-team, then publish', detail: 'Lena tries to break it for ' + rtDays + ' days first. No scandal risk. Same gains, later.' + firstLook + late(rtDays + fl), disabled: rtBusy, why: rtBusy ? 'Lena is already red-teaming run ' + S.redteam.runId + '.' : '' });
+        if (ev) opts.push({ key: 'rt_publish', label: 'Safety-test first, then publish', detail: 'Lena tries to break it for ' + rtDays + ' days first. No scandal risk. Same gains, later.' + firstLook + late(rtDays + fl), disabled: rtBusy, why: rtBusy ? 'Lena is already safety-testing run ' + S.redteam.runId + '.' : '' });
         var canShip = S.day >= DAY.ship && run.capsOn.indexOf('paragraph') >= 0;
         var sp = shipPlan(run);
-        var shipWhy = S.day < DAY.ship ? 'Nobody sells model APIs yet (opens 11 Jun).' : (run.capsOn.indexOf('paragraph') < 0 ? 'Needs the Paragraphs capability (loss under ' + Lline(S.caps[0].C).toFixed(2) + ').' : '');
+        var shipWhy = S.day < DAY.ship ? 'Nobody sells model APIs yet (opens 11 Jun).' : (run.capsOn.indexOf('paragraph') < 0 ? 'Needs the model to write paragraphs first (an error score under ' + Lline(S.caps[0].C).toFixed(2) + ').' : '');
         opts.push({ key: 'ship', label: 'Ship as an API', detail: canShip ? '+' + fmtMoney(sp.rev) + '/month, ' + sp.n + ' cards of ' + CFG.poolNames[sp.pool] + ' go to serving. Reputation +' + CFG.repShip + '. ' + relTxt + (S.shipped ? ' Replaces the API you ship now.' : '') + ' Scandal risk ' + pct(CFG.scandal.ship) + '.' + firstLook : shipWhy,
           disabled: !canShip, why: shipWhy });
-        if (ev && canShip) opts.push({ key: 'rt_ship', label: 'Red-team, then ship', detail: rtDays + ' days of Lena first. No scandal risk.' + firstLook + late(rtDays + fl), disabled: rtBusy, why: rtBusy ? 'Lena is busy.' : '' });
+        if (ev && canShip) opts.push({ key: 'rt_ship', label: 'Safety-test first, then ship', detail: rtDays + ' days of Lena first. No scandal risk.' + firstLook + late(rtDays + fl), disabled: rtBusy, why: rtBusy ? 'Lena is busy.' : '' });
         opts.push({ key: 'private', label: 'Keep it private', detail: 'Counts for investors and Meridian. Nobody else hears of it: no reputation, no forgotten-clock reset, no help to rivals.' });
       } else {
-        opts.push({ key: 'private', label: 'Shelve it', detail: 'It read ' + (run.amt === CRAWL ? 'web crawl' : 'junk') + ': the run ate ' + bigNum(run.Dland) + ' tokens against a clean wall of ' + bigNum(run.wallAtLaunch) + '. It proves nothing. Filter the data (Data panel) before the next big run.' });
+        opts.push({ key: 'private', label: 'Shelve it', detail: 'It read ' + (run.amt === CRAWL ? 'web crawl' : 'junk') + ': the run read ' + bigNum(run.Dland) + ' of text against a data wall of ' + bigNum(run.wallAtLaunch) + '. It proves nothing. Clean the crawl (Data row) before the next big run.' });
       }
       var evTxt = run.evals.map(function (e) { return CFG.capNames[e.id] + ' ' + Math.round(e.score * 100) + '%' + (e.pass ? ' ✓' : '') + (e.contaminated && e.known ? ' (leaked: Lena caught it)' : ''); }).join(' · ');
-      var body = sci(run.Cland) + ' FLOPs · ' + bigNum(run.N) + ' params on ' + bigNum(run.Dland) + ' tokens · loss ' + run.loss.toFixed(3) + ' nats (line ' + Lline(run.Cland).toFixed(3) + ', ' + (run.loss / Lline(run.Cland) - 1 >= 0 ? '+' : '') + pct(run.loss / Lline(run.Cland) - 1, 1) + ').';
-      var note = run.clean ? 'Evals: ' + evTxt + (run.onLine ? '. On the line: counts toward a Series A.' : '. Above the line: investors will not count it.') : 'Past the clean-data wall.';
+      var body = modelName(run) + ' read ' + bigNum(run.Dland) + ' of text. Error score ' + run.loss.toFixed(2) + ' (lower is better), ' + pct(Math.abs(run.loss / Lline(run.Cland) - 1), 1) + (run.loss / Lline(run.Cland) - 1 >= 0 ? ' above' : ' below') + ' the line.' + (run.clean ? ' ' + shortFmt(shortOf(run.Cland)) + ' short of GPT-3.' : '');
+      var note = run.clean ? (run.onLine ? 'On the line: counts toward a Series A.' : 'Above the line: investors will not count it.') : 'Past the data wall.';
       if (run.clean && !hasEvals() && S.caps.some(function (c) { return c.contaminated && !c.known && run.capsOn.indexOf(c.id) >= 0; })) note += ' Nobody checked for leaked test sets (no evals person).';
       else if (run.clean && !hasEvals() && run.capsOn.some(function (c) { return CFG.noTestSet.indexOf(c) < 0; }) && S.filters === 0) note += ' Unfiltered crawl and no evals person: a test set may have leaked into it.';
       if (S.firstAuthor && run.clean) note += ' Priya expects first author on this one.';
-      decide('landing', { title: (again ? 'Release run ' : 'Run ') + run.id + (again ? '?' : (run.clean ? ' landed' : ' landed past the wall')), body: body, note: note, options: opts, runId: run.id }, function (choice) {
+      decide('landing', { title: (again ? 'Release ' : '') + modelName(run) + (again ? '?' : (run.clean ? ' is saved' : ' read junk')), body: body, note: note, options: opts, runId: run.id }, function (choice) {
         resolveLanding(run, choice);
       });
     }
@@ -620,8 +696,8 @@
       if (rt) {
         var days = S.shipped ? CFG.redTeamDaysApi : CFG.redTeamDays;
         S.redteam = { runId: run.id, until: S.day + days, then: kind };
-        run.pending = 'red-team: ' + kind;
-        log('Lena is red-teaming run ' + run.id + ' for ' + days + ' days.', 'people');
+        run.pending = 'safety test: ' + kind;
+        log('Lena is safety-testing ' + modelName(run) + ' for ' + days + ' days.', 'people');
         return;
       }
       release(run, kind);
@@ -642,11 +718,11 @@
         if (S.firstAuthor) { run.firstAuthor = true; var pr = person('priya'); if (pr) moodAdd(pr, CFG.firstAuthorMood); S.firstAuthor = null; log('Published with Priya as first author: Raman et al.', 'people'); }
         var C = run.Cland;
         at(S.day + CFG.rivalSlideDelay, function () {
-          S.rivals.forEach(function (rv) { var c = rivalC(rv); if (c < C) { var g = CFG.rivalSlideExp * (log10(C) - log10(c)); rv.extra += g; log(rv.name + ' built on your ' + sci(C) + ' paper: +' + g.toFixed(2) + ' decades of progress.', 'rival'); } });
+          var topG = 0; S.rivals.forEach(function (rv) { var c = rivalC(rv); if (c < C) { var g = CFG.rivalSlideExp * (log10(C) - log10(c)); rv.extra += g; if (g > topG) { topG = g; run.copied = { by: rv.name, day: S.day }; } log(rv.name + ' built on your ' + modelName(run) + ' paper and caught up ' + g.toFixed(2) + ' tenfolds of compute.', 'rival'); } });
         }, 'slide');
         var risk = scandalRisk(run, 'publish');
         if (rng() < risk) at(S.day + Math.round(U(CFG.scandal.delay[0], CFG.scandal.delay[1])), function () { scandal(run, 'publish'); }, 'scandal');
-        log('Published run ' + run.id + ' (' + sci(run.Cland) + '): reputation +' + rep + (rel ? ', relevant until ' + fmtDay(S.relevantUntil) : '') + '.', 'run');
+        log('Published ' + modelName(run) + ': reputation +' + rep + (rel ? ', relevant until ' + fmtDay(S.relevantUntil) : '') + '.', 'run');
         if (run.Cland >= CFG.strategicNeedC && !S.strategicOffered) at(S.day + 10, strategicOffer, 'strategic');
       } else if (kind === 'ship') {
         if (S.shipped) { var old = runById(S.shipped.runId); if (old) old.shipped = false; }
@@ -655,7 +731,8 @@
         run.shipped = true; S.stats.shipped++;
         S.rep = clamp(S.rep + CFG.repShip, 0, 100);
         if (rng() < scandalRisk(run, 'ship')) at(S.day + Math.round(U(CFG.scandal.delay[0], CFG.scandal.delay[1])), function () { scandal(run, 'ship'); }, 'scandal');
-        log('Shipped run ' + run.id + ' as an API: ' + fmtMoney(sp.rev) + '/month, ' + sp.n + ' cards serving.', 'run');
+        mile('api', 'Your API is live: ' + fmtMoney(sp.rev) + ' a month from ' + modelName(run) + '.');
+        log('Shipped ' + modelName(run) + ' as an API: ' + fmtMoney(sp.rev) + '/month, ' + sp.n + ' cards serving.', 'run');
       }
       emit('release', { id: run.id, kind: kind });
     }
@@ -666,7 +743,7 @@
       var w = kind === 'ship' ? W.scandals.ship : leak ? W.scandals.leak : W.scandals.repro;
       var what = w[0].replace('{cap}', leak ? CFG.capNames[leak.id].toLowerCase() : ''), detail = w[1].replace('{cap}', leak ? CFG.capNames[leak.id].toLowerCase() : '');
       run.scandal = what; S.stats.scandals++;
-      var term = S.raise.diligence ? ' Your ' + S.raise.diligence.round + ' diligence is withdrawn.' : '';
+      var term = S.raise.diligence ? ' Investors checking your ' + S.raise.diligence.round + ' have walked away.' : '';
       S.raise.diligence = null; S.raise.termBlockUntil = S.day + CFG.scandal.termBlockDays;
       var api = kind === 'ship' && S.shipped ? ' The API is pulled; its serving cards go back to training.' : '';
       if (api) { S.shipped = null; run.shipped = false; }
@@ -675,7 +752,7 @@
         { key: 'retract', label: 'Retract and apologise', detail: 'Reputation −' + Math.round(CFG.scandal.rep * 0.6) + '. Your people respect it: no morale hit.' },
         { key: 'stand', label: 'Stand by it', detail: 'Reputation −' + CFG.scandal.rep + '. Data and evals people lose ' + CFG.scandal.mood + ' morale.' }
       ];
-      decide('scandal', { title: 'Scandal: ' + what, body: detail + term + api, note: 'No term sheets for ' + CFG.scandal.termBlockDays + ' days. The forgotten clock loses ' + CFG.scandal.relevanceCut + ' days (now ' + fmtDay(S.relevantUntil) + ').' + (hasEvals() ? '' : ' An evals person red-teams releases and catches leaked test sets.'), options: opts }, function (c) {
+      decide('scandal', { title: 'Scandal: ' + what, body: detail + term + api, note: 'No term sheets for ' + CFG.scandal.termBlockDays + ' days. The forgotten clock loses ' + CFG.scandal.relevanceCut + ' days (now ' + fmtDay(S.relevantUntil) + ').' + (hasEvals() ? '' : ' An evals person safety-tests releases and catches leaked test sets.'), options: opts }, function (c) {
         if (c === 'retract') S.rep = clamp(S.rep - Math.round(CFG.scandal.rep * 0.6), 0, 100);
         else { S.rep = clamp(S.rep - CFG.scandal.rep, 0, 100); staff().forEach(function (p) { if (p.role === 'data' || p.role === 'evals') moodAdd(p, -CFG.scandal.mood); }); }
       });
@@ -693,19 +770,19 @@
     }
     function roundTerms(round) {
       var mult = repFactor(CFG.repValue);
-      if (round === 'A') { var t = S.day < DAY.crash ? CFG.seriesA.pre : CFG.seriesA.after; return { cash: t.cash, post: Math.round(t.post * mult) }; }
-      if (round === 'B') return { cash: CFG.seriesB.cash, post: Math.round((S.shipped ? CFG.seriesB.postApi : CFG.seriesB.post) * mult) };
+      if (round === 'A') { var t = S.day < DAY.crash ? CFG.seriesA.pre : CFG.seriesA.after; return { cash: t.cash, post: Math.round(t.post * mult * S.world.heat * desperation()) }; }
+      if (round === 'B') return { cash: CFG.seriesB.cash, post: Math.round((S.shipped ? CFG.seriesB.postApi : CFG.seriesB.post) * mult * S.world.heat * desperation()) };
       return { cash: marketClosed() ? CFG.bridge.crashCash : CFG.bridge.cash, stake: CFG.bridge.stake };
     }
     function roundStatus(round) {
       var why = [], ok = true, t = roundTerms(round);
-      if (S.raise.diligence) { ok = false; why.push('Diligence on your ' + S.raise.diligence.round + ' runs until ' + fmtDay(S.raise.diligence.until) + '.'); }
+      if (S.raise.diligence) { ok = false; why.push('Investors are checking your ' + S.raise.diligence.round + ' until ' + fmtDay(S.raise.diligence.until) + '.'); }
       if (S.day < S.raise.termBlockUntil && round !== 'bridge') { ok = false; why.push('Scandal: no term sheets until ' + fmtDay(S.raise.termBlockUntil) + '.'); }
       if (round === 'A') {
         if (S.raise.aDone) return { ok: false, done: true, why: ['Raised.'], terms: t };
         if (marketClosed()) { ok = false; why.push('Market closed after the crash, until 15 Jun.'); }
         var pr = seriesAProof();
-        if (!pr.pair) { ok = false; why.push('Needs two clean dots on the line (within +1.5%), a decade apart, the farthest ≥ ' + sci(S.raise.aNeed) + ', landed after 23 Jan. Yours: ' + (pr.far ? sci(pr.far) : 'none') + '.'); }
+        if (!pr.pair) { ok = false; why.push('Needs two saved models on the line, one ten times bigger than the other, the bigger within ' + shortFmt(shortOf(S.raise.aNeed)) + ' of GPT-3, both saved after 23 Jan. ' + (pr.far ? 'Your best on the line: ' + shortFmt(shortOf(pr.far)) + ' short.' : 'You have none yet.')); }
         var stakeAfter = S.stake * (1 - t.cash / t.post);
         return { ok: ok, why: why, terms: t, stakeAfter: stakeAfter, diligence: CFG.seriesA.diligenceDays, proof: pr };
       }
@@ -714,7 +791,7 @@
         if (!S.raise.aDone) { ok = false; why.push('Needs a Series A first.'); }
         if (marketClosed()) { ok = false; why.push('Market closed until 15 Jun.'); }
         var hasB = cleanRuns().some(function (r) { return r.Cland >= CFG.seriesB.needC && r.landDay >= DAY.seriesB; });
-        if (!hasB) { ok = false; why.push('Needs a clean dot ≥ 3e22 landed after 11 Jun.'); }
+        if (!hasB) { ok = false; why.push('Needs a saved model within ' + shortFmt(shortOf(CFG.seriesB.needC)) + ' of GPT-3, saved after 11 Jun.'); }
         return { ok: ok, why: why, terms: t, stakeAfter: S.stake * (1 - t.cash / t.post), diligence: CFG.seriesB.diligenceDays };
       }
       // bridge
@@ -725,26 +802,26 @@
     function pitch(round) {
       var st = roundStatus(round); if (!st.ok) return { ok: false, msg: st.why[0] || 'not now' };
       if (round === 'bridge') {
-        var t = st.terms; S.bank += t.cash; S.stake *= 1 - t.stake; S.raise.lastBridge = S.day; S.raise.rounds.push({ round: 'Bridge', day: S.day, cash: t.cash, stake: S.stake });
+        var t = st.terms; S.bank += t.cash; flow('raise', t.cash); S.stake *= 1 - t.stake; S.raise.lastBridge = S.day; S.raise.rounds.push({ round: 'Bridge', day: S.day, cash: t.cash, stake: S.stake });
         log('Bridge note: +' + fmtMoney(t.cash) + ' for ' + pct(t.stake) + '. You own ' + pct(S.stake, 1) + '.', 'money');
         emit('cash', { delta: t.cash }); checkBoard();
         return { ok: true };
       }
       S.raise.diligence = { round: round, until: S.day + st.diligence, start: S.day };
-      log('Pitched the Series ' + round + ': investors are in diligence until ' + fmtDay(S.raise.diligence.until) + '.', 'money');
+      log('Pitched the Series ' + round + ': investors are checking until ' + fmtDay(S.raise.diligence.until) + '.', 'money');
       return { ok: true };
     }
     function termSheet(round) {
       var t = roundTerms(round), after = S.stake * (1 - t.cash / t.post), D_ = round === 'A' ? W.decisions.termA : W.decisions.termB;
       var board = after < CFG.boardBelow ? ' That takes you below 50%: the board would sell to Halcyon on the next 1st.' : '';
       decide('term', { from: D_.from, title: D_.title, body: D_.body.replace('{cash}', fmtMoney(t.cash)).replace('{post}', fmtMoney(t.post)),
-        note: 'Runway ' + fmtRunway(runway()) + ' → ' + fmtRunway((S.bank + t.cash) / Math.max(1, burn())) + ' months. You own ' + pct(S.stake, 1) + ' → ' + pct(after, 1) + '.' + board,
+        note: 'Months until broke ' + fmtRunway(runway()) + ' → ' + fmtRunway((S.bank + t.cash) / Math.max(1, burn())) + '. You own ' + pct(S.stake, 1) + ' → ' + pct(after, 1) + '.' + board,
         options: [
-          { key: 'sign', label: 'Sign', detail: '+' + fmtMoney(t.cash) + ' now. Stake ' + pct(S.stake, 1) + ' → ' + pct(after, 1) + '.' + board },
+          { key: 'sign', label: 'Sign', detail: '+' + fmtMoney(t.cash) + ' now. You own ' + pct(S.stake, 1) + ' → ' + pct(after, 1) + '.' + board },
           { key: 'pass', label: 'Walk away', detail: round === 'A' ? 'Next time they want a farthest dot three times further out.' : 'No Series B this year.' }
         ] }, function (c) {
         if (c === 'sign') {
-          S.bank += t.cash; S.stake = after; S.post = t.post;
+          S.bank += t.cash; flow('raise', t.cash); S.stake = after; S.post = t.post; mile('series', 'Series ' + round + ' closed: +' + fmtMoney(t.cash) + ', you own ' + pct(after, 0) + '.');
           if (round === 'A') S.raise.aDone = true; else S.raise.bDone = true;
           S.raise.rounds.push({ round: 'Series ' + round, day: S.day, cash: t.cash, stake: S.stake });
           log('Signed the Series ' + round + ': +' + fmtMoney(t.cash) + ' at a ' + fmtMoney(t.post) + ' post. You own ' + pct(S.stake, 1) + '.', 'money');
@@ -763,8 +840,8 @@
       var heads = staff().length + 1, total = forced ? Math.max(heads * CFG.acquiPerHead, Math.round(S.post)) : heads * CFG.acquiPerHead;
       var D_ = W.decisions.acqui;
       var opts = [{ key: 'accept', label: 'Sell the team', detail: 'The year ends: ACQUIRED. Your people get rich.' }];
-      if (!forced) opts.push({ key: 'decline', label: 'Keep going', detail: 'Runway ' + fmtRunway(runway()) + ' months. They will ask again next month if it stays under ' + CFG.acquiRunway + '.' });
-      decide('buyout', { from: D_.from, title: forced ? 'The board is selling FRONTIER to Halcyon' : D_.title, body: forced ? 'Halcyon pays ' + fmtMoney(total) + ' for FRONTIER, the price of your last round. You no longer control the company.' : D_.body.replace('{total}', fmtMoney(total)), note: forced ? W.decisions.boardNote.replace('{stake}', pct(S.stake, 1)) : 'Halcyon writes to labs with under ' + CFG.acquiRunway + ' months of runway.', options: opts, forced: forced }, function (c) {
+      if (!forced) opts.push({ key: 'decline', label: 'Keep going', detail: fmtRunway(runway()) + ' months until broke. They will ask again next month if it stays under ' + CFG.acquiRunway + '.' });
+      decide('buyout', { from: D_.from, title: forced ? 'The board is selling FRONTIER to Halcyon' : D_.title, body: forced ? 'Halcyon pays ' + fmtMoney(total) + ' for FRONTIER, the price of your last round. You no longer control the company.' : D_.body.replace('{total}', fmtMoney(total)), note: forced ? W.decisions.boardNote.replace('{stake}', pct(S.stake, 1)) : 'Halcyon writes to labs with under ' + CFG.acquiRunway + ' months until broke.', options: opts, forced: forced }, function (c) {
         if (c === 'accept') endYear('acquired', forced ? 'You owned ' + pct(S.stake, 1) + ', below half, so the board sold FRONTIER to Halcyon for ' + fmtMoney(total) + '. Every round you raised gave away control.' : 'With ' + fmtRunway(runway()) + ' months of money left, you sold the team to Halcyon for ' + fmtMoney(total) + '.');
       });
     }
@@ -772,29 +849,30 @@
       if (S.phase !== 'play' || S.strategicOffered) return;
       S.strategicOffered = true;
       var price = Math.round(S.post * CFG.strategicMult), forced = S.stake < CFG.boardBelow, D_ = W.decisions.strategic;
-      var opts = [{ key: 'accept', label: 'Sell FRONTIER', detail: 'Your stake is worth ' + fmtMoney(price * S.stake) + '. The year ends: ACQUIRED.' }];
+      var opts = [{ key: 'accept', label: 'Sell FRONTIER', detail: 'Your share is worth ' + fmtMoney(price * S.stake) + '. The year ends: ACQUIRED.' }];
       if (!forced) opts.push({ key: 'decline', label: 'Stay independent', detail: 'You own ' + pct(S.stake, 1) + '. Keep racing.' });
-      decide('buyout', { from: D_.from, title: D_.title, body: D_.body.replace('{C}', sci(farthestClean())).replace('{price}', fmtMoney(price)), note: forced ? W.decisions.boardNote.replace('{stake}', pct(S.stake, 1)) : 'Below 50% the board would decide this for you.', options: opts, forced: forced }, function (c) {
+      decide('buyout', { from: D_.from, title: D_.title, body: D_.body.replace('{C}', shortFmt(shortOf(farthestClean()))).replace('{price}', fmtMoney(price)), note: forced ? W.decisions.boardNote.replace('{stake}', pct(S.stake, 1)) : 'Below 50% the board would decide this for you.', options: opts, forced: forced }, function (c) {
         if (c === 'accept') endYear('acquired', forced ? 'The board (you own ' + pct(S.stake, 1) + ') sold FRONTIER to Halcyon for ' + fmtMoney(price) + '.' : 'You sold FRONTIER to Halcyon for ' + fmtMoney(price) + '.');
       });
     }
 
     /* ---------------- Meridian ---------------- */
     function meridianOffer(second) {
-      var m = CFG.meridian, n = second ? m.second.cards : m.cards, D_ = second ? W.decisions.meridian2 : W.decisions.meridian;
+      var m = CFG.meridian, n = second ? Math.round(S.world.merCards * m.second.share / 8) * 8 : S.world.merCards, lead = S.world.merLead, D_ = second ? W.decisions.meridian2 : W.decisions.meridian;
       var after = S.stake * m.second.stakeMult;
       var onCloud = activeRuns().filter(function (r) { return r.pool === 'cloud'; }).map(function (r) { return 'run ' + r.id; });
       var lastEnd = 0; S.rentals.forEach(function (r) { lastEnd = Math.max(lastEnd, r.end); });
       var cloudWarn = S.rentals.length ? ' Your rented cards go back by ' + fmtDay(lastEnd) + (onCloud.length ? ' (' + onCloud.join(', ') + ' trains on them; it moves to whatever cards are free).' : '.') : '';
       var opts = [
-        { key: 'sign', label: 'Sign with Meridian', detail: '+' + n + ' V100s live ' + fmtDay(S.day + m.leadDays) + ', paid from credits. No more broker rentals (yours end at term). Publishes and ships wait ' + m.firstLookDays + ' days. Their queue from 11 Jun gives labs far behind the frontier fewer cards.' + cloudWarn + (second ? ' Stake ' + pct(S.stake, 1) + ' → ' + pct(after, 1) + '.' : '') },
+        { key: 'sign', label: 'Sign with Meridian', detail: '+' + n + ' V100s live ' + fmtDay(S.day + lead) + ', paid from credits. No more broker rentals (yours end at term). Publishes and ships wait ' + m.firstLookDays + ' days. Their queue from 11 Jun gives labs far behind the frontier fewer cards.' + cloudWarn + (second ? ' You own ' + pct(S.stake, 1) + ' → ' + pct(after, 1) + '.' : '') },
         { key: 'pass', label: second ? 'Pass' : 'Stay independent', detail: second ? 'No more offers this year.' : 'They will come back after 15 Jun with a smaller offer for equity.' }
       ];
-      decide('meridian', { from: D_.from, title: D_.title, body: D_.body.replace('{n}', n.toLocaleString('en-US')).replace('{weeks}', Math.round(m.leadDays / 7)), note: 'Your farthest clean dot: ' + sci(farthestClean()) + '.', options: opts }, function (c) {
+      decide('meridian', { from: D_.from, title: D_.title, body: D_.body.replace('{n}', n.toLocaleString('en-US')).replace('{weeks}', Math.round(lead / 7)), note: farthestClean() ? 'Your best saved model: ' + shortFmt(shortOf(farthestClean())) + ' short of GPT-3.' : 'You have no saved model yet.', options: opts }, function (c) {
         if (c === 'sign') {
-          S.mer = { cards: n, live: Math.floor(S.day) + m.leadDays, alloc: n, second: !!second, credits: second ? m.credits / 2 : m.credits, signed: S.day };
+          S.mer = { cards: n, live: Math.floor(S.day) + lead, alloc: n, second: !!second, credits: second ? m.credits / 2 : m.credits, signed: S.day };
           if (second) { S.stake = after; checkBoard(); }
           S.rentals.forEach(function (r) { r.noRenew = true; });
+          mile('meridian', 'Meridian signed: ' + n + ' cards live ' + fmtDay(S.mer.live) + '.');
           log('Signed with Meridian: ' + n + ' V100s live ' + fmtDay(S.mer.live) + '.', 'money');
         } else { if (!second) S.merPassed = true; log(second ? 'Passed on Meridian’s second offer.' : 'Passed on Meridian.', 'money'); }
       });
@@ -837,8 +915,8 @@
         body: W.decisions.court.body.replace(/\{first\}/g, d.first).replace('{days}', Math.round(S.day - c.since)).replace('{rival}', rv.name).replace(/\{him\}/g, him(P)).replace('{salary}', fmtMoney(sal)).replace('{he}', he(P)),
         note: W.roles[d.role] + ' · skill ' + d.skill + ' · ' + d.pitch,
         options: [
-          { key: 'hire', label: 'Hire ' + d.first, detail: fmtMoney(sal) + '/month. Runway ' + fmtRunway(runway()) + ' → ' + fmtRunway(S.bank / (burn() + sal)) + ' months.', disabled: !!req, why: req },
-          { key: 'pass', label: 'Let ' + him(P) + ' go', detail: d.first + ' joins ' + rv.name + ': +' + CFG.rivalPassBoost + ' decades of progress for them.' }
+          { key: 'hire', label: 'Hire ' + d.first, detail: fmtMoney(sal) + '/month. Months until broke ' + fmtRunway(runway()) + ' → ' + fmtRunway(S.bank / (burn() + sal)) + '.', disabled: !!req, why: req },
+          { key: 'pass', label: 'Let ' + him(P) + ' go', detail: d.first + ' joins ' + rv.name + ', which jumps ahead ' + grow(CFG.rivalPassBoost) + ' in compute.' }
         ] }, function (ch) {
         if (ch === 'hire') hire(c.key);
         else { S.cands = S.cands.filter(function (x) { return x !== c; }); rv.extra += CFG.rivalPassBoost; rv.gained.push(d.first); S.gone.push({ key: c.key, first: d.first, to: rv.name, day: S.day }); log(d.first + ' joined ' + rv.name + '.', 'rival'); }
@@ -849,18 +927,18 @@
       var p;
       if ((p = person('priya')) && !S.demands.priya && S.day >= 70) demand('priya', W.decisions.demandPriya.title, W.decisions.demandPriya.body, [
         { key: 'yes', label: 'Agree', detail: 'Your next publish carries her name: morale +' + CFG.firstAuthorMood + '. If nothing is published in 90 days (by ' + fmtDay(S.day + 90) + '), she walks.' },
-        { key: 'no', label: 'Refuse', detail: 'Priya walks. You lose your data person: no filter jobs, no landing reviews.' }
+        { key: 'no', label: 'Refuse', detail: 'Priya walks. You lose your data person: nobody to clean the crawl, no landing reviews.' }
       ], function (c) { if (c === 'yes') S.firstAuthor = { due: S.day + 90 }; else walk(person('priya'), 'kestrel', 'refused first author'); });
       if ((p = person('dev')) && !S.demands.dev && S.day - p.joined >= 90) demand('dev', W.decisions.demandDev.title, W.decisions.demandDev.body, [
-        { key: 'yes', label: 'Give him 1%', detail: 'Stake ' + pct(S.stake, 1) + ' → ' + pct(S.stake - 0.01, 1) + '.' },
-        { key: 'no', label: 'Refuse', detail: 'Dev walks to Halcyon (+0.2 decades for them). Memory limit falls back unless another systems person stays.' }
+        { key: 'yes', label: 'Give him 1%', detail: 'You own ' + pct(S.stake, 1) + ' → ' + pct(S.stake - 0.01, 1) + '.' },
+        { key: 'no', label: 'Refuse', detail: 'Dev walks to Halcyon (they jump ahead ' + grow(0.2) + '). The biggest model that fits falls back unless another systems person stays.' }
       ], function (c) { if (c === 'yes') { S.stake -= 0.01; checkBoard(); } else walk(person('dev'), 'halcyon', 'refused equity'); });
       if ((p = person('ayaan')) && !S.demands.ayaan && S.day >= DAY.gpt3 + 1 && p.salary < W.people.ayaan.salaryLate) demand('ayaan', W.decisions.demandAyaan.title, W.decisions.demandAyaan.body, [
         { key: 'yes', label: 'Pay $55K', detail: 'Salary ' + fmtMoney(p.salary) + ' → $55K a month.' },
         { key: 'no', label: 'Refuse', detail: 'Ayaan’s morale −40 (now ' + Math.round(p.mood) + '). Below ' + CFG.moodLow + ' he works at one skill lower.' }
       ], function (c) { var a = person('ayaan'); if (!a) return; if (c === 'yes') { a.salary = W.people.ayaan.salaryLate; moodAdd(a, 10); } else moodAdd(a, -40); });
       if ((p = person('sunhee')) && !S.demands.sunhee && S.day - p.joined >= 45) demand('sunhee', W.decisions.demandSunhee.title, W.decisions.demandSunhee.body, [
-        { key: 'yes', label: 'Let her publish', detail: 'Reputation +6 and she stays. In 30 days every rival lands 2.5% lower too (+0.22 decades for each).' },
+        { key: 'yes', label: 'Let her publish', detail: 'Reputation +6 and she stays. In 30 days every rival gets the same 2.5% better error score (each jumps ahead ' + grow(0.22) + ').' },
         { key: 'no', label: 'Refuse', detail: 'Sun-hee walks to Halcyon, with the trick.' }
       ], function (c) { if (c === 'yes') { S.rep = clamp(S.rep + 6, 0, 100); at(S.day + 30, function () { S.sunheeTrick = true; S.rivals.forEach(function (rv) { rv.extra += 0.22; }); log('Every rival now uses Sun-hee’s schedule trick.', 'rival'); }, 'trick'); } else walk(person('sunhee'), 'halcyon', 'refused her paper'); });
     }
@@ -877,8 +955,8 @@
         note: W.roles[target.role] + ' · skill ' + target.skill + '. Rivals go for whoever is least happy.',
         options: [
           { key: 'match', label: 'Match with a raise', detail: '+' + fmtMoney(match) + '/month (salary x' + CFG.matchMult + '), morale +' + CFG.counterMood + '.' },
-          { key: 'equity', label: 'Counter with equity', detail: 'Stake ' + pct(S.stake, 1) + ' → ' + pct(S.stake - CFG.counterStake, 1) + ', morale +' + CFG.counterMood + '.' },
-          { key: 'let', label: 'Let ' + him(target) + ' go', detail: target.first + ' joins ' + rv.name + ' (+' + CFG.rivalPassBoost + ' decades for them).' }
+          { key: 'equity', label: 'Counter with equity', detail: 'You own ' + pct(S.stake, 1) + ' → ' + pct(S.stake - CFG.counterStake, 1) + ', morale +' + CFG.counterMood + '.' },
+          { key: 'let', label: 'Let ' + him(target) + ' go', detail: target.first + ' joins ' + rv.name + ' (they jump ahead ' + grow(CFG.rivalPassBoost) + ').' }
         ] }, function (c) {
         var t = person(target.key); if (!t) return;
         if (c === 'match') { t.salary += match; moodAdd(t, CFG.counterMood); }
@@ -891,13 +969,13 @@
       var grey = S.mer ? 'Meridian: no. Their contract gives them the say over open weights.' : S.stake < CFG.boardBelow ? 'The board: no.' : '';
       var pub = 0; cleanRuns().forEach(function (r) { if (r.published && r.Cland > pub) pub = r.Cland; });
       var ow = CFG.openWeights;
-      decide('open', { from: W.decisions.open.from, title: W.decisions.open.title, body: W.decisions.open.body.replace('{C}', sci(pub)), note: grey,
+      decide('open', { from: W.decisions.open.from, title: W.decisions.open.title, body: W.decisions.open.body.replace('{C}', shortFmt(shortOf(pub))), note: grey,
         options: [
-          { key: 'open', label: 'Open the weights', detail: 'Reputation +' + ow.rep + '. Ines and Kofi will join now at ' + Math.round(ow.earlySalary * 100) + '% salary. Kestrel +' + ow.kestrel + ' and Northwind +' + ow.northwind + ' decades within a week.', disabled: !!grey, why: grey },
-          { key: 'no', label: 'Keep them closed', detail: 'They build on Northwind’s instead: Northwind +' + ow.passNorthwind + ' decades.' }
+          { key: 'open', label: 'Open the weights', detail: 'Reputation +' + ow.rep + '. Ines and Kofi will join now at ' + Math.round(ow.earlySalary * 100) + '% salary. Kestrel jumps ahead ' + grow(ow.kestrel) + ' and Northwind ' + grow(ow.northwind) + ' within a week.', disabled: !!grey, why: grey },
+          { key: 'no', label: 'Keep them closed', detail: 'They build on Northwind’s instead: Northwind jumps ahead ' + grow(ow.passNorthwind) + '.' }
         ] }, function (c) {
         if (c === 'open') {
-          S.opened = true; S.rep = clamp(S.rep + ow.rep, 0, 100);
+          S.opened = true; S.openedDay = S.day; S.rep = clamp(S.rep + ow.rep, 0, 100);
           ['ines', 'kofi'].forEach(function (k) { if (!S.team.some(function (p) { return p.key === k; }) && !S.gone.some(function (g) { return g.key === k; })) { var cd = candidate(k); if (!cd) { cd = { key: k, since: S.day, courtBy: S.day + CFG.courtDays }; S.cands.push(cd); } cd.ask = Math.round(W.people[k].salary * ow.earlySalary); } });
           at(S.day + 7, function () { rivalBy('kestrel').extra += ow.kestrel; rivalBy('northwind').extra += ow.northwind; log('Kestrel and Northwind fine-tuned your open weights.', 'rival'); }, 'open');
           log('Opened the weights.', 'run');
@@ -926,19 +1004,19 @@
     function rivalPublish(rv) {
       var c = rivalC(rv), L = Lline(c) * rv.offset * (S.sunheeTrick ? CFG.sunheeBend : 1);
       rv.pubs.push({ C: c, L: L, day: S.day }); rv.passedBy = false;
-      log(rv.name + ' published a ' + bigNum(Nopt(c)) + '-parameter model (' + sci(c) + ' FLOPs, loss ' + L.toFixed(2) + ').', 'rival');
+      log(rv.name + ' published a ' + bigNum(Nopt(c)) + '-parameter model, ' + shortFmt(shortOf(c)) + ' short of GPT-3 (error score ' + L.toFixed(2) + ').', 'rival');
       emit('rival', { key: rv.key });
     }
     function payday() {
       var pay = payroll();
-      S.bank -= pay;
+      S.bank -= pay; flow('payroll', -pay);
       S.lastPayroll = { day: S.day, pay: pay, parts: { base: CFG.base, salaries: salaries(), upkeep: upkeep(), priority: priorityCost() } };
       log('Payroll ' + fmtMoney(pay) + ' (salaries ' + fmtMoney(salaries()) + ', base ' + fmtMoney(CFG.base) + ', card upkeep ' + fmtMoney(upkeep()) + (priorityCost() ? ', Meridian priority ' + fmtMoney(priorityCost()) : '') + ').', 'money');
       emit('payroll', { pay: pay });
       if (S.bank < 0) {
         var b = burnParts();
         var spent = 0; S.orders.forEach(function (o) { spent += o.price; });
-        endYear('bankrupt', 'Payroll on ' + fmtDay(S.day) + ' needed ' + fmtMoney(pay) + ' and the bank went to ' + fmtMoney(S.bank) + '. Monthly burn was ' + fmtMoney(burn()) + (b.rent > 0 ? ', ' + fmtMoney(b.rent) + ' of it rented cards' : '') + '.' + (S.repossessed != null ? ' The broker had already taken back your rented cards on ' + fmtDay(S.repossessed) + ', when the bank first went negative.' : '') + (spent > 0 ? ' ' + fmtMoney(spent) + ' was tied up in hardware still on order.' : ''));
+        endYear('bankrupt', 'Payroll on ' + fmtDay(S.day) + ' needed ' + fmtMoney(pay) + ' and the bank went to ' + fmtMoney(S.bank) + '. Spending a month was ' + fmtMoney(burn()) + (b.rent > 0 ? ', ' + fmtMoney(b.rent) + ' of it rented cards' : '') + '.' + (S.repossessed != null ? ' The broker had already taken back your rented cards on ' + fmtDay(S.repossessed) + ', when the bank first went negative.' : '') + (spent > 0 ? ' ' + fmtMoney(spent) + ' was tied up in hardware still on order.' : ''));
         return false;
       }
       return true;
@@ -946,7 +1024,7 @@
     function monthStart() {
       var m = monthIdx(S.day);
       S.hangsLastMonth = S.hangsThisMonth; S.hangsThisMonth = 0;
-      if (!payday()) return;
+      if (S.day >= 1 && !payday()) return;
       // morale: big egos sulk when nothing has been published lately
       if (S.day - S.lastPublishDay > CFG.noPaperDays && S.day > 40) staff().forEach(function (p) { if (p.ego >= 4) moodAdd(p, -CFG.noPaperMood); });
       if (S.day - S.lastPublishDay > CFG.repDecayAfter && S.day > 40) S.rep = clamp(S.rep - CFG.repDecay, 0, 100);
@@ -957,6 +1035,7 @@
         var qa = queueAlloc(), was = S.mer.alloc; S.mer.alloc = qa.n; S.mer.allocWhy = qa.why;
         if (qa.n !== was) log('Meridian queue for ' + MON[m] + ': ' + qa.n + ' of ' + S.mer.cards + ' cards (' + qa.why + ').', qa.n < was ? 'bad' : 'money');
       }
+      if (S.day >= 1) { var prevSnap = S.snap, mon = S.month; S.snap = takeSnap(); S.month = { in: {}, out: {} }; buildSlip(prevSnap, mon); } else S.snap = takeSnap();
       if (S.boardSale && S.stake < CFG.boardBelow) { acquiOffer(true); return; }
       if (S.day >= 31 && runway() < CFG.acquiRunway) acquiOffer(false);
       if (S.hangsLastMonth >= 3 && has('tom') && !S.demands.tom) demand('tom', W.decisions.demandTom.title, W.decisions.demandTom.body, [
@@ -981,7 +1060,7 @@
       // history and market notices
       W.news.forEach(function (n) { if (D(n[0]) === d) { S.news.unshift({ day: d, text: n[1], effect: n[2], real: true }); emit('news', { text: n[1] }); } });
       W.market.forEach(function (n) { if (D(n[0]) === d) { S.news.unshift({ day: d, text: n[1], effect: '', real: false }); } });
-      if (d === DAY.crash && S.raise.diligence) { var dl = S.raise.diligence; S.raise.diligence = null; decide('notice', { title: 'Series ' + dl.round + ' withdrawn', body: 'The market crashed today. Your investors pulled out of diligence.', note: 'The venture market reopens on 15 Jun, at post-GPT-3 prices.', options: [{ key: 'ok', label: 'Understood', detail: '' }] }, function () {}); log('Crash: the Series ' + dl.round + ' in diligence was withdrawn.', 'bad'); }
+      if (d === DAY.crash && S.raise.diligence) { var dl = S.raise.diligence; S.raise.diligence = null; decide('notice', { title: 'Series ' + dl.round + ' withdrawn', body: 'The market crashed today. Your investors stopped checking and walked away.', note: 'The venture market reopens on 15 Jun, at post-GPT-3 prices.', options: [{ key: 'ok', label: 'Understood', detail: '' }] }, function () {}); log('Crash: the Series ' + dl.round + ' was withdrawn.', 'bad'); }
       // rivals publish
       S.rivals.forEach(function (rv) { if (d >= rv.nextPub) { rivalPublish(rv); rv.nextPub = d + Math.round(rv.period * U(0.7, 1.3)); } });
       // candidates arrive on the board
@@ -993,11 +1072,12 @@
       S.cands.slice().forEach(function (c) { if (d >= c.courtBy && !c.courted) { c.courted = true; courtDecision(c); } });
       // jobs finishing
       if (S.filterJob && d >= S.filterJob.until) {
-        S.W *= CFG.filter.mult; S.wallLo *= CFG.filter.mult; S.wallHi *= CFG.filter.mult; S.filters++; S.stats.filters++; S.filterJob = null;
-        log('Filter job done: the clean-data wall moved x' + CFG.filter.mult + ' (est. ' + bigNum(S.wallLo) + '–' + bigNum(S.wallHi) + ' tokens). Runs launched from now use the cleaner data.', 'data');
+        var fm = filterMult(S.filters);
+        S.W *= fm; S.wallLo *= fm; S.wallHi *= fm; S.wallScale *= fm; S.filters++; S.stats.filters++; S.filterJob = null;
+        log('The crawl is clean: the data wall moved out x' + fm.toFixed(2) + ' (now est. ' + bigNum(S.wallLo) + '–' + bigNum(S.wallHi) + ' of text). Runs started from now read the cleaner data.', 'data');
         emit('filter', {});
       }
-      if (S.redteam && d >= S.redteam.until) { var rt = S.redteam, run = runById(rt.runId); S.redteam = null; if (run) { run.redteamed = true; run.pending = null; S.caps.forEach(function (c) { if (c.contaminated && run.capsOn.indexOf(c.id) >= 0) c.known = true; }); log('Red-team on run ' + run.id + ' done: nothing found that could blow up.', 'people'); release(run, rt.then); } }
+      if (S.redteam && d >= S.redteam.until) { var rt = S.redteam, run = runById(rt.runId); S.redteam = null; if (run) { run.redteamed = true; run.pending = null; S.caps.forEach(function (c) { if (c.contaminated && run.capsOn.indexOf(c.id) >= 0) c.known = true; }); log('Safety test on ' + modelName(run) + ' done: nothing found that could blow up.', 'people'); release(run, rt.then); } }
       if (S.firstAuthor && d >= S.firstAuthor.due) { var pr = person('priya'); S.firstAuthor = null; if (pr) walk(pr, 'kestrel', 'no paper with her name in 90 days'); }
       // diligence ends: the term sheet arrives
       if (S.raise.diligence && d >= S.raise.diligence.until) { var rd = S.raise.diligence.round; S.raise.diligence = null; termSheet(rd); }
@@ -1016,14 +1096,14 @@
       // forgotten
       if (d >= S.relevantUntil && S.phase === 'play') {
         var need = relevanceNeed();
-        endYear('forgotten', (S.lastRelevant ? 'Your last result the world cared about went out on ' + fmtDay(S.lastRelevant.day) + ' (' + sci(S.lastRelevant.C) + ').' : 'You never published or shipped a result the world cared about.') + ' The world forgets a lab that goes ' + CFG.relevanceDays + ' days without publishing or shipping something within 100x of the frontier (' + sci(frontier()) + ' today). Anything of ' + sci(need) + ' or more would have reset the clock.');
+        endYear('forgotten', (S.lastRelevant ? 'Your last result the world cared about went out on ' + fmtDay(S.lastRelevant.day) + ' (' + shortFmt(shortOf(S.lastRelevant.C)) + ' short of GPT-3).' : 'You never published or shipped a result the world cared about.') + ' The world forgets a lab that goes ' + CFG.relevanceDays + ' days without publishing or shipping something within 100x of the frontier. Anything that took about ' + daysOfCluster(need) + ' of your cluster, or more, would have reset the clock.');
         return;
       }
       S.cashHist.push(Math.round(S.bank)); S.computeHist.push(flopsPerDay(true) / 8.64e19);
     }
     function stepMoney(dt) {
-      var rent = rentDaily() * dt; S.bank -= rent;
-      if (S.shipped) { var r = S.shipped.rev / CFG.daysPerMonth * dt; S.bank += r; S.stats.apiRevenue += r; }
+      var rent = rentDaily() * dt; S.bank -= rent; flow('rent', -rent);
+      if (S.shipped) { var r = S.shipped.rev / CFG.daysPerMonth * dt; S.bank += r; S.stats.apiRevenue += r; flow('api', r); }
       if (S.mer && S.day >= S.mer.live) S.mer.credits = Math.max(0, S.mer.credits - S.mer.alloc * CFG.meridian.rate * 24 * dt);
       if (S.bank < 0 && S.rentals.length) {
         S.rentals = []; S.repossessed = S.day; log('The bank went negative: the broker took back every rented card.', 'bad');
@@ -1076,10 +1156,13 @@
       var spec = CFG.buy[item]; if (!spec) return { ok: false, msg: 'no such item' };
       units = Math.max(1, Math.min(CFG.buyMaxUnits, Math.round(units || 1)));
       if (S.day < D(spec.from)) return { ok: false, msg: spec.label + ' is not on the market until ' + fmtDay(D(spec.from)) + '.' };
+      var left = buyLeft(item); if (left < 1) return { ok: false, msg: 'The reseller has no more ' + spec.label + ' units for you this year (' + spec.yearCap + ' a year).' };
+      units = Math.min(units, left);
       var price = buyPrice(item, S.day) * units; if (price > S.bank) return { ok: false, msg: 'Costs ' + fmtMoney(price) + '; you have ' + fmtMoney(S.bank) + '.' };
       var lead = leadFor(item, S.day);
-      S.bank -= price;
-      S.orders.push({ type: spec.type, cards: spec.cards * units, units: units, arrive: Math.floor(S.day) + lead, ordered: S.day, price: price, label: units + ' x ' + spec.label });
+      S.bank -= price; flow('cards', -price);
+      S.orders.push({ item: item, type: spec.type, cards: spec.cards * units, units: units, arrive: Math.floor(S.day) + lead, ordered: S.day, price: price, label: units + ' x ' + spec.label });
+      S.bought[item] = (S.bought[item] || 0) + units;
       log('Ordered ' + units + ' x ' + spec.label + ' for ' + fmtMoney(price) + ': arrives ' + fmtDay(Math.floor(S.day) + lead) + '.', 'cards');
       emit('cash', { delta: -price });
       return { ok: true };
@@ -1089,7 +1172,7 @@
       var free = poolFree(pool); n = Math.min(Math.round(n || free), free);
       if (n < 1) return { ok: false, msg: 'No idle owned cards.' };
       var cash = n * CFG.rentOutPerHour[poolType(pool)] * 24 * CFG.rentOutDays;
-      S.bank += cash; S.stats.rentOutRevenue += cash;
+      S.bank += cash; S.stats.rentOutRevenue += cash; flow('rentout', cash);
       S.rentOut.push({ pool: pool, n: n, until: Math.floor(S.day) + CFG.rentOutDays });
       log('Rented out ' + n + ' idle ' + CFG.card[poolType(pool)].label + 's for ' + CFG.rentOutDays + ' days: +' + fmtMoney(cash) + '.', 'money');
       emit('cash', { delta: cash });
@@ -1097,18 +1180,18 @@
     }
     function startFilter() {
       var ds = byRole('data'); if (!ds.length) return { ok: false, msg: 'Needs a data person.' };
-      if (S.filterJob) return { ok: false, msg: 'A filter job is already running (until ' + fmtDay(S.filterJob.until) + ').' };
+      if (S.filterJob) return { ok: false, msg: 'The crawl is already being cleaned (until ' + fmtDay(S.filterJob.until) + ').' };
       var cost = filterCost(), days = filterDays();
       if (cost > S.bank) return { ok: false, msg: 'Costs ' + fmtMoney(cost) + '.' };
-      S.bank -= cost; S.filterJob = { until: Math.floor(S.day) + days, cost: cost, who: ds[0].key, start: S.day, days: days };
-      log('Filter job started (' + ds.map(function (p) { return p.first; }).join(' + ') + '): ' + fmtMoney(cost) + ', ' + days + ' days.', 'data');
+      S.bank -= cost; flow('data', -cost); S.filterJob = { until: Math.floor(S.day) + days, cost: cost, who: ds[0].key, start: S.day, days: days };
+      log('Cleaning the crawl (' + ds.map(function (p) { return p.first; }).join(' + ') + '): ' + fmtMoney(cost) + ', ' + days + ' days.', 'data');
       emit('cash', { delta: -cost });
       return { ok: true };
     }
     function sample(id) {
       var run = id ? runById(id) : (S.selRun ? runById(S.selRun) : null);
       if (!run) { var a = activeRuns(); run = a.length ? a[0] : S.runs[S.runs.length - 1]; }
-      if (!run || !run.ckpts.length) return { ok: false, msg: 'No checkpoint yet.' };
+      if (!run || !run.ckpts.length) return { ok: false, msg: 'Nothing saved to read yet.' };
       var unread = run.ckpts.filter(function (c) { return !c.read; }), ck = unread.length ? unread[unread.length - 1] : run.ckpts[run.ckpts.length - 1];
       return { ok: true, sample: readCheckpoint(run, ck, 'you read it') };
     }
@@ -1146,7 +1229,168 @@
       return { ok: false, msg: 'unknown action ' + name };
     }
 
+    /* ---------------- what the lab is worth, where it stands, the ladder and the monthly slip ---------------- */
+    function flow(kind, amt) { if (!amt) return; var m = S.month; if (amt > 0) m.in[kind] = (m.in[kind] || 0) + amt; else m.out[kind] = (m.out[kind] || 0) - amt; }
+    function mile(kind, text) { S.mile.push({ day: S.day, kind: kind, text: text }); }
+    // "your lab owns": cards at what they cost, plus every clean saved model at the rent of the cards that made it. Fixed prices, no depreciation: it only climbs.
+    function lab() {
+      var lv = CFG.labValue, v = S.owned.v100 * lv.v100 + S.owned.a100 * lv.a100;
+      cleanRuns().forEach(function (r) { v += r.Cland / CFG.card.v100.flops * lv.v100Day; });
+      return v;
+    }
+    function rivalBestC(rv) { var m = 0; rv.pubs.forEach(function (p) { if (p.C > m) m = p.C; }); return m; }
+    function takeSnap() {
+      var rv = {}; S.rivals.forEach(function (r) { rv[r.key] = rivalBestC(r); });
+      var b = bestRun();
+      return { day: S.day, bank: S.bank, runway: runway(), far: farthestClean(), lab: lab(), own: S.stake, burn: burn(), rep: S.rep, err: b ? b.loss : null, rivals: rv, post: S.post, people: staff().length };
+    }
+    function standing() {
+      var rows = [{ key: 'you', name: 'FRONTIER', C: farthestClean(), prev: S.snap ? S.snap.far : 0, you: true }];
+      S.rivals.forEach(function (rv) { rows.push({ key: rv.key, name: rv.name, C: rivalBestC(rv), prev: S.snap ? S.snap.rivals[rv.key] : null, blurb: rv.blurb }); });
+      rows.sort(function (a, b) { return b.C - a.C || (b.you ? 1 : 0) - (a.you ? 1 : 0); });
+      var rank = 1;
+      rows.forEach(function (r, i) { r.short = shortOf(r.C); r.trend = !r.prev && r.C > 0 ? 1 : (r.C > r.prev * 1.0001 ? 1 : 0); if (r.you) rank = i + 1; });
+      return { rows: rows, rank: rank, of: rows.length, gpt3: S.day >= DAY.gpt3 };
+    }
+    function nearestAhead() {
+      var far = farthestClean(), best = null;
+      S.rivals.forEach(function (rv) { var c = rivalBestC(rv); if (c > far && (!best || c < best.C)) best = { rv: rv, C: c }; });
+      return best;
+    }
+    function compProg(far, target) { if (!(far > 0)) return 0; return clamp((log10(far) - 19) / (log10(target) - 19), 0, 1); }
+    function moreText(far, target) { if (!(far > 0)) return 'needs a first saved model'; if (far >= target) return ''; return 'needs ' + shortFmt(target / far).replace(/x$/, '') + 'x more compute'; }
+    function rungDefs() {
+      var far = farthestClean(), d = {}, act = activeRuns();
+      var qMax = 0; act.forEach(function (r) { if (r.q > qMax) qMax = r.q; });
+      var anyRun = S.runs.length > 0, anyLanded = S.runs.some(function (r) { return r.state === 'landed'; });
+      var leftDays = null; act.forEach(function (r) { var type = poolType(r.pool), perDay = r.cards * CFG.card[type].flops * scaleEff(r.cards); var l = perDay > 0 ? (r.C - r.done) / perDay + (r.hang ? r.hang.left : 0) : null; if (l != null && (leftDays == null || l < leftDays)) leftDays = l; });
+      d.start = { id: 'start', label: 'Start a training run', done: anyRun, prog: 0, left: 'a 3-week run on every card', act: 'launch' };
+      d.land = { id: 'land', label: 'Land your first saved model', done: anyLanded, prog: qMax, left: act.length ? (leftDays != null ? Math.ceil(leftDays) + ' days to go' : 'no free cards') : 'start a run first', act: 'watch' };
+      var stA = roundStatus('A'), aTarget = S.raise.aNeed;
+      d.seriesA = { id: 'seriesA', label: 'Win a Series A', done: S.raise.aDone, prog: compProg(far, aTarget), left: far >= aTarget && !stA.ok ? (stA.why[0] || '') : (far >= aTarget && stA.ok ? 'investors are ready' : moreText(far, aTarget) || 'two clean results on the line, one ten times bigger'), act: 'raise', disabled: false };
+      function capRung(id, label) { var c = S.caps.filter(function (x) { return x.id === id; })[0]; return { id: id, label: label, done: c.fired, prog: compProg(far, c.lo), left: moreText(far, c.lo) || 'in reach', act: 'design' }; }
+      d.paragraph = capRung('paragraph', 'Teach it paragraphs');
+      var na = nearestAhead();
+      d.rival = { id: 'rival', label: na ? 'Pass ' + na.rv.name : 'Pass every rival', done: !na, prog: na ? compProg(far, na.C) : 1, left: na ? moreText(far, na.C) : '', act: 'design' };
+      d.arithmetic = capRung('arithmetic', 'Teach it arithmetic');
+      var para = S.caps[0], apiOpen = S.day >= DAY.ship, canApi = apiOpen && para.fired;
+      d.api = { id: 'api', label: 'Ship an API', done: S.stats.shipped > 0, prog: para.fired ? 1 : compProg(far, para.lo), left: !apiOpen ? 'opens ' + fmtDay(DAY.ship) : (!para.fired ? 'teach it paragraphs first' : 'pick Ship when a model lands'), act: 'models', disabled: !canApi };
+      var stB = roundStatus('B');
+      d.seriesB = { id: 'seriesB', label: 'Raise a Series B', done: S.raise.bDone, prog: compProg(far, CFG.seriesB.needC), left: far >= CFG.seriesB.needC ? (stB.why[0] || 'investors are ready') : (moreText(far, CFG.seriesB.needC)), act: 'raise' };
+      d.translation = capRung('translation', 'Teach it translation');
+      d.within10 = { id: 'within10', label: 'Get within 10x of GPT-3', done: far >= CFG.gpt3.C / 10, prog: compProg(far, CFG.gpt3.C / 10), left: moreText(far, CFG.gpt3.C / 10), act: 'design' };
+      d.beat = { id: 'beat', label: 'Beat GPT-3', done: far >= CFG.gpt3.C * CFG.gpt3.tolC, prog: compProg(far, CFG.gpt3.C), left: moreText(far, CFG.gpt3.C), act: 'design' };
+      return d;
+    }
+    function ladder() {
+      var d = rungDefs(), first = [d.start, d.land, d.seriesA], early = !first.every(function (r) { return r.done; });
+      var rungs = early ? first : ['paragraph', 'rival', 'arithmetic', 'api', 'seriesB', 'translation', 'within10', 'beat'].map(function (id) { return d[id]; }).filter(function (r) { return !r.done; }).slice(0, 3);
+      var lit = -1; rungs.forEach(function (r, i) { if (lit < 0 && !r.done) lit = i; });
+      return { rungs: rungs, lit: lit, early: early };
+    }
+    function forgotten() { var need = relevanceNeed(), fp = flopsPerDay(true); return { left: S.relevantUntil - S.day, need: need, days: fp > 0 ? need / fp : null }; }
+    function bestKnown() {
+      var L = Infinity, who = '';
+      S.rivals.forEach(function (rv) { rv.pubs.forEach(function (p) { if (p.L < L) { L = p.L; who = rv.name; } }); });
+      if (S.day >= DAY.gpt3 && CFG.gpt3.L < L) { L = CFG.gpt3.L; who = 'GPT-3'; }
+      return { L: L, who: who };
+    }
+    function cardDayCost(pool) {
+      if (pool === 'cloud') return rentPrice() * 24;
+      if (pool === 'meridian') return CFG.meridian.rate * 24;
+      return CFG.labValue[poolType(pool)] / CFG.cardLifeDays + CFG.upkeepPerCard / CFG.daysPerMonth;
+    }
+    function ownedCardDay() { return cardDayCost('office'); }
+    function idleDrip() {
+      var n = 0, d = 0; CFG.pools.forEach(function (pool) {
+        var i = poolInfo(pool); if (!i.free) return; n += i.free;
+        d += pool === 'cloud' ? i.free * rentPrice() * 24 : pool === 'meridian' ? 0 : i.free * CFG.upkeepPerCard / CFG.daysPerMonth;
+      });
+      return { cards: n, perDay: d };
+    }
+    function busyUseful() {
+      var t = 0, tr = 0, sv = 0, lent = 0, effW = 0; CFG.pools.forEach(function (p) { var i = poolInfo(p), eq = CFG.card[i.type].eq; t += i.total * eq; tr += i.training * eq; sv += i.serving * eq; lent += i.lent * eq; });
+      activeRuns().forEach(function (r) { effW += scaleEff(r.cards) * r.cards * CFG.card[poolType(r.pool)].eq; });
+      var effAvg = tr > 0 ? effW / tr : 1;
+      return { total: t, busy: t ? (tr + sv + lent) / t : 0, useful: t ? tr / t * CFG.mfu * effAvg : 0, mfu: CFG.mfu };
+    }
+    function trainingSpeed() { return flopsPerDay(true) / (CFG.startOwnedV100 * CFG.card.v100.flops); }
+    function gpt3Wait() { var f = flopsPerDay(true); return f > 0 ? CFG.gpt3.C / f : Infinity; }   // days
+    function shelf() {
+      var item = S.day >= D(CFG.buy.dgxa100.from) ? 'dgxa100' : 'dgx1', spec = CFG.buy[item], unit = buyPrice(item, S.day), pick = null;
+      for (var i = 0; i < CFG.shelfUnits.length; i++) { var u = CFG.shelfUnits[i]; if (u * unit > S.bank) { pick = u; break; } }
+      if (!pick) return null;
+      var cost = pick * unit, cards = pick * spec.cards, lastRun = S.runs.length ? S.runs[S.runs.length - 1] : null, eff = null;
+      if (lastRun) {
+        var pool = lastRun.pool, now = Math.max(1, lastRun.want), flNow = now * cardFlops(pool), flNew = cards * CFG.card[spec.type].flops;
+        var dNow = lastRun.C / (flNow * scaleEff(now)), dWith = lastRun.C / ((flNow + flNew) * scaleEff(now + cards));
+        eff = { now: dNow, with: dWith, run: lastRun.id };
+      }
+      return { item: item, label: spec.short, units: pick, cards: cards, type: spec.type, cost: cost, short: cost - S.bank, isNew: item === 'dgxa100' && S.day < D(CFG.buy.dgxa100.from) + 21, effect: eff, monthsAfter: S.bank >= cost ? (S.bank - cost) / (burn() + cards * CFG.upkeepPerCard) : null };
+    }
+    function apiMeter() {
+      if (!S.shipped) return null;
+      var rev = S.shipped.rev, dev = Math.round(rev / 400);
+      var m = { rev: rev, developers: dev, waiting: Math.round(dev * (2 + S.rep / 20)), wordsDay: Math.round(rev / CFG.daysPerMonth / 0.06 * 750), apps: Math.min(36, Math.floor(dev / 10)), since: S.shipped.since, runId: S.shipped.runId };
+      return m;
+    }
+    function openMeter() { if (!S.opened || S.openedDay == null) return null; var days = Math.max(0, S.day - S.openedDay), dl = Math.round(40 * days * S.rep / 10); return { days: days, downloads: dl, tunes: Math.floor(dl / 25) }; }
+    function raiseBlock() {
+      var next = !S.raise.aDone ? 'A' : !S.raise.bDone ? 'B' : 'bridge', st = roundStatus(next), t = st.terms;
+      return { own: S.stake, lastPost: S.post, next: next, wouldPay: next === 'bridge' ? null : t.post, cash: t.cash, why: st.why, ok: st.ok, desp: desperation(), stakeAfter: st.stakeAfter };
+    }
+    function desperation() { var d = CFG.desperation, rw = runway(); return rw >= d.months ? 1 : d.floor + (1 - d.floor) * Math.max(0, rw) / d.months; }
+    function hangLine() { var h = S.lastHang; if (!h || S.day - h.day > 21) return null; return h; }
+
+    // the monthly slip: three lines, what moved, why, what is next. It never stops the clock.
+    var CAUSE = { payroll: 'payroll', api: 'API income', rentout: 'cards rented out', raise: 'a raise', cards: 'new cards', data: 'cleaning the crawl', rent: 'rent' };
+    function causeName(k) { return k === 'rent' ? 'rent on ' + rentedCount() + ' cards' : (CAUSE[k] || k); }
+    function topCauses(obj, n) { return Object.keys(obj).map(function (k) { return { k: k, v: obj[k] }; }).sort(function (a, b) { return b.v - a.v; }).slice(0, n).map(function (x) { return causeName(x.k); }); }
+    function buildSlip(prev, mon) {
+      var n = S.slips.length + 1, mi = monthIdx(S.day), dCash = S.bank - prev.bank, lines = [];
+      var causes = dCash < 0 ? topCauses(mon.out, 2) : topCauses(mon.in, 2);
+      lines.push({ k: 'cash', tone: dCash < 0 ? 'out' : 'in', t: 'Cash ' + (dCash < 0 ? 'down ' : 'up ') + fmtMoney(Math.abs(dCash)).replace('−', '') + (causes.length ? ': ' + causes.join(', ') : '') });
+      var mm = S.mile.filter(function (m) { return m.day >= prev.day; }), order = ['series', 'cap', 'passed', 'first', 'api', 'meridian'], pick = null;
+      order.forEach(function (k) { if (!pick) mm.forEach(function (m) { if (!pick && m.kind === k) pick = m; }); });
+      var b = bestRun(), act = activeRuns(), p;
+      if (pick) p = { tone: 'good', t: pick.text };
+      else if (b && prev.err != null && b.loss < prev.err - 0.004) p = { tone: 'good', t: 'Error score down ' + (prev.err - b.loss).toFixed(2) + ': ' + modelName(b) + '.' };
+      else if (act.length) { var r = act[0], type = poolType(r.pool), perDay = r.cards * CFG.card[type].flops * scaleEff(r.cards), left = perDay > 0 ? Math.ceil((r.C - r.done) / perDay + (r.hang ? r.hang.left : 0)) : null; p = { tone: '', t: 'Run ' + r.id + ' is ' + Math.round(r.q * 100) + '% done' + (left != null ? ', ' + left + ' days left.' : ', waiting for cards.') }; }
+      else if (S.runs.length === 0) p = { tone: 'warn', t: 'Nothing has trained yet. The cards cost money either way.' };
+      else p = { tone: 'warn', t: 'Nothing is training' + (idleDrip().cards ? ': ' + idleDrip().cards + ' idle cards drip ' + fmtMoney(idleDrip().perDay) + ' a day.' : '.') };
+      lines.push({ k: 'prog', tone: p.tone, t: p.t });
+      lines.push({ k: 'next', tone: 'next', t: cliff(prev, n) });
+      var slip = { n: n, day: S.day, month: mi, label: MON[mi], lines: lines, cash: dCash };
+      S.slips.push(slip); emit('slip', slip);
+    }
+    function cliff(prev, n) {
+      var far = farthestClean(), vill = null, ahead = nearestAhead();
+      if (n <= 3) vill = rivalBy('northwind'); else if (ahead) vill = ahead.rv; else { var bc = 0; S.rivals.forEach(function (rv) { var c = rivalBestC(rv); if (c > bc) { bc = c; vill = rv; } }); }
+      // 1. a rival passed you this month
+      var passer = null; S.rivals.forEach(function (rv) { var c = rivalBestC(rv), pc = prev.rivals[rv.key] || 0; if (c > far && c > pc * 1.0001 && c > prev.far && (!passer || rv === vill)) passer = rv; });
+      if (passer) { var pr = rivalBestC(passer); return passer.name + ' published a ' + bigNum(Nopt(pr)) + '-parameter model' + (far > 0 ? ', ' + shortFmt(pr / far) + ' your biggest.' : ' and you have no saved model yet.'); }
+      // 2. a truck lands within 14 days
+      var truck = null; S.orders.forEach(function (o) { var dl = o.arrive - S.day; if (dl <= 14 && (!truck || o.arrive < truck.arrive)) truck = o; });
+      if (truck) return unitsText(truck) + ' land ' + fmtDay(truck.arrive) + ', in ' + Math.max(1, Math.round(truck.arrive - S.day)) + ' days.';
+      // 3. a round decision date
+      if (S.raise.diligence) return 'Investors finish checking your Series ' + S.raise.diligence.round + ' on ' + fmtDay(S.raise.diligence.until) + '.';
+      // 4. forgotten under 45 days
+      var fg = S.relevantUntil - S.day; if (fg < 45) return 'The world forgets you in ' + Math.ceil(fg) + ' days unless you publish or ship something big.';
+      // 5. under 6 months until broke
+      var rw = runway(); if (rw < 6) return 'Only ' + rw.toFixed(1) + ' months until broke at this spending.';
+      // 6. the villain, for the first three slips; else the next rung
+      if (n <= 3 && vill) {
+        var vc = rivalBestC(vill);
+        if (vc > far) return vill.name + ' has published a ' + bigNum(Nopt(vc)) + '-parameter model' + (far > 0 ? ', ' + shortFmt(vc / far) + ' your biggest' : '. You have no saved model yet') + '. It publishes again about ' + fmtDay(vill.nextPub) + '.';
+        return vill.name + ' is next to publish, about ' + fmtDay(vill.nextPub) + '. It trails you now; it will not for long.';
+      }
+      var l = ladder(), r = l.rungs[l.lit] || l.rungs[0];
+      return r ? 'Next: ' + r.label.charAt(0).toLowerCase() + r.label.slice(1) + (r.left ? ' (' + r.left + ')' : '') + '.' : 'Next: beat GPT-3.';
+    }
+    function unitsText(o) { var spec = CFG.buy[o.item]; return o.cards + ' ' + CFG.card[o.type].label + 's'; }
+
     /* ---------------- views for the screen ---------------- */
+    S.snap = takeSnap();
     var api = {
       S: S, CFG: CFG, DAY: DAY, act: act, advance: advance, design: design, on: function (f) { listeners.push(f); },
       blocked: blocked, staff: staff, person: person, candidate: candidate, candAsk: candAsk, candReq: candReq,
@@ -1158,7 +1402,11 @@
       filterDays: filterDays, filterCost: filterCost, effSkill: effSkill, activeRuns: activeRuns, runById: runById, moveTarget: moveTarget, poolTotal: poolTotal, lossAt: lossAt, Lline: Lline,
       recipeForC: recipeForC, recipeForN: recipeForN, Nopt: Nopt, Dopt: Dopt, offPen: offPen, score: score, gapLine: gapLine, priorityCost: priorityCost,
       fmtDay: fmtDay, fmtLong: fmtLong, dom: dom, monthIdx: monthIdx, D: D, dateOf: dateOf, scaleEff: scaleEff, cardFlops: cardFlops, poolType: poolType,
-      amount: amount, CRAWL: CRAWL, rivalBy: rivalBy
+      amount: amount, CRAWL: CRAWL, rivalBy: rivalBy,
+      shortFmt: shortFmt, shortOf: shortOf, modelName: modelName, modelLine: modelLine, lab: lab, standing: standing, ladder: ladder, forgotten: forgotten, bestKnown: bestKnown,
+      cardDayCost: cardDayCost, ownedCardDay: ownedCardDay, idleDrip: idleDrip, busyUseful: busyUseful, trainingSpeed: trainingSpeed, gpt3Wait: gpt3Wait, shelf: shelf, apiMeter: apiMeter,
+      openMeter: openMeter, raiseBlock: raiseBlock, desperation: desperation, hangLine: hangLine, nearestAhead: nearestAhead, rivalBestC: rivalBestC, takeSnap: takeSnap,
+      suggest: suggest, shape: shape, buyLeft: buyLeft, wallCross: wallCross, stopPreview: stopPreview, filterMult: filterMult, hangRate: hangRate, rentDaily: rentDaily
     };
     return api;
   }
