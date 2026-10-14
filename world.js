@@ -48,31 +48,98 @@
   W.letters = {
     rent: { from: 'BROKER', body: '{n} V100s on demand, live tomorrow. ${price} an hour for 90 days.', pass: 'gone by the {gone}' },
     rentGrey: 'Meridian: exclusive',
+    spot: { from: 'SECOND-HAND BROKER', body: 'Somebody’s cancelled reservation: {n} V100s for {days} days, live tomorrow. ${price} an hour.', pass: 'gone by the {gone}' },
     buyV: { from: 'BROKER', body: '64 V100s to own: eight servers with InfiniBand. {price}. Delivery in {weeks} weeks.', pass: 'gone' },
     buyA: { from: 'BROKER', body: 'Eight DGX A100s: 64 A100s. {price}. Delivery in {weeks} weeks.', pass: 'gone' },
-    renew: { from: 'BROKER', body: 'Your {n} V100s go back on {date}. Renew for 90 days at ${price}?', take: 'keep them', pass: 'they go back on {date}' },
+    renew: { from: 'BROKER', body: 'Your {n} V100s go back on {date}. Renew for 90 days at ${price}?', take: 'keep them to {to}', pass: 'they go back on {date}' },
     renewNo: { from: 'BROKER', body: 'Capacity unavailable. Your {n} V100s go back on {date}.', grey: 'Capacity unavailable.', pass: 'they go back on {date}' },
     rentOut: { from: 'BROKER', body: 'We’ll pay $1.90 an hour for half your owned cards. 30 days. Cash now.', pass: 'no cash' },
     hirePass: { kestrel: 'goes to Kestrel', halcyon: 'goes to Halcyon' },
     acqui: { from: 'HALCYON', body: 'We’ll buy the team: $4M a head, {total} in all. Your people get rich. FRONTIER disappears.', take: 'it’s over, and everyone is rich', pass: 'keep going', forced: 'The board has accepted.' },
-    termA: { from: 'LEAD INVESTOR', body: 'Series A: {cash} at a {post} post. Two dots, one line. Sign by the 25th.', pass: 'gone; next time they want a dot three times further out' },
-    termB: { from: 'LEAD INVESTOR', body: 'Series B: {cash} at a {post} post.', pass: 'gone' },
-    meridian: { from: 'MERIDIAN CLOUD', body: '$50M in compute credits: 1,024 V100s reserved for you, ready in six weeks. Our cloud only. We see every checkpoint first.', take: 'CARDS +1,024 in pencil · no other cloud · no open weights', pass: 'we’ll talk again in June' },
-    meridian2: { from: 'MERIDIAN CLOUD', body: '512 V100s, ready in six weeks, for 10% of FRONTIER.', pass: 'gone' },
-    poach: { body: '{rival} offers {first} double. Counter with equity?', pass: '{he} walks to {rival}' },
+    termA: { from: 'LEAD INVESTOR', body: 'Series A: {cash} at a {post} post. Two dots, one line. Sign by the {by}.', pass: 'gone; next time they want a dot three times further out' },
+    termB: { from: 'LEAD INVESTOR', body: 'Series B: {cash} at a {post} post. Sign by the {by}.', pass: 'gone' },
+    meridian: { from: 'MERIDIAN CLOUD', body: '$50M in compute credits: {n} V100s reserved for you, ready in {weeks} weeks. Our cloud only. We see every checkpoint first.', take: 'CARDS +{n} in pencil, live {live} · no other cloud · no open weights', pass: 'we’ll talk again after 15 June' },
+    meridian2: { from: 'MERIDIAN CLOUD', body: '{n} V100s, ready in {weeks} weeks, for 10% of FRONTIER.', pass: 'gone' },
+    priority: { from: 'MERIDIAN CLOUD', body: 'Our queue puts labs that are behind at the back. Stay at the front for the rest of the year: {price} a month, from your bank.', take: 'all {n} cards every month', pass: 'the queue decides on each 1st' },
+    poach: { body: '{rival} offers {first} double. Counter with equity?', bodyRaise: '{rival} offers {first} double. Counter with equity and a raise?', pass: '{he} walks to {rival}' },
     open: { from: 'THE FIELD', body: 'Grad students want the weights of your published model.', take: 'recruits come running · rivals fine-tune it within a week', pass: 'they build on Northwind’s instead', greyMer: 'Meridian: no.', greyBoard: 'The board: no.' },
-    priyaDemand: { body: 'I want first author on our next paper, or I walk.', take: 'your next clean landing is published with her name on it', pass: 'she walks' },
+    priyaDemand: { body: 'I want first author on our next paper, or I walk.', take: 'your next clean landing is published at once, with her name on it', pass: 'she walks' },
     devDemand: { body: 'One percent, or Halcyon gets my parallelism code.', take: 'STAKE −1 point', pass: 'he walks' },
-    ayaanDemand: { body: 'Whole cluster on one run, all the way to the stop.', take: 'your next touch snaps the nib to the stop', pass: 'mood −40' },
-    tomDemand: { body: 'I need a week off. I’ve been up every night.', take: '7 days without his effect', pass: 'mood −30' },
+    ayaanDemand: { body: 'Whole cluster on one run, all the way to the stop.', take: 'next run goes to the stop: {days} days, lands {land} · MONTHS {m0} → {m1}', pass: 'his name thins' },
+    tomDemand: { body: 'I need a week off. I’ve been up every night.', take: '7 days without his restarts', pass: 'his name thins' },
     sunheeDemand: { body: 'I want to publish the schedule trick.', take: 'she stays, and every rival lands 2.5% lower in 30 days', pass: 'she walks to Halcyon' },
     december: { body: '{a}, {b} and I want to start something safer. We’re telling you first.', take: 'let them go, with your blessing', pass: 'fight to keep them' }
   };
+  W.rafaelNoDev = 'Heard you need someone who can split a model across cards. I cost more.';
+
+  // First-time lessons, written once per sitting, in pencil, the first time each verb matters. No screens, no cards.
+  W.teach = {
+    asleep: 'touch the paper to begin',
+    months: 'MONTHS: how long the money lasts',
+    cards: 'CARDS: our GPUs',
+    goal: 'reach 31 DEC without going broke, being bought or being forgotten',
+    flick: 'flick up to take · down to let it pass',
+    tapLetter: 'flick it: up takes, down lets it pass',
+    drag: 'drag me → then let go to train',
+    tap: 'tap the paper to read what it says',
+    ring: 'reach this: the biggest run of 2020',
+    seriesA: 'Series A: a dot here, one 10× back',
+    wake: 'press a name to wake them',
+    abort: 'drag me home to stop it',
+    vault: 'leave it, and it stays in the vault',
+    redteam: 'press my name: I’ll red-team it · {days} days',
+    filterCost: '→ press my name: {cost}',
+    filterCostInes: '→ press my name: {days} days, {cost}'
+  };
+
+  // What the sheet says when something decides your year. Plain sentences, in pencil.
+  W.warn = {
+    silent: 'Nobody wrote this month. If nobody is reading us by {next}, we’re forgotten. {fix}',
+    silentFixPub: 'A published dot past {need} would do it.',
+    silentFixScandal: 'The scandal is why.',
+    gpt3Bar: 'After this, nobody reads a lab with less than {need} published.',
+    scandal: 'Scandal: {what}. No letters next month, and no term sheets for 90 days.',
+    queueSoon: 'Meridian’s queue on the 1st: we’re behind, so we lose {n} cards',
+    queueCut: 'queue: {n} cards held back',
+    wontLand: 'won’t land by 31 DEC',
+    stopped: 'stopped. {pct}% of it, and nothing proved',
+    moved: 'moved it to the {pool}',
+    janWall: 'same wall every time. we need someone who can split it.',
+    contamRisk: 'unfiltered crawl. the test set might be in it.',
+    firstAuthor: 'publishing it, Raman et al.'
+  };
+
+  // One or two plain sentences on the sheet at every ending, before the next year starts.
+  W.ends = {
+    head: { bankrupt: 'BANKRUPT', bought: 'BOUGHT', forgotten: 'FORGOTTEN', survived: 'SURVIVED' },
+    bankrupt: 'Payroll on {date} needed {pay} and the bank had {bank}. The lab was spending {burn} a month{rent}.',
+    bankruptRent: ', {rent} of it on rented cards',
+    bought: 'With {months} months of money left you sold the team to Halcyon for {price}. Your people are rich; FRONTIER is gone.',
+    boughtBoard: 'Your stake had fallen below half, so the board sold the team to Halcyon for {price}. Your people are rich; FRONTIER is gone.',
+    forgotten: 'Nobody wrote in {m1} or {m2}. The world writes only to labs with a published dot of at least {need}, a hundredth of the frontier; your best was {pub}.',
+    forgottenNone: 'Nobody wrote in {m1} or {m2}. The world writes only to labs with a published dot of at least {need}, a hundredth of the frontier; you had published nothing.',
+    forgottenScandal: 'Nobody wrote in {m1} or {m2}: a scandal ({what}) silenced one month, and with nothing published past {need}, the next stayed quiet too.',
+    survived: 'Survived: the lab is still standing at New Year, with {months} months of money and {people}.',
+    gap: 'Your farthest clean dot was {far}, {ratio}× short of GPT-3 ({gpt3}).',
+    gapNone: 'You never landed a clean dot.',
+    gapMiracle: 'Your dot sits on GPT-3’s point: you matched the frontier.',
+    gapNear: 'Your farthest clean dot was {far}, within {pct} of GPT-3.',
+    again: 'tap for a fresh 1 January'
+  };
+
+  W.scandalNotes = {
+    arithmetic: 'arithmetic memorized: leaked test set',
+    translation: 'translation memorized: leaked test set',
+    code: 'code memorized: leaked test set',
+    generic: 'reviewers: results don’t reproduce',
+    ship: 'screenshot: says something vile'
+  };
+  W.poolNames = { meridian: 'Meridian cloud', broker: 'broker’s cloud', office: 'office racks', a100: 'A100 racks' };
 
   // What your people write on the paper. No other text ever appears on it.
   W.notes = {
     fray: 'SEO spam. Give me three weeks.',
-    fray3: 'junk in the middle. three weeks?',
+    fray3: 'junk in the middle. Three weeks?',
     fray12: 'reads fine to me',
     memStop: 'won’t fit on one card',
     horizonStop: 'we haven’t measured past here',
@@ -84,8 +151,6 @@
     hintPublish: 'flick it up and the world reads it',
     hintShip: 'or → and we sell it',
     evals: 'evals: results on the 3rd',
-    scandalPublish: 'arithmetic memorized: leaked test set',
-    scandalShip: 'screenshot: says something vile',
     queue: 'queue',
     withMeridian: 'with Meridian'
   };

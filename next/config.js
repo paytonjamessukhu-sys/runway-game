@@ -10,6 +10,7 @@
     idleDaysPerSec: 3.0,         // idle with nothing to read: three game days per second
     idleLetterDaysPerSec: 1.0,   // panel: idle while a letter is on screen runs at the pour rate, so reading costs nothing extra
     minPourSec: 4.0,             // a pour lasts max(4 s, T s), re-checked whenever cards change mid-run
+    minPourRepeatSec: 1.5, landRepeatSec: 0.9, repeatAfter: 2,   // panel (Madigan): the third identical dot pours and lands fast
     pourLongAfterSec: 75,        // panel: a long run speeds up so one pour never takes much more than ~75 s ...
     pourMaxRate: 2.5,            // ... but never faster than 2.5 game days a second
     landCleanSec: 2.2, landWallSec: 3.1, momentSec: 3.5, landAbortSec: 1.2,
@@ -133,12 +134,12 @@
 
     /* ---------- rivals (fictional) ---------- */
     rivals: [
-      { key: 'halcyon', name: 'Halcyon', c0: 1e21, tau: 5.0, period: 70, offset: 1.00 },
-      { key: 'kestrel', name: 'Kestrel', c0: 1.5e19, tau: 3.4, period: 50, offset: 1.01 },
-      { key: 'northwind', name: 'Northwind', c0: 3e20, tau: 6.0, period: 45, offset: 1.02 }
+      { key: 'halcyon', name: 'Halcyon', c0: 1e21, tau: 5.0, period: 70, offset: 1.00, cap: 2.4e23 },
+      { key: 'kestrel', name: 'Kestrel', c0: 1.5e19, tau: 3.4, period: 50, offset: 1.01, cap: 1.8e23 },
+      { key: 'northwind', name: 'Northwind', c0: 3e20, tau: 6.0, period: 45, offset: 1.02, cap: 1.1e23 }
     ],
     rivalJitter: 0.15, rivalPassBoost: 0.2, rivalOpenKestrel: 0.2, rivalOpenNorthwind: 0.4, rivalPassOpenNorthwind: 0.1,
-    rivalCapC: 2.4e23,           // panel: no fictional lab passes GPT-3 in 2020
+    rivalCapC: 2.4e23,           // panel: no fictional lab passes GPT-3 in 2020 (each rival also has its own lower ceiling, so three capped labels never read the same size)
 
     /* ---------- relevance ---------- */
     relevanceFromDay: 91, relevanceShare: 0.01, openedMult: 3, vaultedMult: 0.1,

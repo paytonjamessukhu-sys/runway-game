@@ -234,6 +234,9 @@ html, body { background: var(--paper); color: var(--ink); margin: 0; height: 100
   #fr-mute { top: calc(max(2vh, 12px) + 24px); }
   #fr-months { top: max(.5vh, 3px); }
   #fr-months-n { font-size: 44px; line-height: 46px; }
+  .fr-note { font-size: 17px; line-height: 19px; }
+  .fr-note.wrap { font-size: 19px; line-height: 23px; }
+  .fr-note.typed { font-size: 11px; }
   #fr-heads { top: 10px; }
   #fr-team { top: 40px; }
   #fr-team li { height: 32px; }
@@ -281,3 +284,4 @@ html, body { background: var(--paper); color: var(--ink); margin: 0; height: 100
 .fr-note.door { transition: color 1.2s, opacity .3s; }
 #fr.letterup .fr-note.door { opacity: 0 !important; }
 #fr.inmoment:not(.dim28) #fr-letterzone { opacity: .3; pointer-events: none; }
+#fr.inmoment:not(.dim28) #fr-stripwrap { opacity: .45; transition: opacity .25s; }

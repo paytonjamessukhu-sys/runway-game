@@ -128,7 +128,7 @@
       silent: false, silentPrev: false, scandalSilentMonth: -1, termBlockUntil: -1, termLetterOut: false, events: [],
       raise: { aTaken: false, aNeed: CFG.seriesA.needC, bTaken: false },
       shipped: null, opened: false, openedC: 0, lastPublishDay: -999, sunheeTrick: false,
-      rivals: CFG.rivals.map(function (r) { var j = U(-CFG.rivalJitter, CFG.rivalJitter); return { key: r.key, name: r.name, c0: r.c0, tau: r.tau, period: r.period, offset: r.offset, jit: j, extra: 0, pubs: [{ C: r.c0 * Math.pow(10, j) / 2, day: -1, t: -99 }], nextPub: r.period * U(0.2, 1.0), passed: false, passedAt: -99 }; }),
+      rivals: CFG.rivals.map(function (r) { var j = U(-CFG.rivalJitter, CFG.rivalJitter); return { key: r.key, name: r.name, c0: r.c0, cap: Math.min(r.cap || CFG.rivalCapC, CFG.rivalCapC), tau: r.tau, period: r.period, offset: r.offset, jit: j, extra: 0, pubs: [{ C: r.c0 * Math.pow(10, j) / 2, day: -1, t: -99 }], nextPub: r.period * U(0.2, 1.0), passed: false, passedAt: -99 }; }),
       hangsThisMonth: 0, tomDemandDue: false, hints: {}, notes: [], heads: [], gpt3: false, gpt3At: 0, lineAt: 0, lineShown: false,
       ended: null, endFx: null, bags: {}, t3used: {}, t4used: {}, miracle: false, choice: null, landFx: null, pendingTap: null,
       capQueue: [], beatUntil: 0, silentLog: [], lastScandal: null, lastFilterDoneDay: -1, memStops: 0, priority: false, lastSpot: -99,
@@ -285,7 +285,7 @@
   function farthestPublished() { var m = 0; S.runs.forEach(function (r) { if (r.clean && (r.published || r.shipped) && r.C > m) m = r.C; }); return m; }
   function frontier() { var m = 0; S.rivals.forEach(function (rv) { rv.pubs.forEach(function (p) { if (p.C > m) m = p.C; }); }); if (S.day >= D_GPT3) m = Math.max(m, CFG.gpt3C); return m; }
   function wallC() { return C_of_tokens(CFG.passes * S.W); }
-  function rivalC(rv, day) { return Math.min(CFG.rivalCapC, rv.c0 * Math.pow(10, rv.jit + rv.extra + (day / 30.44) / rv.tau)); }
+  function rivalC(rv, day) { return Math.min(rv.cap || CFG.rivalCapC, rv.c0 * Math.pow(10, rv.jit + rv.extra + (day / 30.44) / rv.tau)); }
 
   /* ================= the bet: time on the strip ================= */
   // T is in 'days at today's rate' on the pool the run will take (C = T × F). The year stop is the largest compute that
@@ -338,7 +338,7 @@
     var remDays = left / tr.flops, remShare = Math.max(1e-6, 1 - s);
     var rate = CFG.pourDaysPerSec;
     var longRate = run.T0 / CFG.pourLongAfterSec; if (longRate > rate) rate = Math.min(CFG.pourMaxRate, longRate);
-    var minRate = remDays / (remShare * CFG.minPourSec); // the rest of the run must take at least its share of 4 s
+    var minRate = remDays / (remShare * (run.repeat ? CFG.minPourRepeatSec : CFG.minPourSec)); // the rest of the run must take at least its share of 4 s
     return Math.min(rate, minRate);
   }
   function hangRate() { var h = S.hang; return Math.min(CFG.pourDaysPerSec, Math.max(1e-4, (h.until - h.start) / CFG.hangMinRealSec)); }
@@ -1010,7 +1010,9 @@
     run.loss = Lstar(run, C) * wallDip(run.r);
     // a checkpoint left unflicked goes to the vault and its words sink
     if (S.checkpoint && (S.checkpoint.state === 'up')) { sinkBand(); S.checkpoint = null; }
-    S.run = run; S.started = true; S.stats.launches++; S.snapNext = false;
+    // the third identical dot onward (the memory stop on a big cluster) pours and lands quickly: it can teach nothing new
+    var lcR = log10(C); run.repeat = S.runs.filter(function (r) { return r.clean && Math.abs(log10(r.C) - lcR) < CFG.dupCurveDecades; }).length >= CFG.repeatAfter;
+    S.run = run; S.started = true; S.stats.launches++; S.snapNext = false; staticDirty = true;
     if (S.stats.launches === 1) after(22, retireOpeningLessons);
     run.landProj = projectLand(run.pool, C);
     AU.lift(); AU.vibrate(8); AU.motor('train', br.phys, 0.3);
@@ -1018,7 +1020,7 @@
     pan(C);
     S.log.push(fmtDay(S.day) + ' launch ' + sci(C) + ' T=' + T.toFixed(2) + 'd r=' + run.r.toFixed(2) + ' on ' + run.pool);
     el.sample.classList.remove('flickable');
-    dropNoteKey('teach-drag'); dropNoteKey('snap'); dropNoteKey('stop'); dropNoteKey('split');
+    dropNoteKey('teach-drag'); dropNoteKey('snap'); dropNoteKey('stop'); dropNoteKey('split'); dropNoteKey('hint');   // the last landing's words went to the vault: its hint goes too
     if (br.why === 'mem' && T >= br.T * 0.98) { S.memStops++; if (S.memStops === 3 && !hasSystems() && person('priya')) writeNote(WORLD.warn.janWall, person('priya'), { type: 'strip', key: 'janwall' }, { life: 6 }); }
     // a long run teaches the way out, once: drag the nib home to stop it
     if (run.landProj - S.day > 30) teach('abort', WORLD.teach.abort, person('ayaan') || person('priya'), { type: 'strip', key: 'teach-abort' }, 9);
@@ -1146,7 +1148,7 @@
     var smp = makeSample(run, 1, 'land');
     S.runs.push(run);
     AU.motor('idle', 0, 0.6); AU.scratch(0);
-    S.landUntil = now + (run.clean ? CFG.landCleanSec : CFG.landWallSec);
+    S.landUntil = now + (run.clean ? (run.repeat ? CFG.landRepeatSec : CFG.landCleanSec) : CFG.landWallSec);
     S.landFx = { run: run, t0: now };
     staticDirty = true;
     var capNew = null, capsHit = [];
@@ -1716,6 +1718,7 @@
   function noteHit(n, x, y, w, h) {
     var hitNote = S.notes.some(function (o) { return o !== n && o.box && !o.gone && x < o.box.x + o.box.w + 4 && x + w + 4 > o.box.x && y < o.box.y + o.box.h && y + h > o.box.y; });
     if (hitNote) return true;
+    var lb = L.landLabel; if (lb && (n.anchor.type === 'strip' || n.anchor.type === 'stop') && x < lb.x + lb.w && x + w > lb.x && y < lb.y + lb.h && y + h > lb.y) return true;
     if (L.readoutBox && el.readout.classList.contains('on')) { var rb = L.readoutBox; if (x < rb.x + rb.w + 4 && x + w > rb.x - 4 && y < rb.y + rb.h && y + h > rb.y) return true; }
     if (L.occ && L.paper) { var px = x - L.paper.x, py = y - L.paper.y; for (var i = 0; i < L.occ.length; i++) { var o = L.occ[i]; if (px < o.x + o.w && px + w > o.x && py < o.y + o.h && py + h > o.y) return true; } }
     return false;
@@ -1729,6 +1732,7 @@
       if (!n.faded && !n.wrap && !n.el.classList.contains('teach') && now - n.born > CFG.noteFadeSec) { n.faded = true; n.el.classList.add('faded'); }
       if (n.life && now - n.born > n.life) { fadeNote(n); return false; }
       if (n.anchor.type === 'paper' && (viewGen !== n.vg || layoutGen !== n.lg)) { placeNote(n); moved = true; }
+      else if (n.anchor.type === 'strip' && n.box && L.landLabel) { var lb = L.landLabel, b = n.box; if (now - (n.placedAt || 0) > 0.5 && b.x < lb.x + lb.w && b.x + b.w > lb.x && b.y < lb.y + lb.h && b.y + b.h > lb.y) { n.placedAt = now; placeNote(n); } }
       return true;
     });
     return moved;
@@ -1761,7 +1765,7 @@
     var ymin = a.type === 'paper' ? L.paper.y + L.plot.y : a.type === 'band' ? L.band.y : a.type === 'stop' || a.type === 'strip' ? L.strip.y : 2;
     var ymax = a.type === 'paper' ? L.paper.y + L.plot.y + L.plot.h - h - 2 : a.type === 'band' ? L.band.y + L.band.h - h : a.type === 'stop' || a.type === 'strip' ? L.strip.y + L.strip.h - h : L.root.h - h - 4;
     var rw = (L.readoutBox ? L.readoutBox.w : 70) + 14;
-    var offs = a.type === 'paper' ? [[0, 0], [0, -18], [0, 18], [-w - 16, 0], [0, -36], [0, 36], [-w - 16, -18], [-w - 16, 18], [0, -54], [-w - 16, -36], [0, 54]] : a.type === 'name' ? [[0, 0], [0, 14], [0, -14]] : a.type === 'stop' || a.type === 'strip' ? [[0, 0], [0, h + 2], [0, -h - 2]] : a.type === 'band' || a.type === 'names' ? [[0, 0], [0, h + 1], [0, 2 * h + 2]] : a.type === 'door' || a.type === 'months' || a.type === 'goal' ? [[0, 0], [0, h + 4], [0, 2 * h + 8]] : [[0, 0], [0, -h], [0, h], [0, -2 * h]];
+    var offs = a.type === 'paper' ? [[0, 0], [0, -18], [0, 18], [-w - 16, 0], [0, -36], [0, 36], [-w - 16, -18], [-w - 16, 18], [0, -54], [-w - 16, -36], [0, 54]] : a.type === 'name' ? [[0, 0], [0, 14], [0, -14]] : a.type === 'stop' ? [[0, 0], [0, h + 2], [0, -h - 2]] : a.type === 'strip' ? [[0, 0], [0, -(L.strip.h - h - 6)]].concat(L.landLabel ? [[L.landLabel.x + L.landLabel.w + 8 - x, 0], [L.landLabel.x - w - 8 - x, 0], [L.landLabel.x + L.landLabel.w + 8 - x, -(L.strip.h - h - 6)]] : []) : a.type === 'band' || a.type === 'names' ? [[0, 0], [0, h + 1], [0, 2 * h + 2]] : a.type === 'door' || a.type === 'months' || a.type === 'goal' ? [[0, 0], [0, h + 4], [0, 2 * h + 8]] : [[0, 0], [0, -h], [0, h], [0, -2 * h]];
     for (var oi = 0; oi < offs.length; oi++) {
       var cx = clamp(x0 + offs[oi][0], xmin, xmax - w), cy = clamp(y0 + offs[oi][1], ymin, ymax);
       if (!noteHit(n, cx, cy, w, h)) { best = [cx, cy]; break; }
@@ -1808,7 +1812,7 @@
     L.margin = parseFloat(rs.getPropertyValue('--margin')) || G.margin; L.home = G.home; L.nibW = G.nibW; L.readoutAbove = G.readoutAbove;
     // the plot (log compute against log loss) has its own axis labels; the calendar is a separate band beneath it,
     // with its own rule, so the months can never be read as the plot's x axis (panel)
-    var rulerH = G.rulerH, axisH = G.axisH, top = L.laptop ? 34 : 30;
+    var rulerH = G.rulerH, axisH = G.axisH, top = L.laptop ? 34 : (L.paper.w - L.margin < 700 ? 44 : 30);   // a narrow sheet gives a long headline its three lines above the plot
     L.plot = { x: L.margin, y: top, w: Math.max(80, L.paper.w - L.margin), h: Math.max(50, L.paper.h - top - axisH - rulerH - 6) };
     L.axisY = L.plot.y + L.plot.h + 2;
     L.ruler = { top: L.plot.y + L.plot.h + axisH + 6, h: rulerH };
@@ -1841,6 +1845,7 @@
     view.l = lerp(view.anim.l0, view.anim.l1, u); view.r = lerp(view.anim.r0, view.anim.r1, u);
     staticDirty = true; viewGen++; if (u >= 1) view.anim = null;
   }
+  function boxHits(b, list) { var n = 0; for (var i = 0; i < list.length; i++) { var o = list[i]; if (b.x < o.x + o.w && b.x + b.w > o.x && b.y < o.y + o.h && b.y + b.h > o.y) n += o.k || 1; } return n; }
   function boxHit(b, list) { for (var i = 0; i < list.length; i++) { var o = list[i]; if (b.x < o.x + o.w && b.x + b.w > o.x && b.y < o.y + o.h && b.y + b.h > o.y) return true; } return false; }
 
   // your line: a least-squares fit through your clean dots in (log10 C, ln L), with the spread of the fit (Karpathy)
@@ -1968,9 +1973,16 @@
       var gx = X(log10(S.ghost.C)), gy = Y(Math.log(S.ghost.L));
       if (gx > L.plot.x && gx < plotR) {
         c.strokeStyle = rgba('graphite', 0.5 * dl); c.setLineDash([2, 2]); c.lineWidth = 1; c.beginPath(); c.arc(gx, gy, 4, 0, 6.283); c.stroke(); c.setLineDash([]);
-        c.font = fHand(13); var glw = c.measureText('last year').width, gb = placeLabel(gx, gy, glw, 14, occ, [[6, 4], [-glw - 6, 4], [6, -18], [-glw - 6, -18]], true);
+        c.font = fHand(13); var glw = c.measureText('last year').width, gb = farthestClean() >= S.ghost.C ? null : placeLabel(gx, gy, glw, 14, occ, [[6, 4], [-glw - 6, 4], [6, -18], [-glw - 6, -18]], true);
         if (gb) { c.fillStyle = rgba('graphite', 0.6 * dl); c.textBaseline = 'top'; c.fillText('last year', gb.x, gb.y); }
         occ.push({ x: gx - 5, y: gy - 5, w: 10, h: 10 });
+      }
+    }
+    // the live run's whole path is known at launch: labels keep off it, so the pen never writes through a name (Ive)
+    if (S.run && S.phase === 'play') {
+      for (var lq = Math.log(P0); lq <= 0.0001; lq += 0.08) {
+        var qq0 = Math.min(1, Math.exp(lq)), px0 = X(log10(qq0 * S.run.C)), py0 = Y(Math.log(lossAt(S.run, qq0)));
+        if (px0 > L.plot.x && px0 < plotR && py0 > L.plot.y && py0 < plotB) occ.push({ x: px0 - 4, y: py0 - 4, w: 8, h: 8 });
       }
     }
     // rivals: faint dashed ladders, the latest dot labelled with name and size
@@ -1994,14 +2006,17 @@
         var lab = rv.name + ' · ' + sizeWord(params(lp.C)), tw = c.measureText(lab).width, th = 12;
         var cands = [], dys = [3, -15, 16, -28, 29, -41, 42, -54, 55, -67, -80, -93];
         dys.forEach(function (dy) { cands.push([5, dy]); cands.push([-tw - 5, dy]); });
-        var bx = null;
+        var bx = null, best = null, bestN = Infinity;
         for (var ci = 0; ci < cands.length; ci++) {
           var b = { x: lx[0] + cands[ci][0], y: lx[1] + cands[ci][1], w: tw, h: th };
           if (b.x < L.plot.x + 2 || b.x + tw > plotR || b.y < L.plot.y || b.y + th > plotB - 2) continue;
-          if (!boxHit(b, occ)) { bx = b; break; }
+          var nh = boxHits(b, occ);
+          if (!nh) { bx = b; break; }
+          if (nh < bestN) { bestN = nh; best = b; }
         }
-        if (!bx) bx = { x: clamp(lx[0] + 5, L.plot.x + 2, plotR - tw), y: clamp(lx[1] + 3, L.plot.y, plotB - th - 2), w: tw, h: th };
-        occ.push(bx);
+        // a crowded sheet: the spot that covers the fewest marks, never simply the default
+        if (!bx) bx = best || { x: clamp(lx[0] + 5, L.plot.x + 2, plotR - tw), y: clamp(lx[1] + 3, L.plot.y, plotB - th - 2), w: tw, h: th };
+        bx.k = 50; occ.push(bx);   // words never land on words: a label weighs more than any mark it might cover
         // a label pushed away from its dot keeps a faint leader back to it
         var ly0 = bx.y + th / 2, lxe = bx.x > lx[0] ? bx.x - 2 : bx.x + tw + 2;
         if (Math.abs(ly0 - lx[1]) > 12) { c.strokeStyle = GR(0.45, keepDark); c.lineWidth = 0.75; c.beginPath(); c.moveTo(lx[0], lx[1]); c.lineTo(lxe, ly0); c.stroke(); }
@@ -2082,12 +2097,17 @@
   function placeLabel(x, y, w, h, occ, cands, optional) {
     var plotR = L.plot.x + L.plot.w;
     cands = cands.concat([[8, -h - 14], [-w - 8, -h - 14], [8, 22], [-w - 8, 22], [-w / 2, -h - 28], [-w / 2, 34], [12, -h - 30], [-w - 12, 36]]);
+    var best = null, bestN = Infinity;
     for (var i = 0; i < cands.length; i++) {
-      var b = { x: clamp(x + cands[i][0], L.plot.x + 1, plotR - w - 1), y: clamp(y + cands[i][1], L.plot.y, L.plot.y + L.plot.h - h - 2), w: w, h: h };
-      if (!boxHit(b, occ)) { occ.push(b); return b; }
+      var b = { x: clamp(x + cands[i][0], L.plot.x + 1, plotR - w - 1), y: clamp(y + cands[i][1], L.plot.y, L.plot.y + L.plot.h - h - 2), w: w, h: h, k: 50 };
+      // two phrases side by side read as one sentence: keep a word's width of air around each label
+      var nh = boxHits({ x: b.x - 12, y: b.y - 3, w: w + 24, h: h + 6 }, occ);
+      if (!nh) { occ.push(b); return b; }
+      if (nh < bestN) { bestN = nh; best = b; }
     }
+    // nowhere free: an optional label stays unwritten; a needed one takes the spot that covers least, and never sits on words
     if (optional) return null;
-    var f = { x: clamp(x + cands[0][0], L.plot.x + 1, plotR - w - 1), y: clamp(y + cands[0][1], L.plot.y, L.plot.y + L.plot.h - h - 2), w: w, h: h };
+    var f = best || { x: clamp(x + cands[0][0], L.plot.x + 1, plotR - w - 1), y: clamp(y + cands[0][1], L.plot.y, L.plot.y + L.plot.h - h - 2), w: w, h: h, k: 50 };
     occ.push(f); return f;
   }
   function runBar(c, r, toDay) {
@@ -2400,13 +2420,17 @@
         var lt = run.landProj > CFG.endDay + 1 ? 'after 31 DEC' : fmtDay(run.landProj);
         c.font = fMono(L.laptop ? 11 : 10, false, 500); c.textBaseline = 'middle'; var ltw = c.measureText(lt).width;
         var ltx = nibX + L.nibW / 2 + 6; if (ltx + ltw > w - 4) ltx = nibX - L.nibW / 2 - 6 - ltw;
+        // knock the month ticks out from under the date so it reads clean
+        var lty = Math.round(h * 0.55) - 7; c.fillStyle = COL.reserve; c.fillRect(ltx - 3, lty, ltw + 6, 14);
+        if (ltx < nibX) { c.fillStyle = floodCol; c.fillRect(ltx - 3, lty, ltw + 6, 14); }
         c.fillStyle = run.landProj > CFG.endDay + 1 ? inkCol : mix('graphite', 'dry', fade.u, fade.a); c.fillText(lt, ltx, Math.round(h * 0.55));
-      }
+        L.landLabel = { x: L.strip.x + ltx - 3, y: L.strip.y + Math.round(h * 0.55) - 8, w: ltw + 6, h: 16 };
+      } else L.landLabel = null;
       // dragging the nib home stops the run: the home end darkens to say so
       if (nib.abort && nib.abortX < L.home + 6) { c.strokeStyle = inkCol; c.lineWidth = 1.5; c.strokeRect(2.5, 3.5, L.home - 5, h - 7); }
       L.runNibX = nibX;
     } else if (S.powered && S.phase === 'play') {
-      L.runNibX = null;
+      L.runNibX = null; L.landLabel = null;
       if (nib.t > 0) {
         nibX = L.travel.x + nib.t * L.travel.w;
         c.fillStyle = floodCol; c.fillRect(L.travel.x, 2, nibX - L.travel.x, h - 4);

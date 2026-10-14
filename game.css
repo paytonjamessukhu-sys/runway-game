@@ -23,7 +23,7 @@ html, body { background: var(--paper); color: var(--ink); margin: 0; height: 100
   --bd: 108px; --cl: 58px; --st: 58px;
   --lt: calc(164px + env(safe-area-inset-bottom, 0px));
   --gut: 16px;
-  --margin: 52px;
+  --margin: 58px;
   position: fixed; inset: 0; box-sizing: border-box;
   background: var(--paper); color: var(--ink);
   font-family: var(--mono); font-variant-numeric: tabular-nums;
@@ -53,12 +53,12 @@ html, body { background: var(--paper); color: var(--ink); margin: 0; height: 100
 #fr-bought:empty { display: none; }
 #fr-today, #fr-hour { color: var(--ink); }
 #fr-hour:empty { display: none; }
-#fr-mute { position: absolute; left: 0; top: calc(env(safe-area-inset-top, 0px) + 33px); font-size: 9px !important; line-height: 14px; letter-spacing: 0.1em; color: var(--graphite) !important; padding: 4px 8px 6px 0 !important; transition: opacity .6s; z-index: 3; }
+#fr-mute { position: absolute; left: 0; top: calc(env(safe-area-inset-top, 0px) + 33px); font-size: 9px !important; line-height: 14px; letter-spacing: 0.1em; color: var(--graphite) !important; opacity: .7; padding: 4px 8px 6px 0 !important; transition: opacity .6s; z-index: 3; }
 #fr-mute::before { content: ''; position: absolute; left: -8px; right: -8px; top: 50%; height: 44px; margin-top: -22px; }
 #fr-months { position: absolute; right: 0; top: calc(env(safe-area-inset-top, 0px) + 5px); display: grid; grid-template-columns: auto auto; column-gap: 9px; align-items: end; justify-items: end; transition: opacity .6s; }
 #fr-months-n { grid-column: 2; grid-row: 1; font-size: 34px; line-height: 36px; font-weight: 700; letter-spacing: -0.02em; display: inline-block; color: var(--ink); transition: color 1.2s; }
 #fr-months-l { grid-column: 2; grid-row: 2; font-size: 9px; line-height: 11px; letter-spacing: 0.1em; color: var(--graphite); margin-top: 1px; }
-#fr-proj { grid-column: 1; grid-row: 1; font-size: 15px; line-height: 18px; color: var(--graphite); padding-bottom: 4px; white-space: nowrap; }
+#fr-proj { grid-column: 1; grid-row: 2; font-size: 11px; line-height: 11px; color: var(--graphite); white-space: nowrap; letter-spacing: 0.02em; margin-top: 1px; }
 #fr-months.jolt #fr-months-n { animation: frjolt .1s steps(1) both; }
 #fr.dry #fr-months-n { color: var(--dry); }
 @keyframes frjolt { 0% { transform: translateY(1px); } 100% { transform: none; } }
@@ -67,12 +67,14 @@ html, body { background: var(--paper); color: var(--ink); margin: 0; height: 100
 /* ---------- the paper ---------- */
 #fr-paperwrap { grid-area: paper; position: relative; min-height: 0; min-width: 0; }
 #fr-paper, #fr-pen { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
-#fr-heads { position: absolute; left: var(--margin); right: 0; top: 9px; height: 16px; overflow: hidden; pointer-events: none; transition: opacity .4s;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%); }
-#fr-heads .h { position: absolute; top: 0; left: 0; white-space: nowrap; font-style: italic; font-size: 11px; line-height: 16px; color: var(--graphite); will-change: transform; }
+#fr-heads { position: absolute; left: var(--margin); right: 0; top: 2px; height: 44px; overflow: hidden; pointer-events: none; transition: opacity .4s; z-index: 1; }
+#fr-heads .h { position: absolute; top: 0; left: 0; right: 0; font-style: italic; font-size: 11px; line-height: 14px; color: var(--graphite); text-shadow: 0 0 2px var(--paper), 0 0 2px var(--paper), 0 0 3px var(--paper);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; opacity: 0; transform: translate3d(28px, 0, 0); transition: opacity .45s ease-out, transform .45s cubic-bezier(.2,.7,.3,1); }
+#fr-heads .h.in { opacity: 1; transform: none; }
+#fr-heads .h.out { opacity: 0; transform: translate3d(-12px, 0, 0); transition: opacity .5s linear, transform .5s linear; }
 #fr-team { position: absolute; left: 0; top: 34px; width: var(--margin); margin: 0; padding: 0; list-style: none; transition: opacity .4s; z-index: 2; }
-#fr-team li { margin: 0; height: 28px; }
-#fr-team button { font-family: var(--hand) !important; font-size: 18px !important; line-height: 28px; height: 28px; min-width: 44px; color: var(--ink) !important; padding: 0 2px 0 0 !important; text-align: left; white-space: nowrap; position: relative; display: block; transition: font-weight .9s ease, color 1.2s; font-variation-settings: normal; }
+#fr-team li { margin: 0; height: 30px; }
+#fr-team button { font-family: var(--hand) !important; font-size: 17px !important; line-height: 30px; height: 30px; min-width: 44px; color: var(--ink) !important; padding: 0 2px 0 0 !important; text-align: left; white-space: nowrap; position: relative; display: block; transition: font-weight .9s ease, color 1.2s; font-variation-settings: normal; }
 #fr-team button::before { content: ''; position: absolute; left: -8px; right: -10px; top: 50%; height: 44px; margin-top: -22px; }
 #fr-team button.low { color: var(--graphite) !important; }
 #fr-team button .w { display: inline-block; clip-path: inset(-40% 100% -40% 0); }
@@ -105,7 +107,7 @@ html, body { background: var(--paper); color: var(--ink); margin: 0; height: 100
 #fr-strip.grab { cursor: grab; }
 #fr-strip.grabbing { cursor: grabbing; }
 #fr-strip:focus-visible { outline-offset: 2px; }
-#fr-readout { position: absolute; top: -56px; left: 0; font-size: 15px; line-height: 20px; font-weight: 500; pointer-events: none; opacity: 0; white-space: nowrap; color: var(--ink); z-index: 6; background: var(--paper); padding: 0 5px; transition: opacity .12s; will-change: transform; }
+#fr-readout { position: absolute; top: 0; left: 0; font-size: 15px; line-height: 20px; font-weight: 500; pointer-events: none; opacity: 0; white-space: nowrap; color: var(--ink); z-index: 6; background: var(--paper); padding: 0 5px; transition: opacity .12s; will-change: transform; }
 #fr-readout.on { opacity: 1; }
 
 /* ---------- letters: slips of Reserve paper under the door ---------- */
@@ -113,7 +115,7 @@ html, body { background: var(--paper); color: var(--ink); margin: 0; height: 100
 .fr-letter {
   position: absolute; left: 0; right: 0; top: 14px; height: 128px; box-sizing: border-box; max-width: 440px; margin: 0 auto;
   background: var(--reserve); color: var(--ink);
-  box-shadow: 0 1px 0 rgba(21, 23, 26, .07), 0 10px 24px -14px rgba(21, 23, 26, .38);
+  box-shadow: 0 0 0 1px rgba(21, 23, 26, .06);
   padding: 11px 14px 9px; overflow: hidden;
   transform: translate3d(0, calc(100% + 80px), 0); transition: transform .4s cubic-bezier(.16, .84, .3, 1);
   touch-action: none; cursor: grab; will-change: transform; z-index: 3;
@@ -135,6 +137,7 @@ html, body { background: var(--paper); color: var(--ink); margin: 0; height: 100
 .fr-letter .eff .dn { color: var(--graphite); }
 .fr-letter .eff [data-a] { cursor: pointer; }
 .fr-letter .why { position: absolute; right: 14px; top: 8px; font-family: var(--hand); font-size: 17px; line-height: 20px; color: var(--graphite); }
+.fr-letter .why.teach { font-size: 15px; line-height: 17px; max-width: 58%; text-align: right; }
 .fr-letter.fit1 .body { font-size: 11.5px; line-height: 16px; }
 .fr-letter.fit1 .body.hand { font-size: 17px; line-height: 19px; }
 .fr-letter.fit2 .body.hand { font-size: 16px; line-height: 18px; }
@@ -145,7 +148,12 @@ html, body { background: var(--paper); color: var(--ink); margin: 0; height: 100
 .fr-note { position: absolute; left: 0; top: 0; font-family: var(--hand); font-size: 15px; line-height: 17px; color: var(--ink); white-space: nowrap; transition: color 1.2s, opacity .8s; text-shadow: 0 0 2px var(--paper), 0 0 2px var(--paper), 0 0 1px var(--paper); will-change: transform; }
 .fr-note .c { opacity: 0; }
 .fr-note .c.on { opacity: 1; }
-.fr-note.faded { color: var(--grid); }
+.fr-note.pencil { color: var(--graphite); }
+.fr-note.faded, .fr-note.pencil.faded { color: var(--grid); }
+.fr-note.wrap { white-space: normal; font-size: 17px; line-height: 20px; text-align: center; }
+.fr-note.goalw { white-space: normal; }
+.fr-note.teach { color: var(--graphite); }
+.fr-note.teach.typed { color: var(--graphite); }
 .fr-note.typed { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: var(--graphite); }
 .fr-note.keep.faded { color: var(--graphite); }
 .fr-note.ring { padding: 0 4px; }
@@ -153,13 +161,14 @@ html, body { background: var(--paper); color: var(--ink); margin: 0; height: 100
 #fr.dry .fr-note { color: var(--dry); }
 
 /* ---------- moments and the paper feed ---------- */
-#fr-moment { position: absolute; inset: 0; z-index: 7; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .4s linear; padding: 24px max(24px, env(safe-area-inset-right, 0px)) 24px max(24px, env(safe-area-inset-left, 0px)); background: rgba(228, 229, 225, .92); }
+#fr-moment { position: absolute; inset: 0; z-index: 7; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .4s linear; padding: 24px max(24px, env(safe-area-inset-right, 0px)) 24px max(24px, env(safe-area-inset-left, 0px)); background: rgba(228, 229, 225, .96); }
 #fr-moment.on { opacity: 1; }
 #fr-moment.out { transition: opacity .6s linear; }
 #fr-moment-text { font-family: var(--serif); font-size: 21px; line-height: 30px; margin: 0; max-width: 640px; white-space: pre-wrap; color: var(--ink); }
 #fr-moment-text span { transition: opacity .12s linear; }
 #fr-moment-text.code { font-family: var(--mono); font-size: 16px; line-height: 24px; }
 #fr.dim28 #fr-head, #fr.dim28 #fr-band, #fr.dim28 #fr-clusterwrap, #fr.dim28 #fr-stripwrap, #fr.dim28 #fr-letterzone, #fr.dim28 #fr-team, #fr.dim28 #fr-heads, #fr.dim28 #fr-notes { opacity: .08; }
+#fr.dim28.keephead #fr-heads { opacity: 1; }
 #fr.undim #fr-head, #fr.undim #fr-band, #fr.undim #fr-clusterwrap, #fr.undim #fr-stripwrap, #fr.undim #fr-letterzone, #fr.undim #fr-team, #fr.undim #fr-heads, #fr.undim #fr-notes { transition: opacity .6s; }
 #fr.feedout { transition: transform .9s cubic-bezier(.6, 0, .35, 1); transform: translate3d(-104%, 0, 0); }
 #fr.feedin-start { transition: none; transform: translate3d(104%, 0, 0); }
@@ -215,7 +224,7 @@ html, body { background: var(--paper); color: var(--ink); margin: 0; height: 100
 /* ---------- laptop: the same stack, centred, heights as shares of the viewport ---------- */
 @media (min-width: 960px) {
   #fr {
-    --margin: 120px;
+    --margin: 130px;
     grid-template-columns: 1fr minmax(0, 1200px) 1fr;
     grid-template-rows: max(7vh, 64px) minmax(160px, 1fr) max(12vh, 84px) max(7vh, 52px) max(7vh, 60px) max(15vh, 142px);
     grid-template-areas: ". head ." ". paper ." ". band ." ". cluster ." ". strip ." ". letter .";
@@ -225,6 +234,9 @@ html, body { background: var(--paper); color: var(--ink); margin: 0; height: 100
   #fr-mute { top: calc(max(2vh, 12px) + 24px); }
   #fr-months { top: max(.5vh, 3px); }
   #fr-months-n { font-size: 44px; line-height: 46px; }
+  .fr-note { font-size: 17px; line-height: 19px; }
+  .fr-note.wrap { font-size: 19px; line-height: 23px; }
+  .fr-note.typed { font-size: 11px; }
   #fr-heads { top: 10px; }
   #fr-team { top: 40px; }
   #fr-team li { height: 32px; }
@@ -254,3 +266,22 @@ html, body { background: var(--paper); color: var(--ink); margin: 0; height: 100
   #fr-team button { transition: none; }
   #fr-sample span, #fr-moment-text span { transition: none; }
 }
+
+/* ---------- the end frame: one or two plain sentences, where the letters were ---------- */
+#fr-end { position: absolute; left: 0; right: 0; top: 6px; max-width: 460px; margin: 0 auto; opacity: 0; transition: opacity .8s ease; pointer-events: none; z-index: 4; color: var(--ink); }
+#fr-end.on { opacity: 1; }
+#fr-end .eh { font-size: 10px; letter-spacing: 0.1em; color: var(--graphite); line-height: 14px; }
+#fr-end p { margin: 4px 0 0; font-size: 12px; line-height: 17px; }
+#fr-end .ea { margin-top: 6px; font-family: var(--hand); font-size: 16px; line-height: 18px; color: var(--graphite); }
+#fr.dry #fr-end { color: var(--ink); }
+@media (min-width: 960px) { #fr-end { max-width: 640px; top: 10px; } #fr-end p { font-size: 13px; line-height: 19px; } #fr-end .eh { font-size: 11px; } }
+@media (max-height: 760px) and (max-width: 959px) and (orientation: portrait) { #fr-end p { font-size: 11px; line-height: 15px; } #fr-end .ea { font-size: 15px; } }
+
+/* while a thumb sets the bet, the readout owns the space above the cluster */
+#fr.dragging #fr-cards { opacity: 0; }
+#fr.dragging .fr-note.at-cluster { opacity: 0 !important; }
+/* a warning written in the empty doorway steps aside while a letter is there */
+.fr-note.door { transition: color 1.2s, opacity .3s; }
+#fr.letterup .fr-note.door { opacity: 0 !important; }
+#fr.inmoment:not(.dim28) #fr-letterzone { opacity: .3; pointer-events: none; }
+#fr.inmoment:not(.dim28) #fr-stripwrap { opacity: .45; transition: opacity .25s; }
