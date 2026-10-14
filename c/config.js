@@ -6,7 +6,7 @@
     year: 2020,
     endDay: 366,                 // the year ends at midnight after day 365 (Thu 31 Dec 2020)
     daysPerSec: 1,               // 1x = one game day per real second
-    speeds: [1, 2, 4],
+    speeds: [1, 2],
     minRunRealSec: 4,            // a run never pours in under 4 real seconds at 1x (short runs slow the clock)
     hangMinRealSec: 1.8,         // a hang stays dark at least this long at 1x, so a name can be woken
     slots: [1, 11, 21],          // days of the month when letters (offers, demands, poaches) can knock
@@ -34,7 +34,7 @@
     },
     buy: {
       dgx1: { label: 'DGX-1', n: 8, type: 'v100', price: 149000, lead: 28, from: 0 },
-      pod: { label: 'V100 pod', n: 64, type: 'v100', price: 800000, lead: 56, from: 0 },
+      pod: { label: 'V100 pod', n: 64, type: 'v100', price: 1192000, lead: 56, from: 0 },
       dgxa: { label: 'DGX A100', n: 8, type: 'a100', price: 199000, lead: 84, from: 134 },
       poda: { label: 'A100 pod', n: 64, type: 'a100', price: 1592000, lead: 84, from: 134 }
     },
@@ -47,6 +47,12 @@
     /* ---------- Meridian (fictional cloud giant) ---------- */
     meridian: { credits: 50000000, cards: 1024, lead: 56, rate: 2.48, needC: 1e21, fromDay: 91, firstLook: 7,
       queueFrom: 162, queueFull: 2, queueHalf: 10, second: { fromDay: 166, cards: 512, stakeMult: 0.9 } },
+
+    /* ---------- the lab's books (display addendum): what the lab owns, fixed prices, no depreciation ---------- */
+    own: { v100: 18625, a100: 24875, v100Day: 59.52, ownedPerDay: 4.93, life: 912, mfu: 0.32, base: 2.765e19, gpt3Years: 365 },
+    desperation: { months: 6, floor: 0.6 },   // under 6 months until broke, investors smell it: post x (0.6 + 0.4 x months / 6)
+    preset: { days: 21, maxDays: 60 },
+    sizes: [1, 8, 32, 64],        // units of today's best box on the shelf
 
     /* ---------- raising ---------- */
     lineDay: 22,                 // 23 Jan: the scaling-laws paper
@@ -61,7 +67,7 @@
     gpt3C: 3.14e23, gpt3L: 1.763, gpt3Day: 148, miracleTol: 1.005, miracleCTol: 0.97,
     tokGPT3: 3.0e11, tokExp: 0.27,                                  // the fixed 2020 recipe: D = 300B x (C / 3.14e23)^0.27
     offRecipeK: 0.03,            // loss x (1 + k x decades-off-recipe^2) when tokens stray from the recipe
-    memLimit: [1e9, 2e10, 4e11], // max parameters with 0, 1, 2+ systems people (one card; split across 8; pipelines)
+    memLimit: [2e9, 2e10, 4e11], // max parameters with 0, 1, 2+ systems people (one 32 GB card; split across 8; pipelines)
     horizonMult: 10, horizonFirst: 2.765e20,
     extrapSigma: 0.02,           // per decade past the measured horizon: the run may land this much high
     scalingSigmaMult: 0.25, lineKnownMult: 0.7,
@@ -70,7 +76,7 @@
     optBend: 0.975, optDelay: 30, // an optimizer person bends every run 2.5% under the line after 30 days
     pastWallPenalty: 0.04,       // per doubling of tokens past the wall
     checkpoints: (function () { var a = [0.0005, 0.002, 0.01]; for (var i = 1; i <= 20; i++) a.push(+(i * 0.05).toFixed(2)); return a; })(),
-    autoSampleAt: [0.35, 0.75],
+    autoSampleAt: [0.12, 0.45, 0.8],   // the first saved-model sample lands about 3 s into a 3-week run
     paramsMin: 5e7, paramsMax: 5e11, tokensMin: 1e9, tokensMax: 1e12,
     starter: { N: 1.5e8, D: 2.2e10 },
 
@@ -87,7 +93,7 @@
     /* ---------- data wall and filter jobs ---------- */
     W_lo: 14e9, W_hi: 40e9, passes: 4, rawCrawl: 1.4e12,
     cleanR: 0.62, frayStep: 0.076, frayMax: 5,
-    filterMult: 1.862, filterCost: 150000, filterDays: 21, filterDaysPair: 12,
+    filterMult: 1.862, filterCost: 150000, filterDays: 30, filterDaysPair: 17,
 
     /* ---------- capabilities and the API ---------- */
     caps: [['paragraph', 2e21, 0.2], ['arithmetic', 1e22, 0.3], ['translation', 6e22, 0.3], ['code', 2.5e23, 0.3]],

@@ -60,6 +60,7 @@ window.FrontierAudio = (function () {
   A.launch = function () { if (!ok()) return; try { var o = tone(110, 600, -22, 'sawtooth', 0.02); o.frequency.linearRampToValueAtTime(220, now() + 0.5); } catch (e) {} };
   A.land = function (good) { if (!ok()) return; try { tone(good ? 784 : 330, 260, -24, 'sine'); setTimeout(function () { try { tone(good ? 1175 : 247, 380, -26, 'sine'); } catch (e) {} }, 140); } catch (e) {} };
   A.knock = function () { if (!ok()) return; try { tone(180, 70, -22, 'sine'); setTimeout(function () { try { tone(160, 80, -24, 'sine'); } catch (e) {} }, 130); } catch (e) {} };
+  A.thunk = function () { if (!ok()) return; try { var o = tone(96, 420, -14, 'sine', 0.004); o.frequency.setValueAtTime(130, now()); o.frequency.exponentialRampToValueAtTime(70, now() + 0.35); tone(48, 300, -20, 'triangle', 0.004); } catch (e) {} };
   A.click = function () { if (!ok() || !gate('c', 40)) return; try { tone(1500, 12, -36, 'square'); } catch (e) {} };
   A.bad = function () { if (!ok()) return; try { tone(196, 300, -22, 'triangle'); setTimeout(function () { try { tone(147, 420, -22, 'triangle'); } catch (e) {} }, 200); } catch (e) {} };
   A.vibrate = function (ms) { try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(ms); } catch (e) {} };

@@ -7,150 +7,95 @@
 </head>
 <body>
 <title>Frontier</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;1,8..60,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;1,8..60,400&display=swap">
 <link rel="stylesheet" href="game.css">
 <div id="fx" class="fx">
-  <header id="top" aria-label="Your lab">
-    <div class="t-row t-id">
-      <span class="t-lab"><span class="t-mark" aria-hidden="true"></span><span class="nm">FRONTIER</span></span>
-      <button type="button" class="t-month" id="t-month" data-act="ledger" aria-expanded="false" aria-controls="ledger"><span class="mo" id="t-mo">month 1 of 12</span><span class="dt" id="t-date">1 Jan</span><i class="dotnew" id="t-new" hidden></i></button>
-      <div class="t-speed" role="group" aria-label="Game speed">
-        <button type="button" data-act="speed" data-x="0" id="sp0" aria-label="Pause (space)" aria-pressed="true"><svg viewBox="0 0 12 12" aria-hidden="true"><rect x="2.5" y="2" width="2.4" height="8"/><rect x="7.1" y="2" width="2.4" height="8"/></svg></button>
-        <button type="button" data-act="speed" data-x="1" id="sp1" aria-pressed="false" aria-label="Normal speed (1)">1&times;</button>
-        <button type="button" data-act="speed" data-x="2" id="sp2" aria-pressed="false" aria-label="Double speed (2)">2&times;</button>
+  <header class="top" id="top">
+    <div class="t-row">
+      <div class="brand">
+        <span class="lab">FRONTIER</span>
+        <button type="button" class="month" id="t-month" aria-haspopup="true" aria-expanded="false" aria-controls="ledger" title="The monthly slips"><span id="t-m">month 1 of 12</span><i class="pip" id="t-pip" hidden></i></button>
+        <span class="date num"><span id="t-date">01 JAN</span><span class="yr" id="t-yr"> 2020</span></span>
       </div>
-      <button type="button" class="t-mute" data-act="mute" id="mute" aria-pressed="false" aria-label="Sound on. Press to mute (M)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h3l4-3v10l-4-3H2z"/><path class="w1" d="M11 5.5c1 .8 1 4.2 0 5"/><path class="w2" d="M12.8 3.8c2 1.8 2 6.6 0 8.4"/><path class="x" d="M11 6l4 4M15 6l-4 4"/></svg></button>
+      <div class="clock" role="group" aria-label="Time and sound">
+        <button type="button" class="tb" id="t-pause" aria-label="Pause (space)" title="Pause (space)"><svg viewBox="0 0 16 16" aria-hidden="true"><g class="ic-pause"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></g><path class="ic-play" d="M4 2.2v11.6L13.6 8z"/></svg></button>
+        <button type="button" class="tb sp" data-speed="1" aria-label="Normal speed: one day per second">1&times;</button>
+        <button type="button" class="tb sp" data-speed="2" aria-label="Double speed">2&times;</button>
+        <button type="button" class="tb" id="t-mute" aria-label="Sound on. Press to mute (M)" title="Sound (M)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h3l4-3v10l-4-3H2z"/><path class="w1" d="M11 5.5c1 .8 1 4.2 0 5" fill="none" stroke-width="1.4"/><path class="w2" d="M12.6 3.8c2 1.8 2 6.6 0 8.4" fill="none" stroke-width="1.4"/></svg></button>
+      </div>
     </div>
-    <div class="t-figs" role="group" aria-label="The four numbers that matter">
-      <button type="button" class="fig" id="f-cash" data-act="goto" data-to="money"><span class="k">Cash</span><span class="v" id="t-cash">$5.85M</span><span class="tg" id="g-cash"></span></button>
-      <button type="button" class="fig" id="f-runway" data-act="goto" data-to="money"><span class="k">Months until broke</span><span class="v" id="t-runway">92</span><span class="tg" id="g-runway"></span></button>
-      <button type="button" class="fig" id="f-short" data-act="goto" data-to="curve"><span class="k">Short of GPT-3</span><span class="v" id="t-short">&mdash;</span><span class="tg" id="g-short">no model yet</span></button>
-      <button type="button" class="fig lab" id="f-lab" data-act="goto" data-to="models"><span class="k">Your lab owns</span><span class="v" id="t-lab">$149k</span><span class="tg" id="g-lab"></span></button>
+    <div class="figs" id="figs">
+      <div class="fig" id="f-cash"><span class="k">Cash</span><span class="v num" id="v-cash">$0</span><span class="tg num" id="g-cash">&nbsp;</span></div>
+      <div class="fig" id="f-broke"><span class="k">Months until broke</span><span class="v num" id="v-broke">0</span><span class="tg num" id="g-broke">&nbsp;</span></div>
+      <div class="fig" id="f-short"><span class="k">Short of GPT-3</span><span class="v num" id="v-short">&mdash;</span><span class="tg num" id="g-short">&nbsp;</span></div>
+      <div class="fig own" id="f-own"><span class="k">Your lab owns</span><span class="v num" id="v-own">$0</span><span class="tg num" id="g-own">&nbsp;</span></div>
     </div>
-    <div class="ledger" id="ledger" hidden><div class="lg-h"><b>Monthly slips</b><span>Every 1st, after payroll. The clock never stops.</span></div><div class="lg-b" id="ledger-b"></div></div>
+    <div class="ledger" id="ledger" role="region" aria-label="The monthly slips" hidden></div>
   </header>
 
-  <div id="ladder" class="ladder" aria-label="Your goals">
-    <div class="ld-main">
-      <div class="ld-rungs" id="ld-rungs"></div>
-      <div class="ld-bar" id="ld-bar" aria-hidden="true"><i id="ld-fill"></i></div>
-      <div class="ld-sub" id="ld-sub"></div>
-    </div>
-    <div class="verbs" id="verbs" role="group" aria-label="Quick actions">
-      <button type="button" class="verb" data-act="verb" data-v="hire" id="v-hire">Hire</button>
-      <button type="button" class="verb" data-act="verb" data-v="rent" id="v-rent">Rent cards</button>
-      <button type="button" class="verb" data-act="verb" data-v="data" id="v-data">Buy data</button>
-      <button type="button" class="verb" data-act="verb" data-v="raise" id="v-raise">Raise</button>
-    </div>
-    <div class="ld-why" id="ld-why" hidden></div>
-  </div>
+  <section class="ladder" id="ladder" aria-label="Your goals">
+    <div class="rungs" id="rungs"></div>
+    <div class="lbar" id="lbar"><i id="lbar-i"></i></div>
+    <div class="lnote" id="lnote"></div>
+    <nav class="verbs" id="verbs" aria-label="Where to spend">
+      <button type="button" class="verb" data-verb="hire">Hire</button><button type="button" class="verb" data-verb="rent">Rent cards</button><button type="button" class="verb" data-verb="data">Buy data</button><button type="button" class="verb" data-verb="raise">Raise</button>
+    </nav>
+  </section>
 
-  <main id="grid">
-    <section id="curve" class="hero" aria-label="Your training runs">
-      <div class="chartwrap">
-        <canvas id="chart" role="img" aria-label="Error score against compute, both on a log scale. Your models are dots, GPT-3 is the ring."></canvas>
-        <div class="slip" id="slip" hidden aria-live="polite"></div>
+  <div class="voice" id="voice" aria-live="polite"></div>
+
+  <main class="stage" id="stage">
+    <section class="curve" id="curve" aria-label="The curve">
+      <div class="chartwrap" id="chartwrap">
+        <canvas id="chart" role="img" aria-label="Error score against compute: the line you should land on, your saved models, rival labs and GPT-3"></canvas>
+        <div class="slip" id="slip" role="status" hidden></div>
       </div>
-      <div class="train-cols">
-        <div class="col-design" id="designer">
-          <div class="dz-head"><h3>Plan a training run</h3></div>
-          <div class="dz-ctl">
-          <div class="dz-pools" id="d-pools" role="group" aria-label="Which cards"></div>
-          <div class="dz-quick" role="group" aria-label="Quick sizes">
-            <button type="button" data-act="preset" data-p="mem">Biggest that fits</button>
-            <button type="button" data-act="preset" data-p="7">1 week</button>
-            <button type="button" data-act="preset" data-p="21">3 weeks</button>
-            <button type="button" data-act="preset" data-p="60">2 months</button>
-          </div>
-          <div class="dz-row"><label for="d-gpus">Cards</label><input type="range" id="d-gpus" min="0" max="8" step="1" value="8"><output id="o-gpus">8</output></div>
-          <div class="dz-row"><label for="d-n">Model size</label><input type="range" id="d-n" min="0" max="1000" step="1"><output id="o-n">1B</output></div>
-          <div class="dz-row"><label for="d-d">Text to read</label><input type="range" id="d-d" min="0" max="1000" step="1"><output id="o-d">20B</output></div>
-          </div>
-          <div class="dz-res">
-          <div class="dz-out" id="d-out"></div>
-          <ul class="dz-warn" id="d-warn"></ul>
-          </div>
-          <div class="dz-go"><button type="button" class="launch" id="d-launch" data-act="launch">Start the run</button>
-          <button type="button" class="dz-more" data-act="details" id="d-more" aria-expanded="false">Show the numbers</button></div>
-          <div class="dz-adv" id="d-adv" hidden><label class="chk"><input type="checkbox" id="d-recipe" checked> Keep model size and text in balance</label><div class="dz-det" id="d-det"></div></div>
+      <div class="runbar" id="runbar"></div>
+      <div class="model" id="model" aria-live="polite"><div class="model-meta" id="model-meta"></div><p class="model-text" id="model-text"></p></div>
+      <div class="designer" id="designer">
+        <div class="dz-head"><span class="dz-title">Your next run</span><div class="presets" id="d-presets" role="group" aria-label="Quick runs"></div><button type="button" class="chip tune" id="d-tune" aria-expanded="false" aria-controls="d-sliders">Tune it</button></div>
+        <div class="dz-sliders" id="d-sliders">
+          <label class="sl"><span class="sl-k">Model size</span><span class="sl-v num" id="d-params-v"></span><input type="range" id="d-params" min="0" max="1000" step="1" aria-label="Model size: bigger learns more and trains slower"></label>
+          <label class="sl"><span class="sl-k">Text to read</span><span class="sl-v num" id="d-tokens-v"></span><input type="range" id="d-tokens" min="0" max="1000" step="1" aria-label="Text to read, in tokens"></label>
+          <div class="sl"><span class="sl-k">Cards</span><span class="sl-v num" id="d-gpus-v"></span><input type="range" id="d-gpus" min="1" max="8" step="1" aria-label="How many cards"></div>
+          <div class="chips" id="d-pools" role="group" aria-label="Which cards"></div>
+          <label class="recipe"><input type="checkbox" id="d-recipe" checked> match the text to the model size (the 2020 recipe)</label>
         </div>
-        <div class="col-live">
-          <div id="runs" class="runs"></div>
-          <div id="sample" class="sample" aria-live="polite"></div>
-        </div>
+        <div class="dz-read" id="d-read"></div>
+        <ul class="dz-warn" id="d-warn"></ul>
+        <div class="dz-go"><button type="button" class="btn primary" id="d-launch">Start this run</button><span class="dz-note" id="d-note"></span></div>
+        <details class="dz-detail" id="d-detail"><summary>The numbers behind it</summary><div id="d-detail-b"></div></details>
       </div>
     </section>
 
-    <div class="col cl">
-    <section class="row" id="row-team" data-row="team">
-      <button type="button" class="rh" data-act="fold" data-row="team" aria-expanded="false"><span class="rt">Team</span><span class="rs" id="s-team"></span><i class="chev" aria-hidden="true"></i></button>
-      <div class="rb"><div class="rbi" id="b-team"></div></div>
-    </section>
-    <section class="row" id="row-money" data-row="money">
-      <button type="button" class="rh" data-act="fold" data-row="money" aria-expanded="false"><span class="rt">Money</span><span class="rs" id="s-money"></span><i class="chev" aria-hidden="true"></i></button>
-      <div class="rb"><div class="rbi" id="b-money"></div></div>
-    </section>
-    <section class="row" id="row-data" data-row="data">
-      <button type="button" class="rh" data-act="fold" data-row="data" aria-expanded="false"><span class="rt">Data</span><span class="rs" id="s-data"></span><i class="chev" aria-hidden="true"></i></button>
-      <div class="rb"><div class="rbi" id="b-data"></div></div>
-    </section>
+    <div class="col col-l">
+      <section class="fold" id="r-money" data-row="money"><h2 class="row-h"><button type="button" class="row-btn" aria-expanded="false"><span class="row-t">Money</span></button><div class="row-s" id="s-money"></div><i class="row-chev" aria-hidden="true"></i></h2><div class="row-b" id="b-money"></div></section>
+      <section class="fold" id="r-team" data-row="team"><h2 class="row-h"><button type="button" class="row-btn" aria-expanded="false"><span class="row-t">Team</span></button><div class="row-s" id="s-team"></div><i class="row-chev" aria-hidden="true"></i></h2><div class="row-b" id="b-team"></div></section>
+      <section class="fold" id="r-data" data-row="data"><h2 class="row-h"><button type="button" class="row-btn" aria-expanded="false"><span class="row-t">Data</span></button><div class="row-s" id="s-data"></div><i class="row-chev" aria-hidden="true"></i></h2><div class="row-b" id="b-data"></div></section>
     </div>
-    <div class="col cr">
-    <section class="row" id="row-cluster" data-row="cluster">
-      <button type="button" class="rh" data-act="fold" data-row="cluster" aria-expanded="false"><span class="rt">Cluster</span><span class="rs" id="s-cluster"></span><i class="chev" aria-hidden="true"></i></button>
-      <div class="rb"><div class="rbi" id="b-cluster"></div></div>
-    </section>
-    <section class="row" id="row-news" data-row="news" hidden>
-      <button type="button" class="rh" data-act="fold" data-row="news" aria-expanded="false"><span class="rt">Rivals and news</span><span class="rs" id="s-news"></span><i class="chev" aria-hidden="true"></i></button>
-      <div class="rb"><div class="rbi" id="b-news"></div></div>
-    </section>
+    <div class="col col-r">
+      <section class="fold" id="r-cluster" data-row="cluster"><h2 class="row-h"><button type="button" class="row-btn" aria-expanded="false"><span class="row-t">Cluster</span></button><div class="row-s" id="s-cluster"></div><i class="row-chev" aria-hidden="true"></i></h2><div class="row-b" id="b-cluster"></div></section>
+      <section class="fold" id="r-rivals" data-row="rivals" hidden><h2 class="row-h"><button type="button" class="row-btn" aria-expanded="false"><span class="row-t">Rivals and news</span></button><div class="row-s" id="s-rivals"></div><i class="row-chev" aria-hidden="true"></i></h2><div class="row-b" id="b-rivals"></div></section>
     </div>
-    <section class="row shelf-row" id="row-models" data-row="models">
-      <button type="button" class="rh" data-act="fold" data-row="models" aria-expanded="true"><span class="rt">Models</span><span class="rs" id="s-models"></span><i class="chev" aria-hidden="true"></i></button>
-      <div class="rb"><div class="rbi" id="b-models"></div></div>
-    </section>
+    <section class="fold shelf" id="r-models" data-row="models"><h2 class="row-h"><button type="button" class="row-btn" aria-expanded="false"><span class="row-t">Models</span></button><div class="row-s" id="s-models"></div><i class="row-chev" aria-hidden="true"></i></h2><div class="row-b" id="b-models"></div></section>
   </main>
 
-  <div id="floats" class="floats" aria-hidden="true"></div>
-
-  <div id="card" class="modal card-modal" hidden>
-    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="c-title">
-      <button type="button" class="x-close" data-act="closecard" aria-label="Close">&times;</button>
-      <div id="c-body"></div>
-    </div>
-  </div>
-  <div id="modal" class="modal" hidden>
-    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="m-title">
-      <div class="m-paused">Paused &middot; decide to continue</div>
-      <div class="m-plaque" id="m-plaque"></div>
-      <div class="m-from" id="m-from"></div>
-      <h2 id="m-title"></h2>
-      <p class="m-body" id="m-body"></p>
-      <div class="m-sample" id="m-sample"></div>
-      <p class="m-note" id="m-note"></p>
-      <div class="m-opts" id="m-opts"></div>
-    </div>
-  </div>
-  <div id="end" class="modal end" hidden>
-    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="e-title">
-      <div class="m-from" id="e-date"></div>
-      <h2 id="e-title"></h2>
-      <p class="m-body" id="e-reason"></p>
-      <p class="m-body" id="e-gap"></p>
-      <div class="e-score" id="e-score"></div>
-      <div class="m-opts"><button type="button" class="opt primary" data-act="newyear"><b>Play another 2020</b><span>New hidden data wall, rivals and luck. Same rules.</span></button><button type="button" class="opt" data-act="review"><b>Look at the board</b><span>Close this and inspect your year.</span></button></div>
-    </div>
-  </div>
+  <div class="scrim" id="scrim" hidden></div>
+  <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="m-title" hidden></div>
+  <div class="floats" id="floats" aria-hidden="true"></div>
+  <div class="endcard" id="end" role="dialog" aria-modal="true" aria-labelledby="e-head" hidden></div>
 </div>
 <script src="config.js"></script>
-<script src="world.js"></script>
 <script src="corpus.js"></script>
+<script src="world.js"></script>
 <script src="engine.js"></script>
 <script src="audio.js"></script>
-<script src="ui.js"></script>
+<script src="fx.js"></script>
+<script src="strip.js"></script>
 <script src="chart.js"></script>
+<script src="designer.js"></script>
 <script src="rows.js"></script>
-<script src="boot.js"></script>
+<script src="main.js"></script>
 
 </body>
 </html>

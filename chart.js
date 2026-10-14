@@ -1,183 +1,183 @@
-/* FRONTIER control room, build A: the curve. The one loud thing on the screen.
-   Error score (lower is better) against compute, both on log scales. The white dashed line is "the loss you should get for the
-   compute you spent"; your dots sit on it or above it, and the gap is how well you ran. One dimension line runs from your
-   biggest dot to the GPT-3 ring and says how many times short you are. */
-(function () {
+/* The curve: the hero. Error score against compute, both log. One white line (what the compute should buy), your saved models,
+   the labs, GPT-3's ring, and one dimension line from your biggest dot to the ring, labelled with the strip's "times short". */
+(function (X) {
   'use strict';
-  var FX = window.FX, CFG = FX.CFG, FE = FX.FE, log10 = FE.log10, clamp = FE.clamp;
-  var COL = null;
-  function readColors() {
-    var css = getComputedStyle(FX.root);
-    function g(n, d) { var v = (css.getPropertyValue(n) || '').trim(); return v || d; }
-    COL = { line: g('--line', '#1e2731'), line2: g('--line2', '#2a3541'), text: g('--text', '#dde4ec'), muted: g('--muted', '#8b97a5'), dim: g('--dim', '#5d6977'), acc: g('--accent', '#58e0c2'), acc2: g('--accent2', '#2a8f7c'),
-      bad: g('--danger', '#ff5f57'), cau: g('--caution', '#e39b95'), rival: g('--rival', '#8a96a3'), white: g('--white', '#f2f5f8'), bg: g('--panel', '#0f141b'), mono: g('--mono', 'monospace'), sans: g('--sans', 'sans-serif'), gain: g('--gain', '#6bd968') };
+  var log10 = X.log10, clamp = X.clamp, rgba = X.rgba;
+
+  function sizeCanvas(cv) {
+    var r = cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+    var w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    return { w: r.width, h: r.height, dpr: dpr };
   }
-  var geom = null;
-  FX.chartGeom = function () { return geom; };
+  function marker(ctx, kind, x, y, s) {
+    ctx.beginPath();
+    if (kind === 0) ctx.arc(x, y, s, 0, Math.PI * 2);
+    else if (kind === 1) ctx.rect(x - s, y - s, 2 * s, 2 * s);
+    else { ctx.moveTo(x, y - s * 1.2); ctx.lineTo(x + s * 1.1, y + s * 0.9); ctx.lineTo(x - s * 1.1, y + s * 0.9); ctx.closePath(); }
+    ctx.fill();
+  }
 
-  FX.drawChart = function () {
-    var E = FX.E, S = FX.S, ui = FX.ui; if (!S) return;
-    var cv = FX.$('chart'); if (!cv) return;
-    var wrap = cv.parentNode, w = wrap.clientWidth, h = wrap.clientHeight; if (w < 10 || h < 10) return;
-    if (!COL) readColors();
-    var dpr = Math.min(2, window.devicePixelRatio || 1), W2 = Math.round(w * dpr), H2 = Math.round(h * dpr);
-    if (cv.width !== W2 || cv.height !== H2) { cv.width = W2; cv.height = H2; }
-    var c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
-    var small = w < 520, fs = small ? 10 : 11;
-    var padL = small ? 30 : 40, padR = small ? 10 : 18, padT = small ? 30 : 34, padB = small ? 32 : 36;
-    var x0 = CFG.chart.xMin, x1 = CFG.chart.xMax, yLo = Math.log(CFG.chart.yMin), yHi = Math.log(CFG.chart.yMax);
-    var pw = w - padL - padR, ph = h - padT - padB;
-    function X(lc) { return padL + (lc - x0) / (x1 - x0) * pw; }
-    function Y(L) { return padT + (yHi - Math.log(L)) / (yHi - yLo) * ph; }
-    geom = { X: X, Y: Y, padL: padL, padR: padR, padT: padT, padB: padB, w: w, h: h, dots: [] };
-    var t = performance.now();
-
-    // ---- grid: a tick every ten times more compute, no numbers (the caption says what a tick is)
-    c.font = fs + 'px ' + COL.mono; c.lineWidth = 1;
-    c.strokeStyle = COL.line;
-    for (var d = Math.ceil(x0); d <= Math.floor(x1); d++) { var gx = Math.round(X(d)) + 0.5; c.beginPath(); c.moveTo(gx, padT); c.lineTo(gx, padT + ph); c.stroke(); }
-    c.fillStyle = COL.dim; c.textAlign = 'right'; c.textBaseline = 'middle';
-    [2, 3, 4, 6, 10].forEach(function (L) { var gy = Math.round(Y(L)) + 0.5; c.strokeStyle = COL.line; c.beginPath(); c.moveTo(padL, gy); c.lineTo(padL + pw, gy); c.stroke(); c.fillText(String(L), padL - 5, gy); });
-    c.strokeStyle = COL.line2; c.beginPath(); c.moveTo(padL + 0.5, padT); c.lineTo(padL + 0.5, padT + ph + 0.5); c.lineTo(padL + pw, padT + ph + 0.5); c.stroke();
-    // axis ticks along the bottom: one per ten times more compute
-    c.strokeStyle = COL.dim; for (d = Math.ceil(x0); d <= Math.floor(x1); d++) { var tx = Math.round(X(d)) + 0.5; c.beginPath(); c.moveTo(tx, padT + ph); c.lineTo(tx, padT + ph + 4); c.stroke(); }
-    // axis captions
-    c.fillStyle = COL.muted; c.textAlign = 'left'; c.textBaseline = 'top';
-    c.fillText(small ? 'error score, lower is better ↓' : 'error score, lower is better ↓', 4, 6);
-    c.textAlign = 'right'; c.textBaseline = 'bottom';
-    c.fillText(small ? 'compute: each tick is 10x more →' : 'compute: each tick is ten times more →', w - padR, h - 6);
-
-    // ---- the Series A bar: dim until the third rung is lit
-    var L = E.ladder(), rung = L.rungs[L.lit], aLit = rung && rung.id === 'seriesA';
-    if (!S.raise.aDone && log10(S.raise.aNeed) <= x1) {
-      var ax = Math.round(X(log10(S.raise.aNeed))) + 0.5;
-      c.save(); c.globalAlpha = aLit ? 0.8 : 0.3; c.strokeStyle = aLit ? COL.acc : COL.muted; c.setLineDash([3, 4]);
-      c.beginPath(); c.moveTo(ax, padT); c.lineTo(ax, padT + ph); c.stroke(); c.setLineDash([]);
-      c.fillStyle = aLit ? COL.acc : COL.muted; c.textAlign = 'right'; c.textBaseline = 'top'; c.fillText('Series A', ax - 4, padT + 3); c.restore();
+  X.drawChart = function (cv, opts) {
+    opts = opts || {};
+    var G = X.G, S = X.S, F = X.F, CFG = X.CFG, T = X.tokens, ui = X.ui;
+    var sz = sizeCanvas(cv); if (sz.w < 20 || sz.h < 20) return;
+    var ctx = cv.getContext('2d'); ctx.setTransform(sz.dpr, 0, 0, sz.dpr, 0, 0);
+    var W = sz.w, H = sz.h, phone = W < 520;
+    var padL = phone ? 28 : 36, padR = 12, padT = 24, padB = phone ? 32 : 36;
+    var xMin = CFG.chart.xMin, xMax = CFG.chart.xMax, yMin = CFG.chart.yMin, yMax = CFG.chart.yMax;
+    function Xc(C) { return padL + (log10(C) - xMin) / (xMax - xMin) * (W - padL - padR); }
+    function Yc(L) { return padT + (Math.log(yMax) - Math.log(L)) / (Math.log(yMax) - Math.log(yMin)) * (H - padT - padB); }
+    ctx.clearRect(0, 0, W, H);
+    var mono = (phone ? '9.5px ' : '10.5px ') + '"IBM Plex Mono", ui-monospace, Menlo, monospace';
+    ctx.font = mono; ctx.textBaseline = 'middle';
+    var placed = [], labels = [], hits = [];
+    function block(x, y, r) { placed.push({ x: x - r, y: y - r, w: 2 * r, h: 2 * r }); }
+    function want(text, x, y, color, pri, cands) { labels.push({ t: text, x: x, y: y, c: color, p: pri, cands: cands }); }
+    function overlaps(a) { for (var i = 0; i < placed.length; i++) { var b = placed[i]; if (a.x < b.x + b.w + 2 && a.x + a.w + 2 > b.x && a.y < b.y + b.h + 1 && a.y + a.h + 1 > b.y) return true; } return false; }
+    var CANDS = [[9, -9], [9, 9], [-9, -9], [-9, 9], [0, -15], [0, 15], [14, 0], [-14, 0]];
+    function placeAll() {
+      labels.sort(function (a, b) { return a.p - b.p; });
+      labels.forEach(function (l) {
+        var w = ctx.measureText(l.t).width, h = 12, cands = l.cands || CANDS;
+        for (var i = 0; i < cands.length; i++) {
+          var dx = cands[i][0], dy = cands[i][1];
+          var left = dx > 0 ? l.x + dx : dx < 0 ? l.x + dx - w : l.x - w / 2, top = l.y + dy - h / 2;
+          var r = { x: left, y: top, w: w, h: h };
+          if (left < padL + 1 || left + w > W - padR - 1 || top < 2 || top + h > H - padB - 1) continue;
+          if (overlaps(r)) continue;
+          placed.push(r); ctx.fillStyle = l.c; ctx.textAlign = 'left'; ctx.fillText(l.t, left, top + h / 2); return;
+        }
+      });
     }
+    // grid and axes
+    ctx.lineWidth = 1;
+    for (var e = xMin; e <= xMax; e++) {
+      var x = Math.round(Xc(Math.pow(10, e))) + 0.5;
+      ctx.strokeStyle = rgba(T['line-2'], 0.9); ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, H - padB); ctx.stroke();
+      if (!phone || e % 2 === 1) { ctx.fillStyle = T.dim; ctx.textAlign = 'center'; ctx.fillText('1e' + e, x, H - padB + 9); }
+    }
+    [1.5, 2, 3, 4, 6, 10].forEach(function (L) { var y = Math.round(Yc(L)) + 0.5; ctx.strokeStyle = rgba(T['line-2'], 0.6); ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke(); ctx.fillStyle = T.dim; ctx.textAlign = 'right'; ctx.fillText(String(L), padL - 5, y); });
+    ctx.textAlign = 'left'; ctx.fillStyle = T.muted;
+    var yl = 'error score, lower is better ↓'; ctx.fillText(yl, padL + 4, 11);
+    placed.push({ x: padL + 4, y: 5, w: ctx.measureText(yl).width, h: 12 });
+    var xl = phone ? 'compute: each tick is ten times more →' : 'compute: each tick is ten times more →';
+    ctx.textAlign = 'right'; ctx.fillStyle = T.muted; ctx.fillText(xl, W - padR, H - 8);
+    var dv = G.derived(), ladder = G.ladder(), litId = ladder.lit >= 0 ? ladder.rungs[ladder.lit].id : '';
 
-    // ---- the line: the loss you should get for the compute you spent
-    c.save(); c.strokeStyle = COL.white; c.globalAlpha = S.day >= E.DAY.line ? 0.62 : 0.3; c.lineWidth = 1.2; c.beginPath();
-    for (var lc = x0; lc <= x1 + 1e-9; lc += 0.05) { var ly = Y(E.Lline(Math.pow(10, lc))); if (lc === x0) c.moveTo(X(lc), ly); else c.lineTo(X(lc), ly); }
-    c.stroke(); c.restore();
-    // caption riding on the line
-    var cl = small ? 17.15 : 17.3, cx = X(cl), cy = Y(E.Lline(Math.pow(10, cl))), cl2 = cl + 1, ang = Math.atan2(Y(E.Lline(Math.pow(10, cl2))) - cy, X(cl2) - cx);
-    c.save(); c.translate(cx, cy); c.rotate(ang); c.fillStyle = COL.muted; c.globalAlpha = 0.95; c.textAlign = 'left'; c.textBaseline = 'top';
-    c.font = 'italic ' + fs + 'px ' + COL.sans;
-    if (small) { c.fillText('the loss you should get', 4, 5); c.fillText('for the compute you spent', 4, 5 + fs + 2); }
-    else c.fillText('the loss you should get for the compute you spent', 4, 5);
-    c.restore();
-    c.font = fs + 'px ' + COL.mono;
-
-    // ---- GPT-3
-    var gx3 = X(log10(CFG.gpt3.C)), gy3 = Y(CFG.gpt3.L), real = S.day >= E.DAY.gpt3;
-    c.save(); c.strokeStyle = COL.white; c.lineWidth = 1.6;
-    if (!real) c.setLineDash([2, 2]);
-    c.beginPath(); c.arc(gx3, gy3, 7, 0, 6.2832); c.stroke(); c.setLineDash([]);
-    if (real) { c.fillStyle = COL.white; c.beginPath(); c.arc(gx3, gy3, 2.8, 0, 6.2832); c.fill(); }
-    c.fillStyle = COL.white; c.textAlign = 'center'; c.textBaseline = 'top'; c.fillText(real ? 'GPT-3' : 'GPT-3 size', Math.min(gx3, w - padR - c.measureText('GPT-3 size').width / 2 + 4), gy3 + 10); c.restore();
-
-    // ---- rivals: quiet grey
-    var used = [];
-    S.rivals.forEach(function (rv) {
-      var pts = rv.pubs.filter(function (p) { return log10(p.C) >= x0; }).map(function (p) { return [X(log10(p.C)), Y(clamp(p.L, CFG.chart.yMin, CFG.chart.yMax)), p]; });
-      c.save(); c.strokeStyle = COL.rival; c.fillStyle = COL.rival; c.globalAlpha = 0.55; c.setLineDash([2, 3]);
-      if (pts.length > 1) { c.beginPath(); pts.forEach(function (p, i) { if (i) c.lineTo(p[0], p[1]); else c.moveTo(p[0], p[1]); }); c.stroke(); }
-      c.setLineDash([]); pts.forEach(function (p) { c.beginPath(); c.arc(p[0], p[1], 2.4, 0, 6.2832); c.fill(); });
-      var lp = pts[pts.length - 1];
-      if (lp) {
-        c.globalAlpha = 0.9; c.textAlign = 'left'; c.textBaseline = 'middle';
-        var lab = small ? rv.name : rv.name, ly2 = lp[1] - 10, lx = lp[0] + 5;
-        used.forEach(function (b) { if (Math.abs(b - ly2) < fs + 2) ly2 -= fs + 2; });
-        used.push(ly2);
-        if (lx + c.measureText(lab).width > w - 4) { c.textAlign = 'right'; lx = lp[0] - 5; }
-        c.fillText(lab, lx, ly2);
-      }
-      c.restore();
+    // the data wall estimate (in compute, on the recipe): quiet
+    var wlo = G.C_of_tokens(S.data.lo), whi = G.C_of_tokens(S.data.hi);
+    if (log10(wlo) < xMax) {
+      var x0 = Xc(Math.max(wlo, Math.pow(10, xMin))), x1 = Math.min(Xc(whi), W - padR);
+      ctx.fillStyle = rgba(T.danger, 0.07); ctx.fillRect(x0, padT, Math.max(2, x1 - x0), H - padT - padB);
+      ctx.strokeStyle = rgba(T.danger, 0.45); ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(Math.round(x0) + 0.5, padT); ctx.lineTo(Math.round(x0) + 0.5, H - padB); ctx.stroke(); ctx.setLineDash([]);
+      want('the data wall', x0, padT + 20, rgba(T.danger, 0.9), 5, [[4, 0], [4, 14], [-4, 0]]);
+    }
+    // the biggest model that fits one card (until systems people arrive)
+    if (dv.memLimit < CFG.memLimit[2]) {
+      var memC = Math.pow(6 * dv.memLimit * CFG.tokGPT3 / Math.pow(CFG.gpt3C, CFG.tokExp), 1 / (1 - CFG.tokExp));
+      var mx = Math.round(Xc(memC)) + 0.5;
+      if (mx < W - padR) { ctx.strokeStyle = rgba(T.muted, 0.45); ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.moveTo(mx, padT); ctx.lineTo(mx, H - padB); ctx.stroke(); ctx.setLineDash([]); want('too big to fit', mx, padT + 8, T.muted, 6, [[-4, 0], [-4, 14], [4, 28], [-4, 28]]); }
+    }
+    // the line: what the compute should buy. Cold white.
+    var lineKnown = S.day >= CFG.lineDay;
+    ctx.strokeStyle = lineKnown ? rgba(T.white, 0.8) : rgba(T.white, 0.35); ctx.lineWidth = 1.5; ctx.setLineDash(lineKnown ? [] : [4, 4]);
+    var lx0 = Xc(Math.pow(10, xMin)), ly0 = Yc(G.Lline(Math.pow(10, xMin))), lx1 = Xc(Math.pow(10, xMax)), ly1 = Yc(G.Lline(Math.pow(10, xMax)));
+    ctx.beginPath(); ctx.moveTo(lx0, ly0); ctx.lineTo(lx1, ly1); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+    // its caption, written along the line, above it, in the empty left end; it keeps the labels off its way
+    var ang = Math.atan2(ly1 - ly0, lx1 - lx0), cos = Math.cos(ang), sin = Math.sin(ang);
+    var capLines = phone ? ['the loss you should get', 'for the compute you spent'] : ['the loss you should get for the compute you spent'];
+    ctx.save(); ctx.font = (phone ? '9px ' : '10px ') + '"IBM Plex Sans", system-ui, sans-serif'; ctx.fillStyle = rgba(T.white, 0.66); ctx.textAlign = 'left';
+    var cStart = phone ? 0.035 : 0.05;
+    capLines.forEach(function (ln, i) {
+      var w = ctx.measureText(ln).width, off = -8 - (capLines.length - 1 - i) * 11, ox = lx0 + (lx1 - lx0) * cStart, oy = ly0 + (ly1 - ly0) * cStart;
+      ctx.save(); ctx.translate(ox, oy); ctx.rotate(ang); ctx.fillText(ln, 6, off); ctx.restore();
+      var xs = [6, 6 + w], ys = [off - 9, off + 2], minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+      xs.forEach(function (u) { ys.forEach(function (v) { var px = ox + u * cos - v * sin, py = oy + u * sin + v * cos; minx = Math.min(minx, px); maxx = Math.max(maxx, px); miny = Math.min(miny, py); maxy = Math.max(maxy, py); }); });
+      placed.push({ x: minx, y: miny, w: maxx - minx, h: maxy - miny });
     });
-
-    // ---- your runs: finished curves faint, the live curve bright white and pouring
+    ctx.restore();
+    // rivals: grey, quiet
+    var rcol = [T['rival-a'], T['rival-b'], T['rival-c']];
+    S.rivals.forEach(function (rv, i) {
+      var pubs = rv.pubs.filter(function (p) { return p.day <= S.day; }); if (!pubs.length) return;
+      ctx.strokeStyle = rgba(rcol[i], 0.3); ctx.setLineDash([2, 3]); ctx.beginPath(); pubs.forEach(function (p, j) { var px = Xc(p.C), py = Yc(p.L); if (j) ctx.lineTo(px, py); else ctx.moveTo(px, py); }); ctx.stroke(); ctx.setLineDash([]);
+      pubs.forEach(function (p, j) { var px = Xc(p.C), py = Yc(p.L); ctx.fillStyle = rgba(rcol[i], j === pubs.length - 1 ? 0.95 : 0.55); marker(ctx, i, px, py, j === pubs.length - 1 ? 3.4 : 2.2); });
+      var lp = pubs[pubs.length - 1]; block(Xc(lp.C), Yc(lp.L), 4);
+      want(rv.name, Xc(lp.C), Yc(lp.L), rgba(rcol[i], 0.9), 7 + i * 0.1);
+    });
+    // GPT-3
+    var gx = Xc(CFG.gpt3C), gy = Yc(CFG.gpt3L), out = S.day >= CFG.gpt3Day;
+    ctx.strokeStyle = T.white; ctx.lineWidth = 1.5; ctx.setLineDash(out ? [] : [2, 2]); ctx.beginPath(); ctx.arc(gx, gy, 6, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+    if (out) { ctx.fillStyle = T.white; ctx.beginPath(); ctx.arc(gx, gy, 3, 0, Math.PI * 2); ctx.fill(); }
+    block(gx, gy, 8);
+    want(out ? 'GPT-3' : 'GPT-3 · 28 May', gx, gy, T.white, 1, [[-10, 12], [-10, -12], [10, 12], [10, -12]]);
+    // Series A bar: dim until the third rung is lit
+    if (!S.raise.aDone) {
+      var aC = Math.max(CFG.seriesA.needC, S.raise.aNeed), ax = Xc(aC), ay = Yc(G.Lline(aC)), lit = litId === 'seriesA', aa = lit ? 0.85 : 0.28;
+      ctx.strokeStyle = rgba(T.accent, aa); ctx.beginPath(); ctx.moveTo(ax, ay - 14); ctx.lineTo(ax, ay - 4); ctx.stroke();
+      want('Series A', ax, ay - 16, rgba(T.accent, lit ? 0.95 : 0.4), 4, [[0, -6], [6, -6], [-6, -6], [0, 26]]);
+    }
+    // your saved models
+    S.runs.slice(-14).forEach(function (r) {
+      if (!r.pts || r.pts.length < 2 || r.aborted) return;
+      ctx.strokeStyle = r.clean ? rgba(T.accent, 0.2) : rgba(T.danger, 0.25); ctx.beginPath();
+      r.pts.forEach(function (p, j) { var px = Xc(p.x), py = Yc(clamp(p.y, yMin, yMax)); if (j) ctx.lineTo(px, py); else ctx.moveTo(px, py); }); ctx.stroke();
+    });
     S.runs.forEach(function (r) {
-      if (r.state === 'aborted' || !r.pts.length) return;
-      var live = r.state === 'train';
-      c.save(); c.strokeStyle = COL.white; c.globalAlpha = live ? 0.95 : 0.22; c.lineWidth = live ? 1.8 : 1; c.lineJoin = 'round';
-      c.beginPath(); var started = false;
-      for (var i = 0; i < r.pts.length; i++) { var p = r.pts[i], lcx = log10(p[0] * r.C); if (lcx < x0) continue; var px = X(lcx), py = Y(clamp(p[1], CFG.chart.yMin, CFG.chart.yMax)); if (!started) { c.moveTo(px, py); started = true; } else c.lineTo(px, py); }
-      c.stroke(); c.restore();
-      if (live && r.pts.length) {
-        var hp = r.pts[r.pts.length - 1], hx = X(Math.max(x0, log10(hp[0] * r.C))), hy = Y(clamp(hp[1], CFG.chart.yMin, CFG.chart.yMax));
-        // where it is headed
-        var tx2 = X(log10(r.C)), ty2 = Y(clamp(r.projAtLaunch, CFG.chart.yMin, CFG.chart.yMax));
-        c.save(); c.globalAlpha = 0.45; c.strokeStyle = COL.acc; c.setLineDash([2, 3]); c.beginPath(); c.moveTo(hx, hy); c.lineTo(tx2, ty2); c.stroke(); c.setLineDash([]); c.beginPath(); c.arc(tx2, ty2, 4, 0, 6.2832); c.stroke(); c.restore();
-        c.save(); c.fillStyle = r.hang ? COL.bad : COL.acc;
-        if (!FX.reduced() && !r.hang) { c.globalAlpha = 0.22; c.beginPath(); c.arc(hx, hy, 8 + 2.5 * Math.sin(t / 220), 0, 6.2832); c.fill(); }
-        c.globalAlpha = 1; c.beginPath(); c.arc(hx, hy, 3.8, 0, 6.2832); c.fill();
-        c.textAlign = hx > w - 90 ? 'right' : 'left'; c.textBaseline = 'bottom'; c.fillText((r.hang ? 'dropped ' : '') + Math.round(r.q * 100) + '%', hx + (c.textAlign === 'left' ? 7 : -7), hy - 5); c.restore();
+      if (r.aborted || !r.L) return;
+      var px = Xc(r.C), py = Yc(r.L); hits.push({ x: px, y: py, r: 12, id: r.id });
+      if (!r.clean) { ctx.strokeStyle = T.danger; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1; return; }
+      ctx.fillStyle = T.accent; ctx.beginPath(); ctx.arc(px, py, 3.6, 0, Math.PI * 2); ctx.fill();
+      if (r.published) { ctx.strokeStyle = T.accent; ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.stroke(); }
+      if (r.shipped) { ctx.strokeStyle = T.accent; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(px + 6, py); ctx.lineTo(px + 12, py); ctx.stroke(); ctx.lineWidth = 1; }
+    });
+    var best = dv.best;
+    if (best) {
+      var bx = Xc(best.C), by = Yc(best.L);
+      block(bx, by, 7);
+      // the dimension line: from your biggest dot to the ring
+      if (best.C < CFG.gpt3C * 0.95) {
+        var sx = bx + 8, ex = gx - 9;
+        if (ex > sx + 14) {
+          var ly = (by + gy) / 2 - 0; var y1 = by, y2 = gy;
+          ctx.strokeStyle = rgba(T.white, 0.55); ctx.setLineDash([5, 3]); ctx.beginPath(); ctx.moveTo(sx, y1); ctx.lineTo(ex, y2); ctx.stroke(); ctx.setLineDash([]);
+          ctx.strokeStyle = rgba(T.white, 0.75); ctx.beginPath(); ctx.moveTo(sx, y1 - 4); ctx.lineTo(sx, y1 + 4); ctx.moveTo(ex, y2 - 4); ctx.lineTo(ex, y2 + 4); ctx.stroke();
+          var txt = F.ratio(G.shortOf(best.C)) + ' short';
+          var mxp = (sx + ex) / 2, myp = (y1 + y2) / 2, tw = ctx.measureText(txt).width + 8;
+          placed.push({ x: mxp - tw / 2, y: myp - 16, w: tw, h: 12 });
+          ctx.fillStyle = T.bg || '#050809'; ctx.fillStyle = rgba(T.bg, 0.85); ctx.fillRect(mxp - tw / 2, myp - 16, tw, 13);
+          ctx.fillStyle = T.white; ctx.textAlign = 'center'; ctx.fillText(txt, mxp, myp - 9);
+        }
+      }
+      want('you', bx, by, T.accent, 3);
+    }
+    // the live run pours
+    S.active.forEach(function (r) {
+      if (!r.pts.length || opts.end) return;
+      ctx.strokeStyle = r.hang ? T.danger : T.accent; ctx.lineWidth = 2; ctx.beginPath();
+      r.pts.forEach(function (p, j) { var px = Xc(p.x), py = Yc(clamp(p.y, yMin, yMax)); if (j) ctx.lineTo(px, py); else ctx.moveTo(px, py); }); ctx.stroke(); ctx.lineWidth = 1;
+      var hp = r.pts[r.pts.length - 1], hx = Xc(hp.x), hy = Yc(clamp(hp.y, yMin, yMax));
+      ctx.fillStyle = r.hang ? T.danger : T.accent; ctx.beginPath(); ctx.arc(hx, hy, 3.5, 0, Math.PI * 2); ctx.fill();
+      if (!X.reduced() && !r.hang) { ctx.strokeStyle = rgba(T.accent, 0.35 + 0.25 * Math.sin(X.nowMs() / 180)); ctx.beginPath(); ctx.arc(hx, hy, 7, 0, Math.PI * 2); ctx.stroke(); }
+      block(hx, hy, 6);
+      if (r.hang) want(r.hang.nan ? r.hang.label : r.hang.label + (G.has('tom') ? ' my fault' : ' hung'), hx, hy, T.danger, 0);
+      if (log10(r.C) > xMin && log10(r.C) < xMax) {
+        var tx0 = Xc(r.C), ty0 = Yc(r.proj); ctx.strokeStyle = rgba(T.accent, 0.85); ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.arc(tx0, ty0, 6, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        if (r.sigUp > 0.003) { ctx.beginPath(); ctx.moveTo(tx0, ty0 - 6); ctx.lineTo(tx0, Yc(r.proj * (1 + 2 * r.sigUp))); ctx.stroke(); }
+        block(tx0, ty0, 7); want('lands ' + F.date(S.day + G.runDaysLeft(r)), tx0, ty0, T.accent, r === S.run ? 2 : 2.5, [[10, 12], [10, -12], [-10, 12], [-10, -12], [0, 20]]);
       }
     });
-
-    // ---- your saved models: teal dots; a ring when published; a bar when it is an API
-    var far = E.farthestClean(), farRun = null;
-    S.runs.forEach(function (r) {
-      if (r.state !== 'landed') return;
-      var lcx = log10(r.Cland); if (lcx < x0) return;
-      var x = X(lcx), y = Y(clamp(r.loss, CFG.chart.yMin, CFG.chart.yMax));
-      if (r.clean && r.Cland === far) farRun = { x: x, y: y, r: r };
-      var thunk = ui.thunkRun === r.id && ui.thunkAt && t - ui.thunkAt < 700;
-      if (ui.thunkRun === r.id && !ui.thunkAt) ui.thunkAt = t;
-      c.save();
-      if (r.clean) {
-        if (!FX.reduced()) { c.globalAlpha = 0.18; c.fillStyle = COL.acc; c.beginPath(); c.arc(x, y, thunk ? 12 + (700 - (t - ui.thunkAt)) / 40 : 8, 0, 6.2832); c.fill(); }
-        c.globalAlpha = 1; c.fillStyle = COL.acc; c.beginPath(); c.arc(x, y, 4.6, 0, 6.2832); c.fill();
-      } else { c.strokeStyle = COL.bad; c.lineWidth = 1.6; c.beginPath(); c.arc(x, y, 4.2, 0, 6.2832); c.stroke(); c.beginPath(); c.moveTo(x - 3, y - 3); c.lineTo(x + 3, y + 3); c.moveTo(x + 3, y - 3); c.lineTo(x - 3, y + 3); c.stroke(); }
-      if (r.published) { c.strokeStyle = COL.acc; c.lineWidth = 1; c.globalAlpha = 0.9; c.beginPath(); c.arc(x, y, 8, 0, 6.2832); c.stroke(); }
-      if (r.shipped) { c.strokeStyle = COL.white; c.lineWidth = 1.6; c.beginPath(); c.moveTo(x + 9, y); c.lineTo(x + 15, y); c.stroke(); }
-      if (r.scandal) { c.strokeStyle = COL.bad; c.lineWidth = 1.6; c.beginPath(); c.moveTo(x - 7, y - 7); c.lineTo(x + 7, y + 7); c.stroke(); }
-      c.restore();
-      geom.dots.push({ x: x, y: y, id: r.id });
-    });
-    if (ui.thunkAt && t - ui.thunkAt > 800) { ui.thunkAt = 0; ui.thunkRun = null; }
-
-    // ---- the designer's ghost: where the run you are planning would land
-    var g = ui.lastDesign, ghost = null;
-    if (S.phase === 'play' && g && g.cards > 0 && g.C > 0) {
-      var gxx = X(clamp(log10(g.C), x0, x1)), gyy = Y(clamp(g.proj, CFG.chart.yMin, CFG.chart.yMax));
-      ghost = { x: gxx, y: gyy };
-      var nearDot = geom.dots.some(function (d) { return Math.hypot(d.x - gxx, d.y - gyy) < 18; });
-      c.save(); c.strokeStyle = g.ok ? COL.white : COL.bad; c.globalAlpha = 0.8; c.setLineDash([2, 2]);
-      c.beginPath(); c.moveTo(gxx, Y(clamp(g.hi, CFG.chart.yMin, CFG.chart.yMax))); c.lineTo(gxx, Y(clamp(g.lo, CFG.chart.yMin, CFG.chart.yMax))); c.stroke(); c.setLineDash([]);
-      c.beginPath(); c.moveTo(gxx - 5, gyy); c.lineTo(gxx + 5, gyy); c.moveTo(gxx, gyy - 5); c.lineTo(gxx, gyy + 5); c.stroke();
-      c.fillStyle = g.ok ? COL.white : COL.bad; c.textAlign = gxx > w - 110 ? 'right' : 'left'; c.textBaseline = 'top';
-      if (!nearDot) { c.textBaseline = 'bottom'; c.fillText('your plan', gxx + (c.textAlign === 'left' ? 8 : -8), gyy - 6); }
-      c.restore();
+    // where the next run would land (the designer)
+    var tgt = ui && ui.design && !S.over && !opts.end && !ui.design.block ? { C: ui.design.C, L: ui.design.L, sig: ui.design.sigUp, label: 'next run', bad: ui.design.r > 1 } : null;
+    if (tgt && log10(tgt.C) > xMin && log10(tgt.C) < xMax) {
+      var tx = Xc(tgt.C), ty = Yc(tgt.L), col = tgt.bad ? T.danger : T.accent;
+      ctx.strokeStyle = rgba(col, 0.85); ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.arc(tx, ty, 6, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      if (tgt.sig > 0.003) { ctx.beginPath(); ctx.moveTo(tx, ty - 6); ctx.lineTo(tx, Yc(tgt.L * (1 + 2 * tgt.sig))); ctx.stroke(); }
+      block(tx, ty, 7);
+      want(tgt.label, tx, ty, col, 3.5, [[10, 12], [10, -12], [-10, 12], [-10, -12], [0, 20]]);
     }
-
-    // ---- the dimension line: your biggest dot to the GPT-3 ring
-    var from = farRun, txt = null, dim = false;
-    if (farRun) { var sh = CFG.gpt3.C / far; txt = sh < 1.05 ? 'passed it' : E.shortFmt(sh) + ' short'; }
-    else if (ghost && g.ok) { from = { x: ghost.x, y: ghost.y }; txt = E.shortFmt(CFG.gpt3.C / g.C) + ' short if it lands'; dim = true; }
-    if (from && txt && Math.abs(from.x - gx3) > 18) {
-      c.save(); c.strokeStyle = COL.white; c.globalAlpha = dim ? 0.35 : 0.85; c.lineWidth = 1; c.setLineDash(dim ? [2, 3] : []);
-      var dx = gx3 - from.x, dy = gy3 - from.y, len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len;
-      var sx = from.x + ux * 9, sy = from.y + uy * 9, ex = gx3 - ux * 10, ey = gy3 - uy * 10;
-      c.beginPath(); c.moveTo(sx, sy); c.lineTo(ex, ey); c.stroke(); c.setLineDash([]);
-      // end ticks, perpendicular to the line
-      var nx = -uy * 4, ny = ux * 4; c.beginPath(); c.moveTo(sx + nx, sy + ny); c.lineTo(sx - nx, sy - ny); c.moveTo(ex + nx, ey + ny); c.lineTo(ex - nx, ey - ny); c.stroke();
-      // the label sits on a small pill at the middle
-      var mx = sx + (ex - sx) * 0.4, my = sy + (ey - sy) * 0.4, tw = c.measureText(txt).width + 12;
-      c.globalAlpha = 1; c.fillStyle = COL.bg; c.fillRect(mx - tw / 2, my - 9, tw, 18);
-      c.strokeStyle = dim ? COL.dim : COL.white; c.globalAlpha = dim ? 0.5 : 0.9; c.strokeRect(mx - tw / 2 + 0.5, my - 8.5, tw - 1, 17);
-      c.globalAlpha = dim ? 0.7 : 1; c.fillStyle = COL.white; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = '500 ' + fs + 'px ' + COL.mono; c.fillText(txt, mx, my + 0.5);
-      c.restore();
-    }
+    placeAll();
+    if (ui) ui.hits = hits;
   };
-
-  // tap a dot to open its model card
-  var cv0 = FX.$('chart');
-  if (cv0) cv0.addEventListener('click', function (e) {
-    if (!geom) return;
-    var r = cv0.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, best = null, bd = 22;
-    geom.dots.forEach(function (d) { var dd = Math.hypot(d.x - x, d.y - y); if (dd < bd) { bd = dd; best = d; } });
-    if (best && FX.openCard) FX.openCard(best.id);
-  });
-})();
+})(window.FX);
