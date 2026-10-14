@@ -1,0 +1,50 @@
+:root {
+  --paper: #E4E5E1;
+  --ink: #15171A;
+  --grid: #CCCFCA;
+  --graphite: #6E7378;
+  --reserve: #F8F8F5;
+  --vermilion: #E5482E;
+  --dry: #A9ACAA;
+  --veil: rgba(228, 229, 225, 0.9);
+  --serif: 'Newsreader', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  color-scheme: light;
+  background: var(--paper);
+  color: var(--ink);
+}
+html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: var(--paper); color: var(--ink); touch-action: none; }
+#fr { position: fixed; inset: 0; overflow: hidden; background: var(--paper); color: var(--ink); touch-action: none;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; cursor: default; }
+#fr-world { position: absolute; inset: 0; will-change: transform; }
+#fr-cv { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
+#fr-date { position: absolute; left: 16px; top: 16px; font: 400 13px/1 var(--mono); letter-spacing: 0.06em; color: var(--ink);
+  font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; opacity: 0; }
+#fr-date .g { color: var(--graphite); }
+#fr-heads { position: absolute; left: 0; top: 0; width: 100%; height: 0; pointer-events: none; }
+.fr-hl { position: absolute; left: 0; top: 0; font: italic 400 11px/1.4 var(--mono); color: var(--graphite); white-space: nowrap; pointer-events: none; will-change: transform; font-variant-numeric: tabular-nums; }
+#fr-band { position: absolute; display: flex; flex-direction: column; justify-content: flex-end; pointer-events: none; overflow: hidden; }
+#fr-sample { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 17px; line-height: 24px; font-optical-sizing: auto; color: var(--ink); white-space: pre-line; overflow-wrap: break-word; }
+#fr-sample .w, #fr-moment-text .w { visibility: hidden; }
+#fr-sample .w.on, #fr-moment-text .w.on { visibility: visible; }
+#fr-readout { position: absolute; left: 0; top: 0; font: 500 15px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); pointer-events: none; white-space: nowrap; opacity: 0; letter-spacing: 0.02em; }
+#fr-reprint { position: absolute; font-family: var(--serif); font-size: 15px; line-height: 21px; color: var(--ink); background: var(--veil); padding: 3px 6px 4px; pointer-events: none; opacity: 0; box-sizing: border-box; white-space: pre-line; }
+#fr-dim { position: absolute; inset: 0; background: var(--paper); opacity: 0; pointer-events: none; }
+#fr-moment { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: 0; }
+#fr-moment-text { margin: 0 16px; max-width: 30em; font-family: var(--serif); font-size: 21px; line-height: 30px; color: var(--ink); white-space: pre-line; font-optical-sizing: auto; overflow-wrap: break-word; }
+#fr-gpt { position: absolute; font: italic 400 11px/1.4 var(--mono); color: var(--graphite); pointer-events: none; opacity: 0; will-change: transform; }
+#fr-focus { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; border-radius: 2px; }
+#fr-focus:focus { outline: none; }
+#fr-focus:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+#fr-mute { position: absolute; top: 6px; right: 6px; font: 400 11px/1 var(--mono); letter-spacing: 0.06em; color: var(--graphite);
+  background: transparent; border: 0; padding: 10px 10px; margin: 0; cursor: pointer; border-radius: 2px; touch-action: manipulation; }
+#fr-mute:focus { outline: none; }
+#fr-mute:focus-visible { outline: 2px solid var(--ink); outline-offset: 0; }
+#fr-safe { position: absolute; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+.fr-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (min-width: 960px) {
+  #fr-date { font-size: 15px; }
+  #fr-sample { font-size: 19px; line-height: 27px; }
+  #fr-moment-text { font-size: 28px; line-height: 40px; }
+  #fr-reprint { font-size: 17px; line-height: 24px; }
+}

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Frontier</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap">
+<link rel="stylesheet" href="game.css">
+<div id="fr">
+  <div id="fr-world">
+    <canvas id="fr-cv" aria-hidden="true"></canvas>
+    <div id="fr-date" aria-hidden="true"><span class="g">FRONTIER &middot; </span><span id="fr-today"></span></div>
+    <div id="fr-heads" aria-hidden="true"></div>
+    <div id="fr-reprint"></div>
+    <div id="fr-band"><p id="fr-sample"></p></div>
+    <div id="fr-readout" aria-hidden="true"></div>
+  </div>
+  <div id="fr-dim"></div>
+  <div id="fr-moment"><p id="fr-moment-text"></p></div>
+  <div id="fr-gpt" aria-hidden="true"></div>
+  <div id="fr-focus" tabindex="0" role="slider" aria-label="The strip. Arrow keys move the nib, Enter lifts, S pulls a sample." aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+  <button id="fr-mute" type="button" hidden aria-pressed="false">SOUND ON</button>
+  <div id="fr-safe" aria-hidden="true"></div>
+  <div id="fr-live" class="fr-sr" aria-live="polite"></div>
+</div>
+<script src="config.js"></script>
+<script src="rules.js"></script>
+<script src="corpus.js"></script>
+<script src="game.js"></script>
+
+</body>
+</html>
