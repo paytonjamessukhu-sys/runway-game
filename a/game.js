@@ -1,1480 +1,1893 @@
-/* FRONTIER, slice one ("The Line", 23 Jan to 28 May 2020). Build A: the letter of the spec.
-   Spec v6 (slice1.json) with the round-7 changes on top. One screen, four states: DRAG, POUR, LAND, END. */
+/* FRONTIER, the lab sim. Builder A: the letter of spec/sim1.json.
+   One sheet. The pour is the clock. Three letters a month slide up from the bottom; flick up to take, down to let pass.
+   Numbers in config.js, math in rules.js, people and history in content.js, the model's words in corpus.js. */
 (function () {
   'use strict';
+  var CFG = window.FRONTIER_CONFIG, CORPUS = window.FRONTIER_CORPUS, K = window.FRONTIER_CONTENT, R = window.FRONTIER_RULES.make(CFG);
+  var $ = function (id) { return document.getElementById(id); };
+  var root = $('fr'), cv = $('fr-cv'), ctx = cv.getContext('2d'), hi = $('fr-hi'), hctx = hi.getContext('2d');
+  var elBrand = $('fr-brand'), elToday = $('fr-today'), elHour = $('fr-hour'), elBought = $('fr-bought');
+  var elMN = $('fr-mn'), elProj = $('fr-proj'), elNames = $('fr-names'), elNotes = $('fr-notes'), elBoxes = $('fr-boxes'), elHeads = $('fr-heads');
+  var elBand = $('fr-band'), elSample = $('fr-sample'), elCount = $('fr-count'), elReadout = $('fr-readout');
+  var elDim = $('fr-dim'), elMoment = $('fr-moment'), elMomentText = $('fr-moment-text');
+  var elLetter = $('fr-letter'), elFocus = $('fr-focus'), elMute = $('fr-mute'), elSafe = $('fr-safe'), elLive = $('fr-live');
+  var lFrom = elLetter.querySelector('.from'), lOffer = elLetter.querySelector('.offer'), lUp = elLetter.querySelector('.eff .up'), lDown = elLetter.querySelector('.eff .down');
+  var lFuse = elLetter.querySelector('.fuse i'), lTip = document.createElement('b'); elLetter.querySelector('.fuse').appendChild(lTip);
 
-  // ===========================================================================
-  // CONFIG: every tunable number and every rule switch lives in this object.
-  // ===========================================================================
-  const CFG = {
-    rules: {
-      payrollMode: 'ink',               // 'ink' (round 7 default) | 'flat' (Sid) | 'none' (Musk, Madigan) | 'bank' (spec v6)
-      wallEndsSheet: false,             // spec v6: true. Round 7: a crossing prints nothing and the sheet goes on
-      wallAdvancesAfterCrossing: false, // Sid's filter, not sim-tested
-      wallAdvanceDecades: 0.5,          // "one rung" of compute
-      frayByAmount: true,               // round 7: grade l splices l fragments from one flat pool. false = v6 catalogue
-      pastWallSample: 'banner',         // round 7 'banner' (the whole line is crawl) | v6 'splice'
-      gpt3OnPlayerDot: true,            // round 7 #6: the GPT-3 point presses onto your farthest clean dot if you got there
-      gpt3MomentNeedsAlive: false,      // whether the dry pen erases the miracle moment
-      showMuteControl: true,            // house rule: an obvious way to mute
-      emptyWhirrOnCrossing: false,      // v6 had a 300 ms empty whirr; round 7 wants silence where the ticks should be
-    },
-    money: {
-      seedLights: 20,
-      dollarsPerLight: 1000,
-      cleanPrint: 3,                    // lights printed per inked light on a clean landing
-      payrollInkShare: 0.035,           // 'ink': share of the run's ink per game day
-      payrollFlatLights: 0.35,          // 'flat': lights per game day
-      payrollBankShare: 0.035,          // 'bank': share of the bank at the last lift per game day
-    },
-    clock: {
-      startUTC: Date.UTC(2020, 0, 23),
-      endDay: 126,                      // 28 May 2020
-      dragDaysPerSec: 0.75,
-      pourBase: 6.5, pourLog: 3, pourWarp: 1.5,
-    },
-    compute: {
-      flopsPerGpuDay: 3.456e18,
-      ownedGpus: 8,
-      dollarsPerGpuDay: 59.52,
-      tShortDiv: 2.765e19,
-      tLongCoef: 4.8, tLongRef: 1e19, tLongExp: 0.1,
-      homeRunC: 2.765e19, homeRunDays: 1,
-    },
-    line: { Cc: 2.68e28, alpha: 0.050, onLineTol: 1.015, startLoss: 10.825 },
-    data: {
-      wLo: 18e9, wHi: 110e9, passes: 4,
-      tokCoef: 2.0e10, tokRef: 8.64e19, tokExp: 0.27,
-      frayStart: 0.65, frayStep: 0.07, frayGrades: 5,
-      lateP: 0.5, lateBase: 0.4, latePer: 0.12,  // tap/auto samples at p >= 0.5 fray with 0.4 + 0.12 l
-      earlyProb: 0.5, earlyMinGrade: 3, earlyDrop: 2,
-    },
-    caps: [
-      { id: 'paragraph', log10C: Math.log10(2e21), jit: 0.2 },
-      { id: 'arithmetic', log10C: 22, jit: 0.3 },
-      { id: 'translation', log10C: Math.log10(6e22), jit: 0.3 },
-      { id: 'code', log10C: Math.log10(2.5e23), jit: 0.3 },
-    ],
-    samples: {
-      capShare: 0.35,
-      tierLoss: [6.0, 4.3, 3.3],
-      checkpoints: [0.0005, 0.002, 0.01].concat(Array.from({ length: 20 }, (_, i) => Math.round((i + 1) * 5) / 100)),
-      autoP: [0.35, 0.75], autoQuietMs: 2500,
-      wordMs: 45, bandMaxChars: 180, virusDay: 48,
-    },
-    paper: {
-      xRightMin: 24.3, xLeftStart: 16, xLeftMin: 16, xLeftMax: 20, xLeftBack: 4,
-      lossMin: 1.55, lossMax: 11.5, noise: 0.012, points: 320, gpt3C: 3.14e23,
-    },
-    ms: {
-      liftRead: 100, wakeStagger: 60, wakeEach: 240, motorFade: 800, dateAt: 1000, lineAt: 1000, linePrint: 1200,
-      nudgeEvery: 4000, nudgeDur: 420, liftWave: 300,
-      landPause: 300, inkLift: 300, printTickMax: 40, printTotal: 1200, repack: 400, scratch: 900,
-      capDim: 400, capDuck: 80, capSilence: 1000, capRestore: 600,
-      endMotor: 300, dryFade: 900, drySilence: 800, hatch: 900, gptDrift: 1200, press: 300,
-      fresh: 5000, freshDry: 6000, feed: 900, pan: 800, headline: 7000, payrollClickMin: 60, printTickMin: 30,
-    },
-    layout: {
-      phone: { paperTo: 0.60, bandFrom: 0.60, bandTo: 0.78, stripAt: 0.80, stripH: 52, home: 56, gutter: 16 },
-      laptop: { margin: 24, paperTo: 0.64, bandFrom: 0.64, bandTo: 0.80, stripAt: 0.82, stripH: 60, home: 72, maxStrip: 1200, bandCol: 760 },
-      laptopMinWidth: 960, nibW: 12, nibHit: 44, readoutPhone: 56, readoutLaptop: 40, lightPad: 6,
-    },
-  };
+  /* ---------------- colours: one source, the CSS tokens ---------------- */
+  var cs = getComputedStyle(document.documentElement);
+  function tok(n, d) { var v = (cs.getPropertyValue(n) || '').trim(); return /^#[0-9a-f]{6}$/i.test(v) ? v : d; }
+  var COL = { paper: tok('--paper', '#E4E5E1'), ink: tok('--ink', '#15171A'), grid: tok('--grid', '#CCCFCA'), graphite: tok('--graphite', '#6E7378'),
+    reserve: tok('--reserve', '#F8F8F5'), fil: tok('--filament', '#FF7A21'), verm: tok('--vermilion', '#E5482E'), dry: tok('--dry', '#A9ACAA') };
+  function hex(h) { h = h.replace('#', ''); return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)]; }
+  var RGB = {}; Object.keys(COL).forEach(function (k) { RGB[k] = hex(COL[k]); });
+  function rgba(a, al) { var A = RGB[a]; return 'rgba(' + A[0] + ',' + A[1] + ',' + A[2] + ',' + al + ')'; }
 
-  // ===========================================================================
-  // CORPUS: the only text system. Starter strings from the spec.
-  // ===========================================================================
-  const CORPUS = {
-    T0: ['the the , of . and to the a', '. , the of of and in', 'and the the . to , a of', 'the of , , . the and',
-      'a to the . of the , in and', 'the , . the of', 'of the and . . the to a', 'the the the , and'],
-    T1: ['council water said year the new of he market', 'and police the first season city were of',
-      'music the 2019 people of said time government', 'her team the report . world was school',
-      'the game players said of also new during', 'company the which years on percent the',
-      'film was the in and county early his', 'said the data , online the free first'],
-    T2: ['The city said that the new team will be a year of the water.',
-      'He was born in the first of the church, and his music was a school.',
-      'The company has been a member of the government for the season.',
-      'In the report, the police were the best people of the world.',
-      'She said the game is not a time to be the market.',
-      'The film was released in the county of the president and the album.',
-      'This is the first time that the river has been a player.'],
-    T2virus: 'The virus is a the stock market of Tuesday.',
-    T3: ['The bridge was closed on Monday after engineers found cracks in two of its supports. The city said it would reopen in the spring, or possibly the year before.',
-      'Preheat the oven to 350 degrees. Mix the flour and sugar, then add the eggs one at a time, then add the oven.',
-      'The team won its third straight game on Saturday, thanks to a late goal from a player who did not play.',
-      'Scientists have discovered a new species of frog in the rainforest. It is about the size of a thumbnail and is believed to be the largest frog in the world.',
-      'I have been using this phone for about a month now and the battery is great, but the battery is not great.',
-      'The museum will be open from 9 a.m. to 5 p.m. on weekdays and from 10 a.m. to the weekend.',
-      'He moved to Chicago in 1998, where he worked as a teacher, a carpenter, and eventually a river.',
-      'The recipe calls for two cups of rice, which should be rinsed until the water runs clear, or until the rice runs out.'],
-    T4: ['The lighthouse had been dark for eleven years when Mara climbed its stairs again. The lens was still there, wrapped in a canvas sheet her father had tied with fishing line. She cut the knots one by one, and when the cloth fell away, the glass caught the last of the evening and threw it, faintly, across the water.',
-      'Sourdough starter is just flour and water left long enough for wild yeast to move in. Feed it every day and it becomes predictable: it rises, peaks, and falls on a schedule you can learn. Most failed loaves are not bad recipes. They are bakers who did not wait for the peak.',
-      'The committee met for six hours and agreed on nothing except the date of the next meeting. Outside, the river kept rising. By the time the vote was taken, three members had to be reached by phone from the second floor of the library, where the water had not yet arrived.',
-      'My grandmother kept every letter she ever received in a biscuit tin under her bed. When we opened it after the funeral, we found she had also kept copies of her replies, written in pencil on the backs of envelopes, so that she would always remember exactly what she had promised.'],
-    arithmetic: ['Q: What is 48 plus 76? A: 124', 'Q: What is 37 plus 59? A: 96', 'Q: What is 83 plus 18? A: 101'],
-    translation: ['English: The library closes at noon on Sundays. French: La bibliothèque ferme à midi le dimanche.',
-      'English: Where is the train station? French: Où est la gare ?'],
-    code: ['# return the largest number in a list / def largest(xs): return max(xs)',
-      '# reverse a string / def reverse(s): return s[::-1]'],
-  };
-  // Round 7: one flat pool of web boilerplate, always in the same ink.
-  const FRAY_POOL = ['Read more »', 'Share this:', 'Posted in Uncategorized', 'Tags: news, local', 'Leave a comment',
-    '« Previous', 'Subscribe to our newsletter', 'Powered by WordPress', 'Home | Login', 'Accept cookies',
-    'Skip to content', 'Next post »', 'Comments (0)', 'Continue reading', 'Privacy Policy'];
-  // Spec v6 catalogue (used only when rules.frayByAmount is false).
-  const FRAY_BY_GRADE = { 1: ['Read more »', 'Share this:'], 2: ['Posted in Uncategorized', 'Tags: news, local'],
-    3: ['Leave a comment', '« Previous'], 4: ['Subscribe to our newsletter', 'Powered by WordPress'], 5: ['Home | Login', 'Accept cookies'] };
-  const CRAWL = ['Click here to subscribe | Home | Login', 'We use cookies to improve your experience. Accept | Decline',
-    'cheap flights cheap flights best price cheap', 'Home > Products > Home > Products', '404 Page Not Found | Return to Home',
-    'Login | Register | Forgot password?', 'Copyright © 2019 All rights reserved.'];
+  /* ---------------- utils ---------------- */
+  function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
+  function ease(u) { u = clamp(u, 0, 1); return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; }
+  function easeOut(u) { u = clamp(u, 0, 1); return 1 - Math.pow(1 - u, 3); }
+  var log10 = R.log10;
+  function mulberry(a) { return function () { a = (a + 0x6D2B79F5) >>> 0; var t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  var hashSeed = (String(location.hash).match(/seed=(\d+)/) || [])[1];
+  var rng = Math.random, vis = Math.random;
+  function gauss(r) { r = r || vis; return Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r()); }
+  function pick(a) { return a[Math.floor(rng() * a.length)]; }
+  function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(rng() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  function U(a, b) { return a + rng() * (b - a); }
+  var mqReduce = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+  function reduced() { return !!(mqReduce && mqReduce.matches); }
+  function store(k, v) { try { if (v === undefined) return window.localStorage.getItem(k); window.localStorage.setItem(k, v); } catch (e) { return null; } return null; }
+  function fmtInt(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function money(x) {
+    var a = Math.abs(x);
+    if (a >= 1e9) return '$' + (Math.round(a / 1e8) / 10) + 'B';
+    if (a >= 1e6) return '$' + (a >= 1e8 ? Math.round(a / 1e6) : Math.round(a / 1e5) / 10) + 'M';
+    if (a >= 1e3) return '$' + fmtInt(a);
+    return '$' + Math.round(a);
+  }
+  function pct(x) { var v = Math.round(x * 1000) / 10; return (v % 1 ? v.toFixed(1) : String(v)) + '%'; }
+  function ordinal(n) { var s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+  function dom(day) { return R.dateOf(day).getUTCDate(); }
 
-  // Seven dated factual headlines. History speaking, never the game.
-  const NEWS = [
-    { day: 0, text: '23 JAN 2020 · OpenAI researchers publish “Scaling Laws for Neural Language Models”: test loss falls as a smooth power law in model size, data and compute.' },
-    { day: 5, text: '28 JAN 2020 · Google unveils Meena, a 2.6-billion-parameter chatbot.' },
-    { day: 18, text: '10 FEB 2020 · Microsoft announces Turing-NLG, a 17-billion-parameter language model and the largest published to date, and open-sources DeepSpeed with ZeRO.' },
-    { day: 53, text: '16 MAR 2020 · Five days after the WHO declared COVID-19 a pandemic, the Dow falls 12.9% in a day, its worst day since 1987.' },
-    { day: 112, text: '14 MAY 2020 · NVIDIA announces the A100 GPU and the DGX A100 at $199,000.' },
-    { day: 117, text: '19 MAY 2020 · Microsoft says it has built a supercomputer for OpenAI with 285,000 CPU cores and 10,000 GPUs.' },
-  ];
-  const GPT3_NEWS = '28 MAY 2020 · OpenAI publishes the GPT-3 paper: 175 billion parameters, 300 billion tokens.';
+  /* ---------------- clocks ---------------- */
+  var now = 0, speedMul = 1, lastTs = 0, timers = [], yearN = 0;
+  function after(sec, fn) { timers.push({ at: now + sec, fn: fn, n: yearN }); }
+  function runTimers() {
+    if (!timers.length) return;
+    var due = [];
+    for (var i = timers.length - 1; i >= 0; i--) if (timers[i].at <= now + 1e-9) { due.push(timers[i]); timers.splice(i, 1); }
+    due.sort(function (a, b) { return a.at - b.at; });
+    for (i = 0; i < due.length; i++) if (due[i].n === yearN) due[i].fn();
+  }
 
-  // ===========================================================================
-  // Small utilities
-  // ===========================================================================
-  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-  const lerp = (a, b, t) => a + (b - a) * t;
-  const easeIO = t => (t <= 0 ? 0 : t >= 1 ? 1 : t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
-  const easeOut = t => (t <= 0 ? 0 : t >= 1 ? 1 : 1 - Math.pow(1 - t, 3));
-  function mulberry32(a) {
-    return function () {
-      a |= 0; a = (a + 0x6D2B79F5) | 0;
-      let t = Math.imul(a ^ (a >>> 15), 1 | a);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  /* ================================================================
+     LAYOUT (art direction: phone and laptop stacks)
+     ================================================================ */
+  var L = {}, dpr = 1;
+  function layout() {
+    var vw = Math.max(300, window.innerWidth || document.documentElement.clientWidth), vh = Math.max(480, window.innerHeight || document.documentElement.clientHeight);
+    var sp = getComputedStyle(elSafe);
+    var safe = { t: parseFloat(sp.paddingTop) || 0, r: parseFloat(sp.paddingRight) || 0, b: parseFloat(sp.paddingBottom) || 0, l: parseFloat(sp.paddingLeft) || 0 };
+    var lap = vw >= CFG.laptopMinWidth;
+    L = { vw: vw, vh: vh, lap: lap, safe: safe };
+    if (!lap) {
+      var P = CFG.phone, t0 = safe.t, H = vh - safe.t - safe.b, g = P.gutter, xl = g + safe.l, xr = vw - g - safe.r;
+      // everything below the paper keeps its reference size; the paper band takes what the screen gives
+      var below = P.ref - P.paperBottom, paperBottom = t0 + Math.max(P.headerH + 150, H - below);
+      var sh = paperBottom - (t0 + P.paperBottom);
+      L.x0 = xl; L.x1 = xr; L.top = t0;
+      L.dateY = t0 + 15; L.monthsY = t0 + 10;
+      L.names = { x: xl - 2, y: t0 + 92 - 14, w: P.namesW, line: P.nameLine };
+      L.headY = t0 + 66;
+      L.paper = { y: t0 + P.headerH, bottom: paperBottom };
+      L.ruler = { y: paperBottom - P.rulerH, h: P.rulerH };
+      L.plot = { x: xl + P.namesW, y: t0 + 84, w: xr - xl - P.namesW, h: 0 };
+      L.plot.h = L.ruler.y - 6 - L.plot.y;
+      L.band = { x: xl, y: P.paperBottom + t0 + sh + 4, w: xr - xl, h: P.bandBottom - P.paperBottom - 8 };
+      L.cluster = { x: xl, y: t0 + P.clusterTop + sh, w: xr - xl, h: P.clusterH };
+      L.strip = { x: xl, y: t0 + P.stripTop + sh, w: xr - xl, h: P.stripH, home: P.homeW };
+      L.letter = { x: xl, w: xr - xl, y: t0 + P.letterTop + sh, h: P.letterH, max: vh - safe.b - 6 };
+      L.readAbove = P.readoutAbove; L.bandFont = [17, 24]; L.momentFont = 21;
+      L.mute = { x: xl - 6, y: t0 + 26 };
+    } else {
+      var Q = CFG.laptop, cw = Math.min(vw - 48, Q.colMax), x0 = (vw - cw) / 2;
+      L.x0 = x0; L.x1 = x0 + cw; L.top = 0;
+      L.dateY = vh * Q.header * 0.35; L.monthsY = vh * Q.header * 0.2;
+      L.names = { x: x0, y: vh * Q.header + 40, w: Q.namesW, line: Q.nameLine };
+      L.headY = vh * Q.header + 10;
+      L.paper = { y: vh * Q.header, bottom: vh * Q.paperBottom };
+      L.ruler = { y: L.paper.bottom - Q.rulerH, h: Q.rulerH };
+      L.plot = { x: x0 + Q.namesW, y: vh * Q.header + 34, w: cw - Q.namesW, h: 0 };
+      L.plot.h = L.ruler.y - 6 - L.plot.y;
+      var bw = Math.min(Q.bandMax, cw);
+      L.band = { x: x0 + (cw - bw) / 2, y: vh * Q.bandTop + 4, w: bw, h: vh * (Q.bandBottom - Q.bandTop) - 8 };
+      L.cluster = { x: x0, y: vh * Q.clusterTop, w: cw, h: vh * (Q.clusterBottom - Q.clusterTop) };
+      L.strip = { x: x0, y: vh * Q.stripTop, w: cw, h: Q.stripH, home: Q.homeW };
+      var lw = Math.min(Q.letterW, vw - 32);
+      L.letter = { x: x0 + (cw - lw) / 2, w: lw, y: vh * Q.letterTop, h: Q.letterH, max: vh - 6 };
+      L.readAbove = Q.readoutAbove; L.bandFont = [19, 27]; L.momentFont = 28;
+      L.mute = { x: x0 - 6, y: L.dateY + 14 };
+    }
+    L.travel = { x: L.strip.x + L.strip.home, w: L.strip.w - L.strip.home };
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    [cv, hi].forEach(function (c) { c.width = Math.round(vw * dpr); c.height = Math.round(vh * dpr); });
+    $('fr-date').style.left = L.x0 + 'px'; $('fr-date').style.top = L.dateY + 'px';
+    $('fr-months').style.right = (vw - L.x1) + 'px'; $('fr-months').style.top = L.monthsY + 'px';
+    elNames.style.left = L.names.x + 'px'; elNames.style.top = L.names.y + 'px';
+    elBand.style.left = L.band.x + 'px'; elBand.style.top = L.band.y + 'px'; elBand.style.width = L.band.w + 'px'; elBand.style.height = L.band.h + 'px';
+    elCount.style.right = (vw - (L.cluster.x + L.cluster.w)) + 'px'; elCount.style.top = (L.cluster.y - 14) + 'px';
+    elFocus.style.left = (L.strip.x - 3) + 'px'; elFocus.style.top = (L.strip.y - 3) + 'px'; elFocus.style.width = (L.strip.w + 6) + 'px'; elFocus.style.height = (L.strip.h + 6) + 'px';
+    elMute.style.left = L.mute.x + 'px'; elMute.style.top = L.mute.y + 'px';
+    elMoment.style.top = L.plot.y + 'px'; elMoment.style.height = (L.band.y + L.band.h - L.plot.y) + 'px';
+    elMomentText.style.maxWidth = Math.min(lap ? 760 : 9999, vw - 2 * (lap ? 48 : 22)) + 'px';
+    elLetter.style.left = L.letter.x + 'px'; elLetter.style.width = L.letter.w + 'px'; elLetter.style.minHeight = L.letter.h + 'px';
+    staticDirty = true;
+    if (G) { placeNotes(); fitBand(); placeLetter(); }
+  }
+
+  /* ---------------- plot mapping: log compute across, log loss down; the view pans ---------------- */
+  var view = { l: CFG.plotLeftMinLog, r: CFG.plotRightMinLog, from: null, to: null, t0: 0 };
+  var Y_TOP = Math.log(CFG.plotLossTop), Y_BOT = Math.log(CFG.plotLossBottom);
+  function X(lc) { return L.plot.x + (lc - view.l) / (view.r - view.l) * L.plot.w; }
+  function Y(lnL) { return L.plot.y + (Y_TOP - lnL) / (Y_TOP - Y_BOT) * L.plot.h; }
+  function lineY(C) { return Y(Math.log(R.Lline(C))); }
+  function DX(day) { return L.plot.x + clamp(day / CFG.endDay, 0, 1) * L.plot.w; }
+  function viewTarget() {
+    var big = 0, last = null; G.runs.forEach(function (r) { if (r.C > big) big = r.C; last = r.C; });
+    if (G.run) { last = G.run.C; if (G.run.C > big) big = G.run.C; }
+    var l = last ? clamp(Math.floor(log10(last) - CFG.plotLeftBack), CFG.plotLeftMinLog, CFG.plotLeftMaxLog) : CFG.plotLeftMinLog;
+    return [l, Math.max(CFG.plotRightMinLog, big ? log10(2 * big) : 0)];
+  }
+  function panToTarget() {
+    var t = viewTarget();
+    if (Math.abs(t[0] - view.l) < 1e-6 && Math.abs(t[1] - view.r) < 1e-6) return;
+    view.from = { l: view.l, r: view.r }; view.to = { l: t[0], r: t[1] }; view.t0 = now; snd.whirr(0.6);
+  }
+  function stepView() {
+    if (!view.to) return;
+    var u = reduced() ? 1 : (now - view.t0) / CFG.panSec, e = ease(u);
+    view.l = view.from.l + (view.to.l - view.from.l) * e; view.r = view.from.r + (view.to.r - view.from.r) * e;
+    if (u >= 1) { view.l = view.to.l; view.r = view.to.r; view.to = null; }
+    staticDirty = true; placeNotes();
+  }
+
+  /* ================================================================
+     SOUND (Web Audio, started by the first touch)
+     ================================================================ */
+  var snd = (function () {
+    var A = { ctx: null, muted: store('frontier.sim.muted') === '1' };
+    function db(x) { return Math.pow(10, x / 20); }
+    function t() { return A.ctx.currentTime; }
+    function ok() { return !!(A.ctx && A.ctx.state === 'running'); }
+    function start() {
+      if (A.ctx) { try { if (A.ctx.state === 'suspended' && !document.hidden) A.ctx.resume(); } catch (e) { } return; }
+      try {
+        var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+        var c = A.ctx = new AC();
+        A.out = c.createGain(); A.out.gain.value = A.muted ? 0 : 1; A.out.connect(c.destination);
+        A.duck = c.createGain(); A.duck.gain.value = 1; A.duck.connect(A.out);
+        var n = Math.floor(c.sampleRate * 2), wb = c.createBuffer(1, n, c.sampleRate), bb = c.createBuffer(1, n, c.sampleRate), pb = c.createBuffer(1, n, c.sampleRate);
+        var w = wb.getChannelData(0), b = bb.getChannelData(0), pk = pb.getChannelData(0), last = 0, peak = 0, b0 = 0, b1 = 0, b2 = 0;
+        for (var i = 0; i < n; i++) {
+          var x = Math.random() * 2 - 1; w[i] = x; last = (last + 0.02 * x) / 1.02; b[i] = last; if (Math.abs(last) > peak) peak = Math.abs(last);
+          b0 = 0.99765 * b0 + x * 0.0990460; b1 = 0.96300 * b1 + x * 0.2965164; b2 = 0.57000 * b2 + x * 1.0526913; pk[i] = (b0 + b1 + b2 + x * 0.1848) * 0.2;
+        }
+        for (i = 0; i < n; i++) b[i] /= (peak || 1);
+        A.white = wb; A.pink = pb;
+        A.motor = c.createGain(); A.motor.gain.value = 0; A.motor.connect(A.duck);
+        A.o1 = c.createOscillator(); A.o1.frequency.value = 55; A.o2 = c.createOscillator(); A.o2.frequency.value = 110.6;
+        A.g1 = c.createGain(); A.g1.gain.value = db(CFG.sound.motorDb); A.g2 = c.createGain(); A.g2.gain.value = db(CFG.sound.motorDb);
+        A.o1.connect(A.g1); A.o2.connect(A.g2); A.g1.connect(A.motor); A.g2.connect(A.motor);
+        var bs = c.createBufferSource(); bs.buffer = bb; bs.loop = true; var lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 300;
+        A.bg = c.createGain(); A.bg.gain.value = db(CFG.sound.motorNoiseDb); bs.connect(lp); lp.connect(A.bg); A.bg.connect(A.motor);
+        A.o1.start(); A.o2.start(); bs.start();
+        var ws = c.createBufferSource(); ws.buffer = wb; ws.loop = true; A.bp = c.createBiquadFilter(); A.bp.type = 'bandpass'; A.bp.frequency.value = 3200; A.bp.Q.value = 0.8;
+        A.scr = c.createGain(); A.scr.gain.value = 0; ws.connect(A.bp); A.bp.connect(A.scr); A.scr.connect(A.duck); ws.start();
+      } catch (e) { A.ctx = null; }
+    }
+    function blip(freq, dur, dbv, type) {
+      if (!ok()) return; try {
+        var c = A.ctx, o = c.createOscillator(), g = c.createGain(), t0 = t();
+        if (type) o.type = type;
+        o.frequency.value = freq; g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(db(dbv), t0 + 0.002);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur); o.connect(g); g.connect(A.duck); o.start(t0); o.stop(t0 + dur + 0.02);
+      } catch (e) { }
+    }
+    function noise(buf, ftype, freq, q, dur, dbv, fadeIn) {
+      if (!ok()) return; try {
+        var c = A.ctx, s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(), t0 = t();
+        s.buffer = buf; f.type = ftype; f.frequency.value = freq; f.Q.value = q;
+        if (fadeIn) { g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(db(dbv), t0 + dur * 0.4); g.gain.linearRampToValueAtTime(0.0001, t0 + dur); }
+        else { g.gain.setValueAtTime(db(dbv), t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur); }
+        s.connect(f); f.connect(g); g.connect(A.duck); s.start(t0, Math.random() * 1.5); s.stop(t0 + dur + 0.02);
+      } catch (e) { }
+    }
+    function target(param, v, sec) { try { param.cancelScheduledValues(t()); param.setTargetAtTime(v, t(), Math.max(0.005, sec / 3)); } catch (e) { } }
+    var lastTick = 0, lastCard = 0, lastFuse = 0;
+    return {
+      start: start,
+      get muted() { return A.muted; },
+      setMuted: function (m) { A.muted = m; store('frontier.sim.muted', m ? '1' : '0'); if (A.ctx) try { A.out.gain.setTargetAtTime(m ? 0 : 1, A.ctx.currentTime, 0.02); } catch (e) { } },
+      // motor: the full two-sine hum while training; idle is the 55 Hz sine alone at -36 dB
+      motor: function (mode, cards, sec) {
+        if (!A.ctx) return; sec = sec || 0.3;
+        if (mode === 'train') { var up = Math.pow(10, (Math.log(Math.max(8, cards) / 8) / Math.LN2) / 20); target(A.motor.gain, up, sec); target(A.g2.gain, db(CFG.sound.motorDb), sec); target(A.bg.gain, db(CFG.sound.motorNoiseDb), sec); target(A.g1.gain, db(CFG.sound.motorDb), sec); }
+        else if (mode === 'idle') { target(A.motor.gain, 1, sec); target(A.g2.gain, 0, sec); target(A.bg.gain, 0, sec); target(A.g1.gain, db(CFG.sound.idleDb), sec); }
+        else target(A.motor.gain, 0, sec);
+      },
+      cut: function () { if (A.ctx) try { A.motor.gain.cancelScheduledValues(t()); A.motor.gain.setValueAtTime(0, t()); A.scr.gain.cancelScheduledValues(t()); A.scr.gain.setValueAtTime(0, t()); } catch (e) { } },
+      motorFreq: function (f, sec) { if (A.ctx) { target(A.o1.frequency, f, sec); target(A.o2.frequency, f * 2.011, sec); } },
+      scratch: function (u) { if (A.ctx) try { A.scr.gain.setTargetAtTime(db(CFG.sound.scratchMaxDb) * clamp(u, 0, 1), t(), 0.03); } catch (e) { } },
+      tick: function () { var n = performance.now(); if (n - lastTick < 30) return; lastTick = n; blip(2400, 0.006, CFG.sound.tickDb); },
+      card: function () { var n = performance.now(); if (n - lastCard < 30) return; lastCard = n; blip(1800, 0.005, CFG.sound.printDb); },
+      pay: function () { blip(70, 0.06, CFG.sound.payDb); noise(A.white, 'highpass', 2000, 0.7, 0.003, CFG.sound.payDb + 4); },
+      letter: function () { noise(A.pink, 'lowpass', 1200, 0.7, 0.4, CFG.sound.letterDb, true); },
+      take: function () { blip(120, 0.04, CFG.sound.takeDb); blip(2000, 0.004, CFG.sound.takeDb - 6); },
+      pass: function () { noise(A.pink, 'lowpass', 1200, 0.7, 0.3, CFG.sound.passDb, true); },
+      fuse: function () { var n = performance.now(); if (n - lastFuse < 70 + Math.random() * 50) return; lastFuse = n; noise(A.white, 'bandpass', 3000, 2, 0.01, CFG.sound.fuseDb); },
+      thud: function () { blip(41, 0.25, CFG.sound.hangThudDb); },
+      strike: function () { noise(A.white, 'bandpass', 3200, 0.8, 0.6, -32, true); },
+      lift: function () {
+        if (ok()) try {
+          var c = A.ctx, t0 = t(), g = c.createGain(); g.gain.setValueAtTime(db(CFG.sound.liftDb), t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.4); g.connect(A.duck);
+          [55, 110].forEach(function (f) { var o = c.createOscillator(); o.frequency.value = f; o.connect(g); o.start(t0); o.stop(t0 + 1.45); });
+        } catch (e) { }
+        try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) { }
+      },
+      whirr: function (dur) {
+        if (!ok()) return; try {
+          var c = A.ctx, t0 = t(), o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
+          o.type = 'sawtooth'; o.frequency.value = 90; f.type = 'lowpass'; f.frequency.value = 600;
+          g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(db(CFG.sound.feedDb), t0 + 0.08);
+          g.gain.setValueAtTime(db(CFG.sound.feedDb), t0 + Math.max(0.09, dur - 0.12)); g.gain.linearRampToValueAtTime(0, t0 + dur);
+          o.connect(f); f.connect(g); g.connect(A.duck); o.start(t0); o.stop(t0 + dur + 0.05);
+        } catch (e) { }
+      },
+      hatch: function (sec) {
+        if (!A.ctx) return;
+        try { var g = A.scr.gain, t0 = t(); g.cancelScheduledValues(t0); g.setValueAtTime(g.value, t0); g.linearRampToValueAtTime(db(CFG.sound.scratchMaxDb) * 0.85, t0 + 0.05); g.setValueAtTime(db(CFG.sound.scratchMaxDb) * 0.8, t0 + sec - 0.08); g.linearRampToValueAtTime(0, t0 + sec); } catch (e) { }
+      },
+      duck: function (hold, back) {
+        if (!A.ctx) return; try { var g = A.duck.gain, t0 = t(); g.cancelScheduledValues(t0); g.setValueAtTime(g.value, t0); g.linearRampToValueAtTime(0, t0 + 0.08); g.setValueAtTime(0, t0 + 0.08 + hold); g.linearRampToValueAtTime(1, t0 + 0.08 + hold + back); } catch (e) { }
+      },
+      silence: function (sec) { if (A.ctx) target(A.duck.gain, 0, sec || 0.05); },
+      restore: function () { if (A.ctx) target(A.duck.gain, 1, 0.1); },
+      sleep: function () { if (A.ctx && A.ctx.state === 'running') { A.was = true; try { A.ctx.suspend(); } catch (e) { } } },
+      wake: function () { if (A.ctx && A.was) { A.was = false; try { A.ctx.resume(); } catch (e) { } } }
     };
-  }
-  function gauss(rng) { let u = 0; while (u === 0) u = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng()); }
-  const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  function dateParts(day) { const d = new Date(CFG.clock.startUTC + Math.floor(day + 1e-9) * 864e5); return [d.getUTCDate(), MON[d.getUTCMonth()], d.getUTCFullYear()]; }
-  const pad2 = n => (n < 10 ? '0' + n : '' + n);
-  function fmtShort(day) { const p = dateParts(day); return pad2(p[0]) + ' ' + p[1]; }
-  function fmtLong(day) { const p = dateParts(day); return pad2(p[0]) + ' ' + p[1] + ' ' + p[2]; }
-  function hexToRgb(h) { const n = parseInt(h.replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
-  function mix(a, b, t) { const A = hexToRgb(a), B = hexToRgb(b); return 'rgb(' + A.map((v, i) => Math.round(lerp(v, B[i], t))).join(',') + ')'; }
-
-  // ===========================================================================
-  // Physics: compute, money, the line, the data wall
-  // ===========================================================================
-  const K = CFG.compute;
-  const runDays = C => Math.min(C / K.tShortDiv, K.tLongCoef * Math.pow(C / K.tLongRef, K.tLongExp));
-  const runGpus = C => Math.max(K.ownedGpus, C / (runDays(C) * K.flopsPerGpuDay));
-  const runCost = C => (runGpus(C) - K.ownedGpus) * runDays(C) * K.dollarsPerGpuDay;
-  const C_FREE = (function () { // largest run that fits the owned eight (about 1.77e20)
-    let lo = 19, hi = 22;
-    for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2, C = Math.pow(10, m); if (C / K.tShortDiv <= K.tLongCoef * Math.pow(C / K.tLongRef, K.tLongExp)) lo = m; else hi = m; }
-    return Math.pow(10, lo);
-  })();
-  function computeFor(dollars) {
-    if (!(dollars > 0)) return C_FREE;
-    let lo = Math.log10(C_FREE), hi = 29;
-    for (let i = 0; i < 64; i++) { const m = (lo + hi) / 2; if (runCost(Math.pow(10, m)) <= dollars) lo = m; else hi = m; }
-    return Math.pow(10, lo);
-  }
-  const pourMs = T => (CFG.clock.pourBase + CFG.clock.pourLog * Math.log2(1 + T)) * 1000;
-  const lineL = C => Math.pow(CFG.line.Cc / C, CFG.line.alpha);
-  const lineLn = lc => CFG.line.alpha * (Math.log(CFG.line.Cc) - lc * Math.LN10);
-  const D = CFG.data;
-  const tokens = C => D.tokCoef * Math.pow(C / D.tokRef, D.tokExp);
-  const wallCompute = Dwall => D.tokRef * Math.pow(Dwall / D.tokCoef, 1 / D.tokExp);
-  function frayGrade(r) { if (r < D.frayStart) return 0; if (r > 1) return 6; return Math.min(D.frayGrades, 1 + Math.floor((r - D.frayStart) / D.frayStep + 1e-9)); }
-  const P0 = Math.pow(10, -3.5);
-  function curveLn(run, p) { // ln loss of the run at progress p, without noise
-    const z = (Math.log10(p) + 3.5) / 3.5;
-    return lineLn(Math.log10(p * run.C)) + run.H0 * (0.6 * Math.exp(-10 * z) + 0.4 * (1 - z) * (1 - z));
-  }
-  const LN_MAX = Math.log(CFG.paper.lossMax), LN_MIN = Math.log(CFG.paper.lossMin);
-
-  // ===========================================================================
-  // State
-  // ===========================================================================
-  const S = {
-    now: 0, speed: 1, sheetNo: 0, sheetsEnded: 0, history: [], fixedSeed: null, muted: false,
-    reduced: false, layout: null, dpr: 1,
-  };
-  try {
-    const h = String(location.hash || '');
-    const m = h.match(/seed=(\d+)/); if (m) S.fixedSeed = +m[1] >>> 0;
-    const pm = h.match(/payroll=(ink|flat|none|bank)/); if (pm) CFG.rules.payrollMode = pm[1];
-  } catch (e) { /* no hash */ }
-  try { S.reduced = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { S.reduced = false; }
-
-  // DOM
-  const $ = id => document.getElementById(id);
-  const stage = $('fr'), cv = $('fr-cv'), ctx = cv.getContext('2d');
-  const sheetEl = $('fr-sheet'), dateEl = $('fr-date'), dayEl = $('fr-day'), newsEl = $('fr-news'), reprintEl = $('fr-reprint');
-  const bandEl = $('fr-band'), sampleEl = $('fr-sample'), readoutEl = $('fr-readout'), stripEl = $('fr-strip');
-  const momentEl = $('fr-moment'), momentP = $('fr-moment-p'), muteEl = $('fr-mute'), probeEl = $('fr-probe');
-
-  // Colours from the tokens on :root
-  const COL = {};
-  (function () {
-    let cs = null; try { cs = getComputedStyle(document.documentElement); } catch (e) { cs = null; }
-    const pick = (name, fb) => { const v = cs && cs.getPropertyValue(name).trim(); return /^#[0-9a-fA-F]{6}$/.test(v) ? v : fb; };
-    COL.paper = pick('--paper', '#E4E5E1'); COL.ink = pick('--ink', '#15171A'); COL.grid = pick('--grid', '#CCCFCA');
-    COL.graphite = pick('--graphite', '#6E7378'); COL.reserve = pick('--reserve', '#F8F8F5');
-    COL.vermilion = pick('--vermilion', '#E5482E'); COL.dry = pick('--dry', '#A9ACAA');
   })();
 
-  // ===========================================================================
-  // Sheet lifecycle
-  // ===========================================================================
-  function newSheet() {
-    S.sheetNo++;
-    S.seed = S.fixedSeed != null ? (S.fixedSeed + S.sheetNo - 1) >>> 0 : (Math.floor(Math.random() * 4294967296) >>> 0);
-    const rng = S.rng = mulberry32(S.seed);
-    S.W = Math.exp(Math.log(D.wLo) + rng() * (Math.log(D.wHi) - Math.log(D.wLo)));
-    S.Dwall = D.passes * S.W; S.Cwall = wallCompute(S.Dwall); S.Cwall0 = S.Cwall;
-    const jit = CFG.caps.map(c => c.log10C + (rng() * 2 - 1) * c.jit).sort((a, b) => a - b);
-    S.caps = CFG.caps.map((c, i) => ({ id: c.id, lc: jit[i], C: Math.pow(10, jit[i]), fired: false }));
-    S.phase = 'asleep'; S.powered = false; S.powerAt = -1e9;
-    S.bank = CFG.money.seedLights; S.day = 0; S.clockStarted = false;
-    S.lastInk = 0; S.bankAtLift = S.bank;
-    S.runs = []; S.run = null; S.maxC = 0;
-    S.xL = CFG.paper.xLeftStart; S.xR = CFG.paper.xRightMin; S.pan = null;
-    S.hatches = []; S.reprintText = null; S.crossings = 0;
-    S.nib = { t: -1, dragging: false, pid: null, buf: [], downT: 0, everDragged: false, keyed: false, px: 0, py: 0, mouse: false };
-    S.bags = {}; S.bandSample = null; S.lastSample = null; S.liftBand = null; S.lastFrayedSeen = null;
-    S.band = { words: [], shown: 0, next: 0 };
-    S.newsIdx = 0; S.newsQ = []; S.newsActive = [];
-    S.moment = null; S.momentQ = []; S.L = null; S.E = null; S.dim = 0; S.gptPress = null;
-    S.pendingTap = false; S.lastTapAt = -1e9; S.lastClickAt = -1e9; S.lastPrintTickAt = -1e9;
-    S.frozenView = null; S.liftAt = -1e9; S.lastNudge = 0; S.virusDone = false; S.reprintFor = null;
-  }
-
-  function power() {
-    if (S.powered || S.phase !== 'asleep') return;
-    S.powered = true; S.powerAt = S.now; S.phase = 'drag'; S.lastNudge = S.now + 2400;
-    audioInit();
-    motorTo(1, CFG.ms.motorFade);
-  }
-
-  // ===========================================================================
-  // The lift: every lift launches
-  // ===========================================================================
-  function launch(t) { // t: share of the bank in [0,1], or null for a lift inside the home end
-    if (S.phase !== 'drag' || !S.powered) return false;
-    const home = t == null || t < 0;
-    const bank0 = S.bank;
-    let C, ink, tt = 0;
-    if (home) { C = K.homeRunC; ink = 0; }
-    else { tt = clamp(t, 0, 1); ink = tt * Math.max(0, bank0); C = computeFor(ink * CFG.money.dollarsPerLight); }
-    const T = home ? K.homeRunDays : runDays(C);
-    const Dtok = tokens(C), r = Dtok / S.Dwall;
-    const run = {
-      C, lc: Math.log10(C), ink, T, P: pourMs(T), launchDay: S.day, t: 0, p: 0, r, grade: frayGrade(r), home,
-      bankAtLift: bank0, tLift: tt, tWall: 0, ckNext: 0, sampledUpTo: -1, result: null, done: false, lastFrayed: null,
-      H0: Math.log(CFG.line.startLoss) - Math.log(lineL(P0 * C)), lx: null, ly: null,
+  /* ================================================================
+     THE YEAR: state
+     ================================================================ */
+  var G = null;
+  function proto(id) { for (var i = 0; i < K.people.length; i++) if (K.people[i].id === id) return K.people[i]; return null; }
+  function newYear(seed) {
+    yearN++; timers = [];
+    var s = seed != null ? seed : (hashSeed && yearN === 1 ? +hashSeed : (Math.random() * 4294967295) >>> 0);
+    rng = mulberry(s >>> 0); vis = mulberry((s ^ 0x9E3779B9) >>> 0);
+    G = {
+      seed: s, powered: false, firstLift: false, day: 0, month: -1, phase: 'asleep', over: null,
+      bank: CFG.seedBank - CFG.dgx1Price, stake: CFG.stakeStart,
+      people: [], owned: CFG.ownedStart, ownedA100: 0, orders: [], rentals: [], mer: null, merPassed: false, merSecondDone: false, lent: null, api: null, queueCut: 0,
+      W: R.drawW(rng), caps: R.drawCaps(rng), filter: null, filters: 0, priyaOffer: 0, lastFrayAmt: 0,
+      run: null, runs: [], dots: [], rings: [], scars: [], hangMarks: [], cp: null, held: null,
+      rivals: [], letter: null, wait: [], lastBroker: -99, brokerNext: 'rent', buyA100Next: false, seen: {},
+      silent: false, scandals: [], scandalMonth: -1, termBlockUntil: 0,
+      A: { taken: false, need: CFG.seriesA.minC }, B: { taken: false, need: CFG.seriesB.minC },
+      openedC: 0, openedDay: -99, firstAuthor: null, snapNext: false, tomOffUntil: -1, rivalTrickDay: null, lastPublishDay: -999,
+      hangsThisMonth: 0, hangsLastMonth: 0, evals: null, lineT0: null, gpt3: false, miracle: false, december: null,
+      sample: null, bags: {}, t3used: {}, t4used: {}, newsDone: {}, phrases: [], headQ: [], head: null, notes: [], hints: {},
+      pendings: [], log: []
     };
-    if (!home && r > 1 && bank0 > 0) run.tWall = clamp(runCost(S.Cwall) / CFG.money.dollarsPerLight / bank0, 0, tt);
-    // The pen's path, with real noise kept and never smoothed.
-    const N = CFG.paper.points, rng = S.rng;
-    run.lx = new Float32Array(N); run.ly = new Float32Array(N);
-    for (let i = 0; i < N; i++) {
-      const u = i / (N - 1), lp = -3.5 + 3.5 * u, p = Math.pow(10, lp);
-      let y = curveLn(run, p);
-      if (i < N - 1) y += gauss(rng) * CFG.paper.noise * (1 - 0.5 * u); else y = Math.log(lineL(C));
-      run.lx[i] = run.lc + lp; run.ly[i] = y;
-    }
-    run.Lstar = lineL(C);
-    S.bank = bank0 - ink;
-    S.lastInk = ink; S.bankAtLift = bank0;
-    S.liftBand = S.bandSample;
-    S.run = run; S.runs.push(run);
-    S.clockStarted = true; S.phase = 'pour'; S.liftAt = S.now;
-    S.pendingTap = false; S.lastTapAt = -1e9;
-    S.nib.t = -1; S.nib.dragging = false; S.nib.keyed = false;
-    // Paper pan
-    S.maxC = Math.max(S.maxC, C);
-    const nxL = clamp(Math.floor(run.lc - CFG.paper.xLeftBack), CFG.paper.xLeftMin, CFG.paper.xLeftMax);
-    const nxR = Math.max(CFG.paper.xRightMin, Math.log10(2 * S.maxC));
-    if (Math.abs(nxL - S.xL) > 1e-6 || Math.abs(nxR - S.xR) > 1e-6) { S.pan = { t0: S.now, fL: S.xL, fR: S.xR, tL: nxL, tR: nxR }; whirr(CFG.ms.pan * 0.8); }
-    // The last sample sinks into the strip.
-    sinkBand();
-    liftNote();
-    motorTo(Math.pow(10, Math.log2(Math.max(1, ink)) / 20), 300);
-    try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) { /* no haptics */ }
-    return true;
+    G.Dwall = CFG.passes * G.W; G.Cwall = R.C_of_tokens(G.Dwall);
+    CFG.rivals.forEach(function (r) {
+      var c0 = r.c0 * Math.pow(10, U(-CFG.rivalJitter, CFG.rivalJitter));
+      G.rivals.push({ id: r.id, name: r.name, logc: log10(c0), tau: r.tau, period: r.period, offset: r.offset, trick: 1,
+        pubs: [{ C: c0 / 2, L: R.Lline(c0 / 2) * r.offset, day: -30 }], next: r.period * U(CFG.rivalPeriodJitter[0], CFG.rivalPeriodJitter[1]), passed: false });
+    });
+    view.l = CFG.plotLeftMinLog; view.r = CFG.plotRightMinLog; view.to = null;
+    stopShown = { T: 0 };
+    clearDom();
+    root.classList.remove('on', 'dry');
+    cv.style.transition = ''; cv.style.opacity = 1;
+    staticDirty = true;
+    return G;
+  }
+  function clearDom() {
+    elNotes.innerHTML = ''; elBoxes.innerHTML = ''; elHeads.innerHTML = ''; elSample.innerHTML = ''; elNames.innerHTML = '';
+    elSample.style.transform = ''; elSample.style.opacity = '1';
+    elReadout.style.opacity = 0; elDim.style.opacity = 0; elMoment.style.opacity = 0; elMomentText.innerHTML = ''; hi.style.display = 'none';
+    elLetter.hidden = true; letterAnim = null; flick = null; band = null; bandFly = null; moment = null; boxEls = {}; drag = null; ptr = null;
+    elBrand.classList.remove('struck'); elBought.textContent = ''; elHour.textContent = ''; elProj.textContent = ''; elMN.textContent = ''; lastMN = ''; lastToday = '';
   }
 
-  // ===========================================================================
-  // Payroll
-  // ===========================================================================
-  function payrollRate() {
-    switch (CFG.rules.payrollMode) {
-      case 'ink': return CFG.money.payrollInkShare * S.lastInk;
-      case 'flat': return CFG.money.payrollFlatLights;
-      case 'bank': return CFG.money.payrollBankShare * S.bankAtLift;
-      default: return 0;
-    }
+  /* ---------------- people ---------------- */
+  function staff() { return G.people.filter(function (p) { return !p.gone; }); }
+  function person(id) { for (var i = 0; i < G.people.length; i++) if (G.people[i].id === id && !G.people[i].gone) return G.people[i]; return null; }
+  function hasRole(role) { return staff().some(function (p) { return p.role === role; }); }
+  function hasSystems() { return hasRole('systems'); }
+  function hasBeliever() { return !!person('ayaan'); }
+  function infraMult() {
+    var tom = person('tom') && G.day >= G.tomOffUntil, kofi = !!person('kofi');
+    return tom && kofi ? CFG.hangBothMult : (tom || kofi) ? CFG.hangInfraMult : 1;
   }
-  function payroll(dd) {
-    if (!(dd > 0) || !S.clockStarted) return;
-    const before = S.bank, rate = payrollRate();
-    if (rate <= 0) return;
-    S.bank -= rate * dd;
-    if (before > 0 && Math.ceil(S.bank - 1e-9) < Math.ceil(before - 1e-9)) {
-      const rt = performance.now();
-      if (rt - S.lastClickAt >= CFG.ms.payrollClickMin) { S.lastClickAt = rt; payClick(); }
-    }
+  function hasInfra() { return infraMult() < 1; }
+  function sunheeBend() { var p = person('sunhee'); return p && G.day >= p.joined + CFG.sunheeDelay ? CFG.sunheeBend : 1; }
+  function addPerson(id, salary) {
+    var p = proto(id); if (!p || person(id)) return null;
+    var me = { id: p.id, name: p.name, full: p.full, surname: p.surname, role: p.role, salary: salary || p.salary, ego: p.ego, mood: CFG.moodStart, joined: G.day, gone: false, he: !!p.he, writeT0: now };
+    G.people = G.people.filter(function (q) { return q.id !== id; });
+    var old = nameEl(id); if (old) old.remove();
+    G.people.push(me); renderNames(); return me;
   }
+  function walk(id, why) {
+    var p = person(id); if (!p) return null;
+    p.gone = true; p.why = why; p.left = G.day;
+    if (G.filter && G.filter.who === id) { G.filter = null; }
+    if (G.held && id === 'lena') { G.held = null; }
+    snd.strike(); renderNames(); return p;
+  }
+  function mood(id, d) {
+    var p = person(id); if (!p) return;
+    p.mood = clamp(p.mood + d, 0, 100);
+    if (p.mood <= 0) walk(id, 'mood');
+    renderNames();
+  }
+  function moodAll(d, filter) { staff().forEach(function (p) { if (!filter || filter(p)) mood(p.id, d); }); }
+  function nameWeight(p) { var E = CFG.egoWeight[p.ego] || 550; return clamp(Math.round(400 + (E - 400) * p.mood / 70), 400, 700); }
 
-  // ===========================================================================
-  // Samples
-  // ===========================================================================
-  function shuffle(a, rng) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
-  function drawFrom(key, list) {
-    let bag = S.bags[key];
-    if (!bag || !bag.length) bag = S.bags[key] = shuffle(list.slice(), S.rng);
-    return bag.pop();
+  /* ---------------- the economy ---------------- */
+  function rentPriceNow() { var p = CFG.rentPrice[0][1]; CFG.rentPrice.forEach(function (x) { if (G.day >= x[0]) p = x[1]; }); return p; }
+  function rentLive() { return G.rentals.filter(function (r) { return G.day >= r.start && G.day < r.end; }); }
+  function rentedN() { var n = 0; rentLive().forEach(function (r) { n += r.n; }); return n; }
+  function rentPerDay() { var s = 0; rentLive().forEach(function (r) { s += r.n * r.price * 24; }); return s; }
+  function rentBurnMonthly() { var s = 0; G.rentals.forEach(function (r) { if (G.day < r.end) s += r.n * r.price * 24 * CFG.daysPerMonth; }); return s; }
+  function merLive() { return G.mer && G.day >= G.mer.live ? Math.max(0, G.mer.cards - G.queueCut) : 0; }
+  function lentN() { return G.lent && G.day < G.lent.until ? G.lent.n : 0; }
+  function salaries() { var s = 0; staff().forEach(function (p) { s += p.salary; }); return s; }
+  function payroll() { return CFG.basePerMonth + salaries() + CFG.upkeepPerCard * (G.owned + G.ownedA100); }
+  function apiRevenue() { return G.api ? G.api.revenue : 0; }
+  function burn() { return payroll() + rentBurnMonthly() - apiRevenue(); }
+  function monthsLeft(bank, b) { bank = bank == null ? G.bank : bank; b = b == null ? burn() : b; if (b <= 0) return CFG.monthsCap; return clamp(Math.max(0, bank) / b, 0, CFG.monthsCap); }
+  function fmtMonths(m) { return m >= 3 ? String(Math.floor(m)) : (Math.floor(m * 10) / 10).toFixed(1); }
+  function trainingRaw() { return Math.max(0, G.owned - lentN()) + G.ownedA100 * CFG.a100Eq + rentedN() + merLive(); }
+  function trainingCount() { return Math.max(0, G.owned - lentN()) + G.ownedA100 + rentedN() + merLive(); }
+  function servingN() { return G.api ? clamp(Math.round(trainingCount() * CFG.servingShare), CFG.servingMin, CFG.servingMax) : 0; }
+  function trainingEq() { return Math.max(0, trainingRaw() - servingN()); }
+  function flopsPerDay() { return trainingEq() * CFG.v100PerDay; }
+  function cardsShown() { return G.owned + G.ownedA100 + rentedN() + (G.mer && G.day >= G.mer.live ? G.mer.cards : 0); }
+
+  /* ---------------- dots and proofs ---------------- */
+  function farthestClean() { var c = 0; G.dots.forEach(function (d) { if (d.C > c) c = d.C; }); return c; }
+  function farthestPub() { var c = 0; G.dots.forEach(function (d) { if ((d.pub || d.ship) && d.C > c) c = d.C; }); return c; }
+  function onLine(d) { return d.L <= R.Lline(d.C) * (1 + CFG.onLineTol); }
+  function proofA() {
+    var ds = G.dots.filter(function (d) { return d.day >= CFG.seriesA.after && onLine(d); });
+    var best = 0;
+    ds.forEach(function (a) { if (a.C < Math.max(CFG.seriesA.minC, G.A.need)) return; if (ds.some(function (b) { return b.C <= a.C / CFG.seriesA.apart; }) && a.C > best) best = a.C; });
+    return best;
   }
-  function drawTier(tier) {
-    if (tier === 0) return drawFrom('T0', CORPUS.T0);
-    if (tier === 1) return drawFrom('T1', CORPUS.T1);
-    if (tier === 2) {
-      if (S.day >= CFG.samples.virusDay && !S.virusDone) {
-        const bag = S.bags.T2;
-        if (!bag || !bag.length) { S.virusDone = true; S.bags.T2 = shuffle(CORPUS.T2.concat([CORPUS.T2virus]), S.rng); }
+  function proofB() { var best = 0; G.dots.forEach(function (d) { if (d.day >= CFG.seriesB.from && d.C >= Math.max(CFG.seriesB.minC, G.B.need) && d.C > best) best = d.C; }); return best; }
+  function hasLine() { var ds = G.dots; return ds.some(function (a) { return ds.some(function (b) { return b.C <= a.C / 10; }); }); }
+  function frontier() { var f = 0; G.rivals.forEach(function (r) { r.pubs.forEach(function (p) { if (p.day >= 0 && p.C > f) f = p.C; }); }); if (G.day >= K.gpt3Day) f = Math.max(f, CFG.gpt3C); return f; }
+  function worldView() { return Math.max(farthestPub(), CFG.openWorldMult * G.openedC, farthestClean() * CFG.vaultWorldShare); }
+
+  /* ================================================================
+     SAMPLES (slice one's words)
+     ================================================================ */
+  function bag(name, pool) {
+    var b = G.bags[name];
+    if (!b || !b.length) { var last = b && b.last; b = G.bags[name] = shuffle(pool.slice()); if (last != null && b.length > 1 && b[b.length - 1] === last) { b.unshift(b.pop()); } }
+    var v = b.pop(); b.last = v; return v;
+  }
+  function sentences(txt) { return txt.match(/[^.!?]+[.!?]+["”’]?(\s+|$)/g) || [txt]; }
+  function bandCut(txt) {
+    if (txt.length <= CFG.bandMaxChars) return txt;
+    var parts = sentences(txt), out = '';
+    for (var i = 0; i < parts.length; i++) { if (out && (out + parts[i]).trim().length > CFG.bandMaxChars) break; out += parts[i]; }
+    return out.trim();
+  }
+  function tierOf(Lv) {
+    if (Lv > CFG.tierStatic) return 0; if (Lv > CFG.tierWords) return 1; if (Lv > CFG.tierGrammar) return 2;
+    var para = G.caps[0]; return (para.fired && Lv <= para.L) ? 4 : 3;
+  }
+  function pickT3(Lv) {
+    var want = Lv > CFG.t3Sense[0] ? 1 : Lv > CFG.t3Sense[1] ? 2 : 3, order = want === 1 ? [1, 2, 3] : want === 2 ? [2, 3, 1] : [3, 2, 1];
+    for (var pass = 0; pass < 2; pass++) {
+      for (var o = 0; o < 3; o++) {
+        var cand = [];
+        CORPUS.t3.forEach(function (e, i) { if (e[0] === order[o] && !G.t3used[i]) cand.push(i); });
+        if (cand.length) { var i = cand[Math.floor(rng() * cand.length)]; G.t3used[i] = 1; return CORPUS.t3[i][1]; }
       }
-      return drawFrom('T2', CORPUS.T2);
+      G.t3used = {};
     }
-    if (tier === 3) return drawFrom('T3', CORPUS.T3);
-    return drawFrom('T4', CORPUS.T4);
+    return CORPUS.t3[0][1];
   }
-  function capString(id) {
-    if (id === 'paragraph') return drawFrom('T4', CORPUS.T4);
-    return drawFrom(id, CORPUS[id]);
+  function pickT4(momentGrade) {
+    for (var pass = 0; pass < 2; pass++) {
+      var cand = [];
+      CORPUS.t4.forEach(function (e, i) { if (!G.t4used[i] && (!momentGrade || e[0] === 1)) cand.push(i); });
+      if (!cand.length && momentGrade) CORPUS.t4.forEach(function (e, i) { if (!G.t4used[i]) cand.push(i); });
+      if (cand.length) { var i = cand[Math.floor(rng() * cand.length)]; G.t4used[i] = 1; return CORPUS.t4[i][1]; }
+      G.t4used = {};
+    }
+    return CORPUS.t4[0][1];
   }
-  function cutBand(text) {
-    const max = CFG.samples.bandMaxChars;
-    if (text.length <= max) return [text, ''];
-    const sents = text.match(/[^.!?]+[.!?]+(\s+|$)|[^.!?]+$/g) || [text];
-    let out = '';
-    for (const s of sents) { if (out && (out + s).trim().length > max) break; out += s; }
-    return [out.trim(), text.slice(out.length).trim()];
+  function pickLow(tier) {
+    if (tier === 0) return bag('t0', CORPUS.t0);
+    if (tier === 1) return bag('t1', CORPUS.t1);
+    var cov = G.day >= CFG.covidLineFromDay;
+    return bag(cov ? 't2c' : 't2', cov ? CORPUS.t2.concat([CORPUS.t2Covid]) : CORPUS.t2);
   }
-  function pickFrags(n, grade) {
-    const rng = S.rng;
-    if (!CFG.rules.frayByAmount) { const pool = FRAY_BY_GRADE[clamp(grade, 1, 5)]; return [pool[Math.floor(rng() * pool.length)]]; }
-    const pool = shuffle(FRAY_POOL.slice(), rng); const out = [];
-    for (let i = 0; i < n; i++) out.push(pool[i % pool.length]);
+  function capFull(id) { return id === 'paragraph' ? pickT4(true) : bag(id, CORPUS[id]); }
+  function crawlLine() {
+    var pool = shuffle(CORPUS.crawl.slice()), out = '';
+    for (var i = 0; i < pool.length; i++) {
+      var next = out ? out + ' | ' + pool[i] : pool[i];
+      if (out && next.length > CFG.crawlLen[1]) continue;
+      out = next; if (out.length >= CFG.crawlLen[0]) break;
+    }
     return out;
   }
-  // Splice fragments into the middle of a sentence that otherwise reads clean:
-  // between two words, in the middle third if it can, never at the start or end, never next to punctuation.
-  function splice(text, frags) {
-    const w = text.split(' '); const n = w.length;
-    if (n < 3) return text + ' ' + frags.join(' ');
-    const ok = i => !/[.,;:!?»")\]]$/.test(w[i]) && /^[A-Za-z0-9#'(]/.test(w[i + 1]) && !/^[,.;:!?]/.test(w[i + 1]);
-    let cands = [];
-    for (const [a, b] of [[1 / 3, 2 / 3], [0.22, 0.8], [0.12, 0.9], [0, 1]]) {
-      cands = [];
-      for (let i = 0; i < n - 1; i++) {
-        const pos = (i + 1) / n;
-        if (pos >= a && pos <= b && (i > 0 || n < 4) && (i < n - 2 || n < 4) && ok(i)) cands.push(i);
-      }
-      if (cands.length >= frags.length) break;
+  var PUNCT_END = /[.,;:!?»)\]"”’…]$/, PUNCT_START = /^[(\["“‘«.,;:!?…]/;
+  // exactly k distinct fragments into the middle 80% of the sentence, at word gaps, never by punctuation, never adjacent
+  function splice(text, k) {
+    if (!(k > 0) || k >= R.CRAWL) return text;
+    var words = text.split(' '), n = words.length, i, j;
+    var gaps = [];
+    for (i = 0; i < n - 1; i++) { var pos = (i + 1) / n, a = words[i], b = words[i + 1]; if (pos < 0.1 || pos > 0.9 || /\n/.test(a) || /\n/.test(b) || PUNCT_END.test(a) || PUNCT_START.test(b)) continue; gaps.push(i); }
+    if (!gaps.length) for (i = 0; i < n - 1; i++) gaps.push(i);
+    var chosen = null;
+    for (var tries = 0; tries < 60 && !chosen; tries++) {
+      var c = shuffle(gaps.slice()).slice(0, Math.min(k, gaps.length)).sort(function (x, y) { return x - y; }), okk = true;
+      for (j = 1; j < c.length; j++) if (c[j] - c[j - 1] < 2) okk = false;
+      if (okk || tries > 50) chosen = c;
     }
-    if (!cands.length) cands = [Math.floor((n - 1) / 2)];
-    const rng = S.rng; const chosen = shuffle(cands.slice(), rng).slice(0, Math.min(frags.length, cands.length)).sort((x, y) => x - y);
-    const at = {}; frags.forEach((f, k) => { const g = chosen[k % chosen.length]; (at[g] = at[g] || []).push(f); });
-    const out = [];
-    for (let i = 0; i < n; i++) { out.push(w[i]); if (at[i]) out.push(at[i].join(' ')); }
+    if (k === 1) { var mid = gaps.filter(function (g) { var q = (g + 1) / n; return q >= 0.3 && q <= 0.7; }); if (mid.length) chosen = [pick(mid)]; }
+    var frags = shuffle(CORPUS.fray.slice()).slice(0, k), out = [], fi = 0;
+    for (i = 0; i < n; i++) { out.push(words[i]); if (chosen.indexOf(i) >= 0 && fi < frags.length) out.push(frags[fi++]); }
     return out.join(' ');
   }
-  function crawlLine(base) {
-    const rng = S.rng; const c = shuffle(CRAWL.slice(), rng);
-    if (CFG.rules.pastWallSample === 'banner') return c[0] + ' ' + c[1];
-    const w = base.split(' '); const half = Math.max(3, Math.floor(w.length / 2));
-    return w.slice(0, half).join(' ') + ' ' + c[0] + (rng() < 0.5 ? ' ' + c[1] : '');
-  }
-  // kind: 'tap' | 'auto' | 'land'. forceCap: the capability whose moment this is.
-  function makeSample(run, p, kind, forceCap) {
-    const rng = S.rng;
-    const L = kind === 'land' ? run.Lstar : Math.exp(curveLn(run, p));
-    const TL = CFG.samples.tierLoss;
-    let tier = L > TL[0] ? 0 : L > TL[1] ? 1 : L > TL[2] ? 2 : 3;
-    const par = S.caps.find(c => c.id === 'paragraph');
-    if (tier === 3 && par.fired && L <= lineL(par.C)) tier = 4;
-    let base = null, capId = null;
-    if (forceCap) { capId = forceCap; base = capString(forceCap); tier = Math.max(tier, 3); }
+  function rq(run, q) { return q * run.D / G.Dwall; }
+  function makeSample(run, q, kind, capId) {
+    var Lv = R.lossAt(run.C, q, run.k), tier = tierOf(Lv), amt = R.amount(rq(run, q));
+    var text, mtext = null, cap = null, full;
+    if (capId) tier = Math.max(tier, 3);
+    if (tier >= 3 && amt === R.CRAWL) { text = crawlLine(); }
     else if (tier >= 3) {
-      const elig = S.caps.filter(c => c.fired && c.id !== 'paragraph' && L <= lineL(c.C));
-      if (elig.length && rng() < CFG.samples.capShare) { const c = elig[Math.floor(rng() * elig.length)]; capId = c.id; base = capString(c.id); }
-    }
-    if (!base) base = drawTier(tier);
-    let parts = cutBand(base), band = parts[0], rest = parts[1];
-    let frays = 0, crawl = false;
-    if (tier >= 3) {
-      const past = run.r > 1 && p >= 1 / run.r - 1e-12;
-      if (past) { crawl = true; band = crawlLine(band); rest = ''; }
+      if (capId) { full = capFull(capId); cap = capId; }
       else {
-        const g = run.r > 1 ? 5 : run.grade;
-        if (g > 0) {
-          let nf = 0;
-          if (kind === 'land') nf = g;
-          else if (p >= D.lateP) nf = rng() < D.lateBase + D.latePer * g ? g : 0;
-          else if (g >= D.earlyMinGrade && rng() < D.earlyProb) nf = g - D.earlyDrop;
-          if (nf > 0) { const fr = pickFrags(nf, nf); band = splice(band, fr); frays = fr.length; }
-        }
+        var elig = G.caps.filter(function (c) { return c.fired && c.id !== 'paragraph' && Lv <= c.L; });
+        if (elig.length && rng() < CFG.capSampleShare) { var c = pick(elig); full = bag(c.id, CORPUS[c.id]); cap = c.id; }
+        else full = tier === 4 ? pickT4(false) : pickT3(Lv);
+      }
+      text = splice(bandCut(full), amt);
+      if (capId) mtext = splice(full, amt);
+    } else { text = pickLow(tier); amt = 0; }
+    return { text: text, momentText: mtext, tier: tier, fray: amt, crawl: amt === R.CRAWL, cap: cap, q: q, kind: kind, loss: Lv, day: G.day, C: run.C, runN: run.n };
+  }
+
+  /* ---------------- the band: one sample at a time ---------------- */
+  var band = null, bandFly = null;
+  function buildWords(el, text) {
+    el.textContent = '';
+    var frag = document.createDocumentFragment(), lines = text.split('\n'), spans = [];
+    lines.forEach(function (line, li) {
+      if (li) frag.appendChild(document.createElement('br'));
+      line.split(' ').forEach(function (w, i) {
+        if (i) frag.appendChild(document.createTextNode(' '));
+        var sp = document.createElement('span'); sp.className = 'w'; sp.textContent = w; frag.appendChild(sp); spans.push(sp);
+      });
+    });
+    el.appendChild(frag);
+    return spans;
+  }
+  function fitBand() {
+    if (!L.bandFont) return;
+    var fs = L.bandFont[0], lh = L.bandFont[1];
+    elSample.style.fontSize = fs + 'px'; elSample.style.lineHeight = lh + 'px';
+    var guard = 0;
+    while (elSample.scrollHeight > L.band.h + 1 && fs > 12 && guard++ < 12) { fs -= 1; lh = Math.round(fs * 1.4); elSample.style.fontSize = fs + 'px'; elSample.style.lineHeight = lh + 'px'; }
+  }
+  function showBand(smp, mode) {
+    G.sample = smp; bandFly = null;
+    elSample.style.transform = ''; elSample.style.opacity = '1';
+    var spans = buildWords(elSample, smp.text); fitBand();
+    if (mode === 'instant' || speedMul > 6 || reduced()) { for (var i = 0; i < spans.length; i++) spans[i].className = 'w on'; band = null; }
+    else band = { spans: spans, t0: now, shown: 0 };
+    elLive.textContent = smp.text;
+    onSampleShown(smp);
+  }
+  function stepBand() {
+    if (bandFly) {
+      var u = (now - bandFly.t0) / bandFly.dur, e = ease(u);
+      elSample.style.transform = 'translate(' + (bandFly.dx * e).toFixed(1) + 'px,' + (bandFly.dy * e).toFixed(1) + 'px)';
+      elSample.style.opacity = String(1 - e);
+      if (u >= 1) { elSample.textContent = ''; elSample.style.transform = ''; elSample.style.opacity = '1'; bandFly = null; }
+    }
+    if (!band) return;
+    var k = Math.min(band.spans.length, Math.floor((now - band.t0) / (CFG.wordMs / 1000)) + 1), ticked = false;
+    while (band.shown < k) { band.spans[band.shown++].className = 'w on'; if (!ticked) { snd.tick(); ticked = true; } }
+    if (band.shown >= band.spans.length) band = null;
+  }
+  function sinkBand() { if (!elSample.firstChild) return; band = null; bandFly = { t0: now, dur: 0.3, dx: 0, dy: 20 }; }
+
+  /* ---------------- moments ---------------- */
+  var moment = null;
+  function startMoment(text, kind) {
+    var spans = text ? buildWords(elMomentText, text) : [];
+    if (!text) elMomentText.textContent = '';
+    var fs = L.momentFont; elMomentText.style.fontSize = fs + 'px'; elMomentText.style.lineHeight = Math.round(fs * 1.43) + 'px';
+    var guard = 0;
+    while (text && elMomentText.offsetHeight > elMoment.clientHeight - 8 && fs > 14 && guard++ < 16) { fs--; elMomentText.style.fontSize = fs + 'px'; elMomentText.style.lineHeight = Math.round(fs * 1.43) + 'px'; }
+    moment = { kind: kind, t0: now, spans: spans, shown: 0, ducked: false, prev: G.phase };
+    moment.wordsEnd = 0.4 + spans.length * CFG.wordMs / 1000;
+    moment.end = Math.max(CFG.momentSec, moment.wordsEnd + 0.08 + 1.0 + 0.6);
+    elMoment.style.opacity = 1; if (text) elLive.textContent = text;
+    if (kind !== 'cap') hi.style.display = 'block';
+    G.phase = 'moment';
+    return moment.end;
+  }
+  function momentDim() {
+    var M = moment; if (!M) return 0;
+    var t = now - M.t0;
+    if (t < 0.4) return reduced() ? 1 : t / 0.4;
+    if (t < M.end - 0.6) return 1;
+    return clamp(1 - (t - (M.end - 0.6)) / 0.6, 0, 1);
+  }
+  function stepMoment() {
+    var M = moment; if (!M) return;
+    var t = now - M.t0, dim = momentDim();
+    elDim.style.opacity = (dim * 0.92).toFixed(3); elMute.style.visibility = dim > 0.3 ? 'hidden' : '';
+    var k = t < 0.4 ? 0 : Math.min(M.spans.length, Math.floor((t - 0.4) / (CFG.wordMs / 1000)) + 1), ticked = false;
+    while (M.shown < k) { M.spans[M.shown++].className = 'w on'; if (!ticked) { snd.tick(); ticked = true; } }
+    elMoment.style.opacity = t > M.end - 0.6 ? dim.toFixed(3) : 1;
+    if (!M.ducked && t >= M.wordsEnd) { M.ducked = true; snd.duck(1.0, 0.6); }
+    if (M.kind !== 'cap') drawHi(M);
+    if (t >= M.end) {
+      elDim.style.opacity = 0; elMoment.style.opacity = 0; elMomentText.textContent = ''; hi.style.display = 'none'; moment = null; elMute.style.visibility = '';
+      if (G.phase === 'moment') G.phase = G.run ? 'pour' : (G.firstLift ? 'idle' : 'wait');
+      if (M.after) M.after();
+      motorForPhase();
+      staticDirty = true;
+    }
+  }
+
+  /* ---------------- notes: your people write on the paper ---------------- */
+  function note(text, whoId, at, opts) {
+    opts = opts || {};
+    G.notes.forEach(function (o) { if (!o.dead && !o.keep && o.text === text) killNote(o); });
+    var el = document.createElement('div'); el.className = 'fr-note' + (opts.typed ? ' typed' : '');
+    var spans = [];
+    for (var i = 0; i < text.length; i++) { var c = document.createElement('span'); c.className = 'c'; c.textContent = text[i]; el.appendChild(c); spans.push(c); }
+    elNotes.appendChild(el);
+    var n = { el: el, at: at, born: now, spans: spans, shown: 0, who: whoId, keep: !!opts.keep, life: opts.life || CFG.noteFadeSec, text: text };
+    G.notes.push(n);
+    var live = G.notes.filter(function (x) { return !x.dead; });
+    if (live.length > 5) killNote(live.filter(function (x) { return !x.keep; })[0] || live[0]);
+    placeNote(n);
+    if (reduced() || speedMul > 6) { spans.forEach(function (s) { s.className = 'c on'; }); n.shown = spans.length; }
+    return n;
+  }
+  function killNote(n) { if (!n || n.dead) return; n.dead = true; n.el.style.opacity = 0; setTimeout(function () { if (n.el.parentNode) n.el.parentNode.removeChild(n.el); }, 450); }
+  function clearNotes() { G.notes.forEach(function (n) { if (!n.keep) killNote(n); }); }
+  function noteXY(at) {
+    if (!at) return { x: L.plot.x + L.plot.w * 0.4, y: L.plot.y + 30 };
+    if (at.name) { var b = nameEl(at.name); if (b) { var r = b.getBoundingClientRect(); return { x: r.right + 6, y: r.top + 6, fixed: true }; } }
+    if (at.C) return { x: X(log10(at.C)), y: at.lnL != null ? Y(at.lnL) : lineY(at.C) };
+    if (at.x != null) return { x: at.x, y: at.y, fixed: at.fixed };
+    return { x: L.plot.x + 20, y: L.plot.y + 20 };
+  }
+  function placeNote(n) {
+    var p = noteXY(n.at), el = n.el, w = el.offsetWidth || 120, h = el.offsetHeight || 16, x, y;
+    if (p.fixed) { x = p.x; y = p.y; }
+    else { x = p.x + 10; if (x + w > L.x1) x = p.x - w - 10; y = p.y - h - 10; if (y < L.plot.y) y = p.y + 12; }
+    x = clamp(x, 4, L.vw - w - 4); y = clamp(y, L.paper.y + 22, L.ruler.y - h - 2);
+    if (!p.fixed) for (var tries = 0; tries < 8; tries++) {
+      var hit = null;
+      G.notes.forEach(function (o) { if (o === n || o.dead || !o.rect) return; var r = o.rect; if (x < r.x + r.w && x + w > r.x && y < r.y + r.h + 2 && y + h + 2 > r.y) hit = r; });
+      if (!hit) break;
+      var dn = hit.y + hit.h + 3, up = hit.y - h - 3;
+      y = dn + h <= L.ruler.y - 2 ? dn : (up >= L.paper.y + 22 ? up : dn);
+    }
+    n.rect = { x: x, y: y, w: w, h: h };
+    el.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(y) + 'px)';
+  }
+  function placeNotes() { if (!G) return; G.notes.forEach(function (n) { n.rect = null; }); G.notes.forEach(function (n) { if (!n.dead) placeNote(n); }); }
+  function stepNotes() {
+    G.notes.forEach(function (n) {
+      if (n.dead) return;
+      var k = Math.min(n.spans.length, Math.floor((now - n.born) / (CFG.noteCharMs / 1000)) + 1);
+      while (n.shown < k) n.spans[n.shown++].className = 'c on';
+      if (!n.keep && now - n.born > n.life && !n.el.classList.contains('faded')) n.el.classList.add('faded');
+    });
+    if (G.notes.length > 40) G.notes = G.notes.filter(function (n) { return !n.dead; });
+  }
+  function noteBy(id, key, at, opts) { if (!id || !person(id)) return null; return note(K.notes[key] || key, id, at, opts); }
+  function anyHand(prefer) { for (var i = 0; i < prefer.length; i++) if (person(prefer[i])) return prefer[i]; var s = staff(); return s.length ? s[0].id : null; }
+
+  /* ---------------- pencil boxes: live status written on the sheet ---------------- */
+  var boxEls = {};
+  function box(key, text, x, y) {
+    var el = boxEls[key];
+    if (!el) { el = boxEls[key] = document.createElement('div'); el.className = 'fr-box'; elBoxes.appendChild(el); }
+    if (el.textContent !== text) el.textContent = text;
+    var w = el.offsetWidth || 80;
+    el.style.transform = 'translate(' + Math.round(clamp(x, 2, L.vw - w - 2)) + 'px,' + Math.round(y) + 'px)';
+    el._seen = true;
+  }
+  function stepBoxes() {
+    Object.keys(boxEls).forEach(function (k) { boxEls[k]._seen = false; });
+    if (G.powered && !G.over) {
+      var who = G.filter && nameEl(G.filter.who);
+      if (G.filter && who) { var r = who.getBoundingClientRect(); box('filter', 'filter: ' + Math.max(1, Math.ceil(G.filter.end - G.day)) + ' days', r.right + 4, r.top + 6); }
+      var le = G.held && nameEl('lena');
+      if (G.held && le) { var r2 = le.getBoundingClientRect(); box('red', 'red-team: ' + Math.max(1, Math.ceil(G.held.end - G.day)) + ' days', r2.right + 4, r2.top + 6); }
+      G.dots.forEach(function (d, i) { if (d.pending) box('mer' + i, 'with Meridian', X(log10(d.C)) + 8, Y(Math.log(d.L)) + 8); });
+      if (G.evals && G.run && G.evals.run === G.run) { var lp = G.run.pts[G.run.pts.length - 1]; if (lp) box('evals', K.notes.evals, X(lp.x) + 8, clamp(Y(lp.y) - 26, L.plot.y, L.ruler.y - 20)); }
+      if (G.queueCut > 0 && G.mer && G.day >= G.mer.live) box('queue', 'queue', L.cluster.x + 4, L.cluster.y - 18);
+      if (G.orders.length) { var o = G.orders[0]; box('order', 'inked by ' + R.fmtDay(o.arrive), L.cluster.x + L.cluster.w * 0.42, L.cluster.y - 18); }
+    }
+    Object.keys(boxEls).forEach(function (k) { if (!boxEls[k]._seen) { boxEls[k].remove(); delete boxEls[k]; } });
+  }
+
+  /* ---------------- the margin ---------------- */
+  function nameEl(id) { return elNames.querySelector('[data-id="' + id + '"]'); }
+  function renderNames() {
+    G.people.forEach(function (p) {
+      var b = nameEl(p.id);
+      if (!b) {
+        b = document.createElement('button'); b.type = 'button'; b.className = 'fr-name'; b.setAttribute('data-id', p.id); b.tabIndex = 0;
+        for (var i = 0; i < p.name.length; i++) { var s = document.createElement('span'); s.className = 'ltr'; s.textContent = p.name[i]; b.appendChild(s); }
+        b.addEventListener('pointerdown', onNameDown);
+        b.addEventListener('pointerup', onNameUp);
+        b.addEventListener('click', function (e) { if (e.detail === 0) pressName(this.getAttribute('data-id')); });
+        elNames.appendChild(b);
+        p.writeT0 = now;
+      }
+      b.style.fontWeight = String(nameWeight(p));
+      b.style.color = p.mood < CFG.moodGraphite && !p.gone ? 'var(--graphite)' : '';
+      if (p.gone && !b.classList.contains('gone')) { b.classList.add('gone'); b.tabIndex = -1; }
+      b.setAttribute('aria-label', p.full + (p.gone ? ', gone' : ''));
+    });
+  }
+  function stepNames() {
+    G.people.forEach(function (p) {
+      var b = nameEl(p.id); if (!b) return;
+      var ls = b.children, k = reduced() || speedMul > 6 ? ls.length : Math.floor((now - p.writeT0) / (CFG.nameLetterMs / 1000)) + 1;
+      for (var i = 0; i < ls.length && i < k; i++) if (ls[i].className !== 'ltr on') ls[i].className = 'ltr on';
+    });
+  }
+  var nameDown = null;
+  function onNameDown(e) { e.stopPropagation(); snd.start(); if (!G.powered) { powerOn(); nameDown = null; return; } nameDown = { id: this.getAttribute('data-id'), t: performance.now() }; }
+  function onNameUp(e) { e.stopPropagation(); if (nameDown && nameDown.id === this.getAttribute('data-id') && performance.now() - nameDown.t <= CFG.pressMaxMs + 150) pressName(nameDown.id); nameDown = null; }
+
+  /* ---------------- pressing a name ---------------- */
+  function pressName(id) {
+    if (!G.powered) { powerOn(); return; }
+    if (G.over) return;
+    var p = person(id); if (!p) return;
+    G.log.push({ day: Math.floor(G.day), press: id });
+    // a hang in progress: wake them
+    if (G.run && G.run.hang && G.day < G.run.hang.restart) {
+      var r = G.day + CFG.wakeRestartHours / 24;
+      if (r < G.run.hang.restart) G.run.hang.restart = r;
+      mood(id, id === 'tom' ? CFG.wakeMoodTom : CFG.wakeMood);
+      note('up.', id, { name: id }, { life: 4 });
+      return;
+    }
+    // standing offers: the filter job (Priya, or Ines alone), Lena's red-team
+    if (p.role === 'data' && !G.filter) {
+      var canRun = id === 'priya' || (id === 'ines' && !person('priya'));
+      if (canRun && G.priyaOffer) { startFilter(id); return; }
+      if (id === 'priya' && G.sample && G.sample.fray === 3) { G.priyaOffer = 3; note(K.notes.fray3, 'priya', { name: 'priya' }); return; }
+      if (id === 'priya' && G.sample && (G.sample.fray === 1 || G.sample.fray === 2)) { note(K.notes.fray12, 'priya', { name: 'priya' }); return; }
+    }
+    if (id === 'lena' && G.cp && !G.held) { startRedTeam(); return; }
+    // otherwise, status beside their work
+    var txt = K.status[id];
+    if (p.role === 'data' && G.filter) txt = 'filter: ' + Math.ceil(G.filter.end - G.day) + ' days';
+    if (id === 'lena' && G.held) txt = 'red-team: ' + Math.ceil(G.held.end - G.day) + ' days';
+    note(txt, id, { name: id }, { life: 5 });
+    snd.tick();
+  }
+
+  /* ---------------- the top: date, months ---------------- */
+  var lastToday = '', lastMN = '';
+  function updateTop() {
+    if (!G.powered) return;
+    var d = R.fmtDay(Math.min(G.day, CFG.endDay - 1e-6), true);
+    if (d !== lastToday) { elToday.textContent = d; lastToday = d; }
+    var h = '';
+    if (G.run && G.run.hang && G.day < G.run.hang.restart) { var hh = G.run.hang.h + (G.day - G.run.hang.start) * 24; hh = ((hh % 24) + 24) % 24; h = ' · ' + String(Math.floor(hh)).padStart(2, '0') + ':' + String(Math.floor((hh % 1) * 60)).padStart(2, '0'); }
+    if (elHour.textContent !== h) elHour.textContent = h;
+    var mtxt = G.over && G.over.reason === 'bankrupt' ? '0' : fmtMonths(monthsLeft());
+    if (mtxt !== lastMN) { elMN.textContent = mtxt; lastMN = mtxt; }
+  }
+  function jolt() { elMN.classList.remove('jolt'); void elMN.offsetWidth; elMN.classList.add('jolt'); }
+
+  /* ---------------- history ---------------- */
+  function stepHeads() {
+    if (!G.head && G.headQ.length) {
+      var el = document.createElement('div'); el.className = 'fr-hl'; el.textContent = G.headQ.shift(); elHeads.appendChild(el);
+      G.head = { el: el, t0: now, w: el.offsetWidth };
+    }
+    var H = G.head; if (!H) return;
+    var u = (now - H.t0) / CFG.headlineSec, x0 = L.vw + 10, x1 = -H.w - 10, x = x0 + (x1 - x0) * u;
+    H.el.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(L.headY) + 'px)';
+    if (u >= 1) { H.el.remove(); G.head = null; }
+  }
+
+  /* ================================================================
+     LETTERS: three slots a month, one on screen, a fuse along the edge
+     ================================================================ */
+  function eff(parts) { return parts.filter(Boolean).join(' · '); }
+  function mArrow(bank2, burn2) { return 'MONTHS ' + fmtMonths(monthsLeft()) + ' → ' + fmtMonths(monthsLeft(bank2, burn2)); }
+  function cArrow(add) { return 'CARDS ' + fmtInt(cardsShown()) + ' → ' + fmtInt(cardsShown() + add); }
+  function sArrow(newStake) { return 'STAKE ' + pct(G.stake) + ' → ' + pct(newStake); }
+  function board() { return G.stake < CFG.boardUnder; }
+  function brokerSize() { var n = 64; CFG.brokerSize.forEach(function (x) { if (G.day >= x[0]) n = x[1]; }); return n; }
+  function orderLead(base) { var d = base; if (G.day >= CFG.covidOrderFrom && G.day <= CFG.covidOrderTo) d += CFG.covidOrderAddDays; if (G.day >= CFG.lateBuyFrom) d += CFG.lateBuyAddDays; return d; }
+  function orderPrice(p) { return G.day >= CFG.lateBuyFrom ? p * CFG.lateBuyPriceMult : p; }
+  function goneBy() { return 'gone by the ' + ordinal(dom(G.day + 7)); }
+  function bumpRival(id, dec) { G.rivals.forEach(function (r) { if (r.id === id) r.logc += dec; }); }
+  function laterBump(id, dec, days) { G.pendings.push({ day: G.day + days, fn: function () { bumpRival(id, dec); } }); }
+
+  var MAKE = {
+    broker: function () {
+      var n = brokerSize(), p = rentPriceNow(), grey = !!G.mer;
+      var add = n * p * 24 * CFG.daysPerMonth;
+      return { id: 'brokerRent', kind: 'broker', from: 'BROKER', offer: n + ' V100s on demand, live tomorrow. $' + p.toFixed(2) + ' an hour for 90 days.',
+        up: grey ? null : eff([mArrow(G.bank, burn() + add), cArrow(n)]), down: goneBy(), grey: grey, forbid: grey ? 'Meridian: exclusive' : null, gpus: n,
+        take: function () { G.rentals.push({ n: n, price: p, start: Math.floor(G.day) + 1, end: Math.floor(G.day) + 1 + CFG.rentTermDays }); },
+        pass: function () { } };
+    },
+    buy: function () {
+      var a100 = G.day >= CFG.buyA100.from && G.buyA100Next, spec = a100 ? CFG.buyA100 : CFG.buyV100, price = orderPrice(spec.price), lead = orderLead(spec.lead), arrive = G.day + lead;
+      return { id: a100 ? 'buyA100' : 'buyV100', kind: 'broker', from: 'BROKER',
+        offer: a100 ? 'Eight DGX A100s: 64 A100s. ' + money(price) + '. Delivery in ' + Math.round(lead / 7) + ' weeks.' : '64 V100s to own: eight servers with InfiniBand. ' + money(price) + '. Delivery in ' + Math.round(lead / 7) + ' weeks.',
+        up: eff([mArrow(G.bank - price, burn() + spec.n * CFG.upkeepPerCard), 'CARDS +64 in pencil, inked by ' + R.fmtDay(arrive)]), down: goneBy(), gpus: spec.n, cost: price,
+        take: function () { G.bank -= price; G.orders.push({ n: spec.n, kind: a100 ? 'a100' : 'v100', at: G.day, arrive: arrive }); },
+        pass: function () { } };
+    },
+    hire: function (id, salary) {
+      var p = proto(id), sal = salary || p.salary, rival = id === 'sunhee' ? 'Halcyon' : 'Kestrel';
+      return { id: 'hire_' + id, kind: 'hire', hireId: id, from: p.full, hand: true, offer: p.knock + ' ' + money(sal) + ' a month.', offerHand: true,
+        up: eff([mArrow(G.bank, burn() + sal)]), down: (p.he ? 'he goes' : 'she goes') + ' to ' + rival,
+        take: function () { addPerson(id, sal); },
+        pass: function () { G.seen['passed_' + id] = G.day; if (id === 'sunhee') bumpRival('halcyon', CFG.passToKestrel); else bumpRival('kestrel', CFG.passToKestrel); } };
+    },
+    termA: function () {
+      var early = G.day < CFG.marketClosedFrom, t = early ? CFG.seriesA.early : CFG.seriesA.late, ns = G.stake * (1 - t.amount / t.post), proof = proofA();
+      return { id: 'termA', kind: 'term', from: K.investorA, offer: 'Series A: ' + money(t.amount) + ' at a ' + money(t.post) + ' post. Two dots, one line. Sign by the 25th.',
+        up: eff([mArrow(G.bank + t.amount, burn()), sArrow(ns)]), down: 'gone; next time they want a dot three times further out',
+        take: function () { G.bank += t.amount; G.stake = ns; G.A.taken = true; },
+        pass: function () { G.A.need = proof * CFG.seriesA.passMult; } };
+    },
+    termB: function () {
+      var post = G.api ? CFG.seriesB.postApi : CFG.seriesB.post, amt = CFG.seriesB.amount, ns = G.stake * (1 - amt / post), proof = proofB();
+      return { id: 'termB', kind: 'term', from: K.investorA, offer: 'Series B: ' + money(amt) + ' at a ' + money(post) + ' post.' + (G.api ? ' They have seen your waitlist.' : ' They have seen your line.'),
+        up: eff([mArrow(G.bank + amt, burn()), sArrow(ns)]), down: 'gone; next time they want a dot three times further out',
+        take: function () { G.bank += amt; G.stake = ns; G.B.taken = true; },
+        pass: function () { G.B.need = proof * CFG.seriesA.passMult; } };
+    },
+    meridian: function () {
+      var M = CFG.meridian;
+      return { id: 'meridian', kind: 'meridian', from: K.cloud, offer: '$50M in compute credits: ' + fmtInt(M.cards) + ' V100s reserved for you, ready in six weeks. Our cloud only. We see every checkpoint first.',
+        up: eff(['CARDS +' + fmtInt(M.cards) + ' in pencil', 'no other cloud', 'no open weights']), down: 'we’ll talk again in June',
+        take: function () { G.mer = { cards: M.cards, live: G.day + M.lead, credits: M.credits, half: false }; },
+        pass: function () { G.merPassed = true; } };
+    },
+    meridian2: function () {
+      var M = CFG.meridian.second, ns = G.stake * M.stakeMult;
+      return { id: 'meridian2', kind: 'meridian', from: K.cloud, offer: fmtInt(M.cards) + ' V100s, ready in six weeks, for 10% of FRONTIER.',
+        up: eff(['CARDS +' + fmtInt(M.cards), sArrow(ns)]), down: 'gone',
+        take: function () { G.stake = ns; G.mer = { cards: M.cards, live: G.day + CFG.meridian.lead, credits: CFG.meridian.credits / 2, half: true }; },
+        pass: function () { } };
+    },
+    renewal: function (r) {
+      var late = G.day >= K.apiDay, refused = late && rng() < CFG.renewRefuseShare, price = late ? CFG.renewPriceLate : rentPriceNow();
+      if (refused) return { id: 'capacity', kind: 'renewal', from: 'BROKER', offer: 'Capacity unavailable. Your ' + r.n + ' V100s go back on ' + R.fmtDay(r.end) + '.', up: null, down: 'they go back on ' + R.fmtDay(r.end), grey: true, forbid: 'The broker: no.', take: function () { }, pass: function () { } };
+      return { id: 'renewal', kind: 'renewal', from: 'BROKER', offer: 'Your ' + r.n + ' V100s go back on ' + R.fmtDay(r.end) + '. Renew for 90 days at $' + price.toFixed(2) + '?',
+        up: eff(['keep them', late ? mArrow(G.bank, burn() + r.n * (price - r.price) * 24 * CFG.daysPerMonth) : null]), down: 'they go back on ' + R.fmtDay(r.end),
+        take: function () { r.end += CFG.rentTermDays; r.price = price; }, pass: function () { } };
+    },
+    acqui: function () {
+      var n = staff().length, tot = n * CFG.acquiPerHead, forced = board();
+      return { id: 'acqui', kind: 'acqui', from: 'HALCYON', offer: 'We’ll buy the team: ' + money(CFG.acquiPerHead) + ' a head, ' + money(tot) + ' in all. Your people get rich. FRONTIER disappears.',
+        up: 'it’s over, and everyone is rich', down: forced ? null : 'keep going', forced: forced, forbid: forced ? 'The board has accepted.' : null,
+        take: function () { endYear('bought'); }, pass: function () { } };
+    },
+    poach: function () {
+      var mon = R.monthOf(G.day) + 1, rv = mon % 2 === 0 ? 'Halcyon' : 'Kestrel', s = staff().slice().sort(function (a, b) { return a.mood - b.mood; }), t = s[0];
+      var ns = G.stake - CFG.counterStake;
+      return { id: 'poach', kind: 'poach', from: rv.toUpperCase(), offer: rv + ' offers ' + t.name + ' double. Counter with equity?',
+        up: eff([sArrow(ns), (t.he ? 'he' : 'she') + ' stays']), down: (t.he ? 'he' : 'she') + ' walks to ' + rv,
+        take: function () { G.stake = ns; mood(t.id, CFG.moodCounter); },
+        pass: function () { walk(t.id, 'poached'); bumpRival(rv.toLowerCase(), CFG.passToKestrel); } };
+    },
+    rentout: function () {
+      var n = Math.floor(G.owned * CFG.rentOut.share), pay = n * CFG.rentOut.price * 24 * CFG.rentOut.days;
+      return { id: 'rentout', kind: 'rentout', from: 'BROKER', offer: 'We’ll pay $' + CFG.rentOut.price.toFixed(2) + ' an hour for half your owned cards. 30 days. Cash now.',
+        up: eff([mArrow(G.bank + pay, burn()), 'CARDS lent for 30 days']), down: 'no cash',
+        take: function () { G.bank += pay; G.lent = { n: n, until: G.day + CFG.rentOut.days }; }, pass: function () { } };
+    },
+    open: function () {
+      var grey = !!G.mer || board(), forbid = G.mer ? 'Meridian: no.' : board() ? 'The board: no.' : null, C = farthestPub();
+      return { id: 'open', kind: 'open', from: 'THE FIELD', offer: 'Grad students want the weights of your published model.',
+        up: grey ? null : eff(['recruits come running', 'rivals fine-tune it within a week']), down: 'they build on Northwind’s instead', grey: grey, forbid: forbid,
+        take: function () { G.openedC = C; G.openedDay = G.day; laterBump('kestrel', CFG.openKestrel, CFG.openFineTuneDays); laterBump('northwind', CFG.openNorthwind, CFG.openFineTuneDays); },
+        pass: function () { bumpRival('northwind', CFG.passNorthwind); } };
+    },
+    december: function () {
+      var pr = person('priya'), others = staff().filter(function (p) { return p.id !== 'priya'; }).sort(function (a, b) { return a.mood - b.mood; });
+      var sender, names;
+      if (pr) { sender = pr; names = others.slice(0, 2).map(function (p) { return p.name; }); }
+      else { var byEgo = staff().slice().sort(function (a, b) { return b.ego - a.ego; }); sender = byEgo[0]; names = others.filter(function (p) { return p !== sender; }).slice(0, 2).map(function (p) { return p.name; }); }
+      if (!sender) return null;
+      var who = names.length === 2 ? names[0] + ', ' + names[1] + ' and I' : names.length === 1 ? names[0] + ' and I' : 'I';
+      var at = { x: L.plot.x + 8, y: L.plot.y + 4, fixed: true };
+      return { id: 'december', kind: 'december', from: sender.full, hand: true, offerHand: true, offer: who + ' want to start something safer. We’re telling you first.',
+        up: 'let them go, with your blessing', down: 'fight to keep them',
+        take: function () { G.december = 'go'; note('let them go', sender.id, at, { keep: true }); },
+        pass: function () { G.december = 'stay'; note('fought to keep them', sender.id, at, { keep: true }); } };
+    }
+  };
+  var DEMAND = {
+    priya: { when: function () { return G.day >= 70; }, make: function () {
+      return { id: 'demand_priya', kind: 'demand', from: 'Priya Raman', hand: true, offerHand: true, offer: 'I want first author on our next paper, or I walk.',
+        up: 'your next clean landing is published: Raman et al.', down: 'she walks', take: function () { G.firstAuthor = 'priya'; }, pass: function () { walk('priya', 'demand'); } };
+    } },
+    dev: { when: function (p) { return G.day >= p.joined + 90; }, make: function () {
+      var ns = G.stake - CFG.devDemandStake;
+      return { id: 'demand_dev', kind: 'demand', from: 'Dev Okafor', hand: true, offerHand: true, offer: 'One percent, or Halcyon gets my parallelism code.',
+        up: eff([sArrow(ns)]), down: 'he walks', take: function () { G.stake = ns; }, pass: function () { walk('dev', 'demand'); } };
+    } },
+    ayaan: { when: function (p) { return G.day >= p.joined + 60; }, make: function () {
+      return { id: 'demand_ayaan', kind: 'demand', from: 'Ayaan Mehta', hand: true, offerHand: true, offer: 'Whole cluster on one run, all the way to the stop.',
+        up: 'your next touch snaps the nib to the stop', down: 'his name thins', take: function () { G.snapNext = true; }, pass: function () { mood('ayaan', -40); } };
+    } },
+    tom: { when: function () { return G.hangsLastMonth >= 3; }, make: function () {
+      return { id: 'demand_tom', kind: 'demand', from: 'Tomasz Wójcik', hand: true, offerHand: true, offer: 'I need a week off. I’ve been up every night.',
+        up: 'seven days without him', down: 'his name thins', take: function () { G.tomOffUntil = G.day + 7; }, pass: function () { mood('tom', -30); } };
+    } },
+    sunhee: { when: function (p) { return G.day >= p.joined + 45; }, make: function () {
+      return { id: 'demand_sunhee', kind: 'demand', from: 'Sun-hee Park', hand: true, offerHand: true, offer: 'I want to publish the schedule trick.',
+        up: 'she stays; every rival lands lower in 30 days', down: 'she walks to Halcyon',
+        take: function () { G.rivalTrickDay = G.day + 30; G.rivalTrickAll = true; },
+        pass: function () { walk('sunhee', 'demand'); G.rivalTrickDay = G.day + 30; G.rivalTrickAll = false; } };
+    } }
+  };
+  function queued(id) { return (G.letter && G.letter.id === id) || G.wait.some(function (w) { return w.id === id; }); }
+  function slotLetter(d, isFirst) {
+    if (d === CFG.decemberDay && !G.seen.december) { G.seen.december = 1; var dl = MAKE.december(); if (dl) return dl; }
+    // acqui-hire: the 1st only, from 1 Feb, months < 3 after payroll
+    if (isFirst && d >= 31 && monthsLeft() < CFG.acquiUnderMonths) return MAKE.acqui();
+    // term sheets
+    var closed = d >= CFG.marketClosedFrom && d < CFG.marketClosedTo;
+    if (!G.A.taken && !closed && d >= G.termBlockUntil && proofA() && !queued('termA')) return MAKE.termA();
+    if (G.A.taken && !G.B.taken && d >= CFG.seriesB.from && d >= G.termBlockUntil && proofB() && !queued('termB')) return MAKE.termB();
+    // Meridian
+    if (!G.mer && !G.merPassed && !G.seen.meridian && d >= CFG.meridian.from && farthestClean() >= CFG.meridian.minC) { G.seen.meridian = 1; return MAKE.meridian(); }
+    if (!G.mer && G.merPassed && !G.merSecondDone && d >= CFG.meridian.second.from) { G.merSecondDone = true; return MAKE.meridian2(); }
+    // renewals and capacity notices
+    var i;
+    if (!G.mer) for (i = 0; i < G.rentals.length; i++) { var r = G.rentals[i]; if (!r.asked && r.end - d <= CFG.renewWindowDays && r.end > d) { r.asked = true; return MAKE.renewal(r); } }
+    // hires on their slots
+    var hires = [['dev', 10], ['ayaan', 20], ['tom', 41], ['lena', 70]];
+    for (i = 0; i < hires.length; i++) { var id = hires[i][0]; if (d >= hires[i][1] && !G.seen['knock_' + id]) { G.seen['knock_' + id] = 1; return MAKE.hire(id); } }
+    if (d >= 70 && !hasSystems() && !G.seen.knock_rafael) { G.seen.knock_rafael = 1; return MAKE.hire('rafael'); }
+    if (d >= 101 && !G.seen.knock_sunhee && G.dots.some(function (x) { return x.pub && x.C >= 1e21; })) { G.seen.knock_sunhee = 1; return MAKE.hire('sunhee'); }
+    var openRecent = G.openedDay >= 0 && d <= G.openedDay + 14;
+    if (!G.seen.knock_ines && (d >= 162 || openRecent)) { G.seen.knock_ines = 1; return MAKE.hire('ines', openRecent ? Math.round(proto('ines').salary * 0.7) : null); }
+    if (!G.seen.knock_kofi && (d >= 213 || openRecent)) { G.seen.knock_kofi = 1; return MAKE.hire('kofi', openRecent ? Math.round(proto('kofi').salary * 0.7) : null); }
+    if (d >= 162 && G.seen.passed_ayaan != null && !G.seen.knock_ayaan2 && !person('ayaan')) { G.seen.knock_ayaan2 = 1; return MAKE.hire('ayaan', proto('ayaan').salaryLate); }
+    // demands
+    var ids = Object.keys(DEMAND);
+    for (i = 0; i < ids.length; i++) { var p = person(ids[i]); if (p && !G.seen['demand_' + ids[i]] && DEMAND[ids[i]].when(p)) { G.seen['demand_' + ids[i]] = 1; return DEMAND[ids[i]].make(); } }
+    // a poach, sometimes, when nothing above it
+    if (d >= CFG.poachFrom && staff().length >= CFG.poachMinPeople && G.seen.poachMonth !== G.month && rng() < CFG.poachChance) { G.seen.poachMonth = G.month; return MAKE.poach(); }
+    // the broker, rent before buy, alternating, at least 14 days apart
+    if (d - G.lastBroker >= CFG.brokerGapDays) {
+      var canRent = d <= CFG.brokerRentUntil, canBuy = d >= 31, which = null;
+      if (canRent && (!canBuy || G.brokerNext === 'rent')) which = 'rent'; else if (canBuy) which = 'buy';
+      if (which) {
+        G.lastBroker = d; G.brokerNext = which === 'rent' ? 'buy' : 'rent';
+        if (which === 'buy') { var l = MAKE.buy(); if (d >= CFG.buyA100.from) G.buyA100Next = !G.buyA100Next; return l; }
+        return MAKE.broker();
       }
     }
-    return { band, full: rest ? band + ' ' + rest : band, frays, crawl, tier, capId, p, kind, day: S.day };
+    if (monthsLeft() < CFG.rentOut.underMonths && G.owned >= CFG.rentOut.minOwned && !lentN() && G.seen.rentoutMonth !== G.month) { G.seen.rentoutMonth = G.month; return MAKE.rentout(); }
+    if (!G.seen.open && d >= 182 && G.dots.some(function (x) { return x.pub && x.C >= 1e21; })) { G.seen.open = 1; return MAKE.open(); }
+    return null;
   }
-  function sampleCheckpoint(k, kind) {
-    const run = S.run; run.sampledUpTo = k;
-    const s = makeSample(run, CFG.samples.checkpoints[k], kind);
-    if (s.frays > 0) run.lastFrayed = s;
-    showSample(s, true);
+  function slot(d, isFirst) {
+    if (G.silent || G.over) return;
+    var l = slotLetter(d, isFirst);
+    if (!l) return;
+    l.fuse = CFG.fuse[l.kind] || 7;
+    if (G.letter || letterAnim) G.wait.push(l); else showLetter(l);
   }
-  function sampleTap() {
-    if (S.phase !== 'pour') return false;
-    S.lastTapAt = S.now;
-    const run = S.run, last = CFG.samples.checkpoints.length - 1, newest = run.ckNext - 1;
-    if (newest > run.sampledUpTo && newest < last) sampleCheckpoint(newest, 'tap');
-    else S.pendingTap = true;
+
+  /* ---------------- the letter on screen ---------------- */
+  var letterAnim = null, flick = null;
+  function showLetter(l) {
+    G.letter = l;
+    lFrom.textContent = l.from; lFrom.className = 'from' + (l.hand ? ' hand' : '');
+    lOffer.textContent = l.offer; lOffer.className = 'offer' + (l.offerHand ? ' hand' : '');
+    lUp.textContent = l.up ? '↑ ' + l.up : '';
+    lDown.innerHTML = '';
+    if (l.forbid) { var f = document.createElement('span'); f.className = 'forbid'; f.textContent = l.forbid; lDown.appendChild(f); }
+    if (l.down) { var dn = document.createElement('span'); dn.textContent = '↓ ' + l.down; lDown.appendChild(dn); }
+    lUp.style.display = l.up ? '' : 'none';
+    elLetter.classList.toggle('grey', !!l.grey);
+    elLetter.hidden = false;
+    letterAnim = { kind: 'in', t0: now };
+    l.fuseLeft = l.fuse;
+    placeLetter();
+    snd.letter();
+    elLive.textContent = l.from + '. ' + l.offer;
+    G.log.push({ day: Math.floor(G.day), letter: l.id });
+    if (document.activeElement === elFocus || (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('fr-name'))) { try { elLetter.focus({ preventScroll: true }); } catch (e) { } }
+  }
+  function letterRest() { var h = elLetter.offsetHeight || L.letter.h; return clamp(L.letter.max - h, L.cluster.y, Math.max(L.letter.y, L.strip.y + L.strip.h + 6)); }
+  function placeLetter() {
+    if (!G || elLetter.hidden) return;
+    var rest = letterRest(), y = rest, op = 1, A = letterAnim;
+    if (A) {
+      var dur = A.kind === 'in' ? CFG.letterInSec : A.kind === 'up' ? CFG.takeSec : A.kind === 'down' ? CFG.passSec : 0.2;
+      var u = reduced() ? 1 : (now - A.t0) / dur, e = A.kind === 'in' ? easeOut(u) : ease(u);
+      if (A.kind === 'in') y = L.vh + 10 + (rest - L.vh - 10) * e;
+      else if (A.kind === 'up') { y = A.y0 - 120 * e; op = 1 - e; }
+      else if (A.kind === 'down') { y = A.y0 + (L.vh + 20 - A.y0) * e; }
+      else if (A.kind === 'back') { y = A.y0 + (rest - A.y0) * e; }
+      if (u >= 1) { var k = A.kind; letterAnim = null; if (k === 'up' || k === 'down') { elLetter.hidden = true; elLetter.classList.remove('grey'); if (G.wait.length && !G.letter && !G.over) showLetter(G.wait.shift()); return; } }
+    } else if (flick) { y = rest + flick.dy; }
+    elLetter.style.transform = 'translate(0px,' + Math.round(y) + 'px)';
+    elLetter.style.opacity = op;
+  }
+  function stepFuse() {
+    var l = G.letter; if (!l) return;
+    var u = clamp(l.fuseLeft / l.fuse, 0, 1);
+    lFuse.style.transform = 'scaleX(' + u.toFixed(4) + ')'; lTip.style.left = (u * 100).toFixed(3) + '%';
+    if (l.fuseLeft <= 0 && !letterAnim && !flick) { if (l.forced) resolveLetter('up', true); else resolveLetter('down', true); }
+  }
+  function letterY() { var m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(elLetter.style.transform || ''); return m ? +m[2] : letterRest(); }
+  function resolveLetter(dir, byFuse) {
+    var l = G.letter; if (!l || (letterAnim && letterAnim.kind !== 'back' && letterAnim.kind !== 'in')) return false;
+    if (dir === 'up' && !l.up) { letterAnim = { kind: 'back', t0: now, y0: letterY() - 20 }; return false; }
+    if (dir === 'down' && l.forced) { letterAnim = { kind: 'back', t0: now, y0: letterY() + 20 }; return false; }
+    G.letter = null; flick = null;
+    letterAnim = { kind: dir === 'up' ? 'up' : 'down', t0: now, y0: letterY() };
+    G.log.push({ day: Math.floor(G.day), resolve: l.id, dir: dir, fuse: !!byFuse });
+    if (dir === 'up') { snd.take(); l.take && l.take(); } else { snd.pass(); l.pass && l.pass(); }
+    if (G.over) return true;
+    updateTop();
+    if (document.activeElement === elLetter) { try { elFocus.focus({ preventScroll: true }); } catch (e) { } }
     return true;
   }
-
-  // Band DOM: one sample at a time, streamed at 45 ms per word.
-  let bandAnim = null;
-  function showSample(s, stream) {
-    S.bandSample = s; S.lastSample = s;
-    if (s.frays > 0) S.lastFrayedSeen = s;
-    if (bandAnim) { try { bandAnim.cancel(); } catch (e) { /* ignore */ } bandAnim = null; }
-    sampleEl.textContent = '';
-    const words = s.band.split(' ');
-    S.band.words = words.map((w, i) => {
-      const sp = document.createElement('span'); sp.textContent = w; if (!stream) sp.className = 'on';
-      sampleEl.appendChild(sp); if (i < words.length - 1) sampleEl.appendChild(document.createTextNode(' '));
-      return sp;
-    });
-    S.band.shown = stream ? 0 : words.length; S.band.next = S.now;
-    fitBand();
-    if (!S.reduced && sampleEl.animate) {
-      try { sampleEl.animate([{ transform: 'translateY(10px)' }, { transform: 'none' }], { duration: 260, easing: 'ease-out' }); } catch (e) { /* ignore */ }
-    }
-  }
-  // Keep the whole sample inside the band: step the size down only if it would not fit.
-  function fitBand() {
-    const lap = S.layout && S.layout.lap, base = lap ? 19 : 17, lh = lap ? 27 / 19 : 24 / 17;
-    const room = bandEl.clientHeight;
-    for (let fs = base; fs >= 13; fs--) {
-      sampleEl.style.fontSize = fs + 'px'; sampleEl.style.lineHeight = Math.round(fs * lh) + 'px';
-      if (!room || sampleEl.scrollHeight <= room + 1) break;
-    }
-  }
-  function sinkBand() {
-    S.bandSample = null; S.band.words = []; S.band.shown = 0;
-    if (!sampleEl.firstChild) return;
-    if (S.reduced || !sampleEl.animate) { sampleEl.textContent = ''; return; }
-    try {
-      bandAnim = sampleEl.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateY(16px)', opacity: 0 }], { duration: 300, easing: 'ease-in', fill: 'forwards' });
-      const a = bandAnim;
-      a.onfinish = () => { if (bandAnim === a) { sampleEl.textContent = ''; try { a.cancel(); } catch (e) { /* ignore */ } bandAnim = null; } };
-    } catch (e) { sampleEl.textContent = ''; }
-  }
-  function updBand() {
-    const b = S.band;
-    while (b.shown < b.words.length && S.now >= b.next) {
-      b.words[b.shown++].className = 'on'; b.next += CFG.samples.wordMs;
-      if (S.now - b.next < 200) tokenTick();
-    }
+  function withdrawTerms() {
+    G.wait = G.wait.filter(function (w) { return w.kind !== 'term'; });
+    if (G.letter && G.letter.kind === 'term') { var l = G.letter; G.letter = null; elLetter.classList.add('grey'); letterAnim = { kind: 'down', t0: now, y0: letterY() }; G.log.push({ day: Math.floor(G.day), withdrawn: l.id }); }
   }
 
-  // ===========================================================================
-  // POUR
-  // ===========================================================================
-  function updPour(dt) {
-    const run = S.run, ck = CFG.samples.checkpoints;
-    run.t += dt;
-    let p = Math.min(1, Math.pow(run.t / run.P, CFG.clock.pourWarp));
-    const day = run.launchDay + p * run.T;
-    if (day > CFG.clock.endDay + 1e-9 && p < 1) { // 28 May: a run in flight stops mid-stroke and prints nothing
-      const pc = (CFG.clock.endDay - run.launchDay) / run.T;
-      payroll(CFG.clock.endDay - S.day); S.day = CFG.clock.endDay; run.p = pc; run.result = 'cut'; run.done = true;
-      end('cut'); return;
-    }
-    payroll(day - S.day); S.day = day; run.p = p;
-    while (run.ckNext < ck.length && ck[run.ckNext] <= p + 1e-12) {
-      const k = run.ckNext++;
-      if (k >= ck.length - 1) break; // the final checkpoint is the landing sample
-      if (S.pendingTap) { S.pendingTap = false; sampleCheckpoint(k, 'tap'); }
-      else if (CFG.samples.autoP.some(a => Math.abs(a - ck[k]) < 1e-9) && S.now - S.lastTapAt > CFG.samples.autoQuietMs && k > run.sampledUpTo) sampleCheckpoint(k, 'auto');
-    }
-    if (p >= 1) land();
+  /* ================================================================
+     THE BET STRIP: time, from a six-hour probe to the stop
+     ================================================================ */
+  var drag = null, stopShown = { T: 0 };
+  function stopInfo() {
+    var F = flopsPerDay();
+    var mem = hasSystems() ? Infinity : CFG.memC / Math.max(F, 1);
+    var horC = hasBeliever() ? Infinity : Math.max(farthestClean() * CFG.horizonMult, CFG.horizonFloor), hor = horC / Math.max(F, 1);
+    var yr = Math.max(0, CFG.endDay - G.day);
+    var T = Math.min(mem, hor, yr), bind = T === yr ? 'year' : T === mem ? 'mem' : 'horizon';
+    return { F: F, T: Math.max(CFG.minDays, T), bind: bind, ok: F > 0 && yr > CFG.minDays * 0.5, horC: Math.max(farthestClean() * CFG.horizonMult, CFG.horizonFloor) };
+  }
+  function daysAt(t, st) { return CFG.minDays + clamp(t, 0, 1) * (st.T - CFG.minDays); }
+  function nibX(t) { return L.travel.x + clamp(t, 0, 1) * L.travel.w; }
+  function tAtX(x) { return clamp((x - L.travel.x) / L.travel.w, 0, 1); }
+  function canBet() { return G.powered && !G.over && !G.run && !moment && (G.phase === 'idle' || G.phase === 'wait'); }
+  function beginDrag(x, y, viaKeys) {
+    if (!canBet()) return false;
+    var st = stopInfo(); if (!st.ok) return false;
+    drag = { st: st, t: 0, samples: [], kb: !!viaKeys, hitStop: false };
+    if (G.snapNext) { G.snapNext = false; drag.t = 1; drag.snapped = true; }
+    else if (!viaKeys) drag.t = tAtX(x);
+    drag.samples.push({ t: drag.t, at: performance.now() });
+    G.phase = 'drag';
+    updateDragNotes();
+    return true;
+  }
+  function moveDrag(x, y) {
+    if (!drag) return;
+    if (!drag.snapped) drag.t = tAtX(x);
+    drag.samples.push({ t: drag.t, at: performance.now() }); if (drag.samples.length > 60) drag.samples.shift();
+    updateDragNotes();
+  }
+  function dragC() { return daysAt(drag.t, drag.st) * drag.st.F; }
+  function updateDragNotes() {
+    var st = drag.st, C = dragC();
+    if (drag.t >= 0.999 && !drag.hitStop) {
+      drag.hitStop = true;
+      var at = { x: Math.min(nibX(1) - 150, L.x1 - 160), y: L.ruler.y - 22, fixed: true };
+      if (st.bind === 'mem') noteBy(anyHand(['priya']), 'memStop', at, { life: 2 });
+      else if (st.bind === 'horizon') noteBy(anyHand(['dev', 'priya']), 'horizonStop', at, { life: 2 });
+      else note(K.notes.yearStop, null, at, { life: 2, typed: true });
+    } else if (drag.t < 0.99) drag.hitStop = false;
+    if (C > CFG.memC && person('dev') && !G.seen.split) { G.seen.split = 1; noteBy('dev', 'split', { C: C, lnL: Math.log(R.Lline(C)) }); }
+    if (hasBeliever() && C > st.horC && !G.seen.keepsGoing) { G.seen.keepsGoing = 1; noteBy('ayaan', 'keepsGoing', { C: C, lnL: Math.log(R.Lline(C)) }); }
+  }
+  function endDrag() {
+    if (!drag) return;
+    var d = drag; drag = null; elReadout.style.opacity = 0; elProj.textContent = '';
+    // the bet is read 100 ms before the lift (or from the first position if the drag was shorter)
+    var tUp = performance.now(), t = d.samples[0].t;
+    for (var i = d.samples.length - 1; i >= 0; i--) if (d.samples[i].at <= tUp - CFG.restReadSec * 1000) { t = d.samples[i].t; break; }
+    if (d.kb || d.snapped) t = d.t;
+    G.phase = G.firstLift ? 'idle' : 'wait';
+    launch(daysAt(t, d.st));
+  }
+  function showReadout(x, y) {
+    var T = daysAt(drag.t, drag.st), land = G.day + T;
+    elReadout.textContent = R.fmtDay(Math.min(land, CFG.endDay - 1e-6));
+    var w = elReadout.offsetWidth || 70;
+    var rx = clamp(x - w / 2, L.x0, L.x1 - w), ry = clamp(y - L.readAbove - 15, 4, L.vh - 20);
+    elReadout.style.transform = 'translate(' + Math.round(rx) + 'px,' + Math.round(ry) + 'px)'; elReadout.style.opacity = 1;
+    elProj.textContent = '→ ' + fmtMonths(Math.max(0, monthsLeft() - T / CFG.daysPerMonth));
   }
 
-  // ===========================================================================
-  // LAND
-  // ===========================================================================
-  function land() {
-    const run = S.run;
-    run.p = 1; S.pendingTap = false;
-    const clean = run.r <= 1 && (run.Lstar <= CFG.line.onLineTol * run.Lstar);
-    run.result = clean ? 'clean' : 'wall';
-    const fresh = clean ? S.caps.filter(c => !c.fired && run.C >= c.C) : [];
-    fresh.forEach(c => { c.fired = true; });
-    S.momentQ = fresh.map(c => ({ kind: 'cap', sample: makeSample(run, 1, 'land', c.id) }));
-    const landSample = S.momentQ.length ? S.momentQ[S.momentQ.length - 1].sample : makeSample(run, 1, 'land');
-    run.landSample = landSample;
-    S.phase = 'land';
-    S.L = { step: 'pause', t: 0, landSample, kept: S.bank, total: clean ? CFG.money.cleanPrint * run.ink : 0, printed: 0, n: 0, iv: 0, count: 0, wPrint: 0, toDrag: false };
+  /* ================================================================
+     THE RUN
+     ================================================================ */
+  function launch(T) {
+    var st = stopInfo(); if (!st.ok) return false;
+    T = clamp(T, CFG.minDays, st.T);
+    var F = st.F, C = T * F, D = R.tokens(C);
+    var blind = hasBeliever() && C > st.horC, b = 0;
+    if (blind) b = rng() < CFG.blind.chance ? U(CFG.blind.hi[0], CFG.blind.hi[1]) : U(CFG.blind.lo[0], CFG.blind.lo[1]);
+    var m = sunheeBend();
+    var run = { n: G.runs.length + 1, C: C, T: T, D: D, k: m * (1 + b), m: m, b: b, blind: blind, s: 0, launchDay: G.day, pts: [], lastQ: null,
+      dps: T < CFG.minPourSec ? T / CFG.minPourSec : CFG.pourDaysPerSec, sampledUpTo: -1, autoQ: CFG.autoSampleQ.slice(), lastTap: -99, lastAuto: now, pendingTap: null,
+      hang: null, hangs: [], liftT0: now };
+    // the vault: an unflicked checkpoint sinks at the next lift
+    if (G.cp) G.cp = null;
+    sinkBand();
+    G.run = run; G.phase = 'pour'; G.firstLift = true;
+    snd.lift(); snd.motor('train', trainingEq(), 0.3);
+    panToTarget();
+    staticDirty = true;
+    G.log.push({ day: Math.floor(G.day), launch: C, T: +T.toFixed(2) });
+    return true;
   }
-  function updLand(dt) {
-    const L = S.L, run = S.run, M = CFG.ms; L.t += dt;
-    switch (L.step) {
-      case 'pause':
-        if (L.t >= M.landPause) {
-          L.t = 0;
-          if (S.momentQ.length) { startMoment(S.momentQ.shift()); L.step = 'moment'; }
-          else { L.step = 'lift'; showSample(L.landSample, true); }
-        }
-        break;
-      case 'moment':
-        if (!S.moment) {
-          if (S.momentQ.length) startMoment(S.momentQ.shift());
-          else { L.step = 'lift'; L.t = 0; showSample(L.landSample, false); }
-        }
-        break;
-      case 'lift':
-        if (L.t >= M.inkLift) {
-          L.t = 0;
-          if (run.result === 'clean') {
-            if (L.total > 1e-9) { L.step = 'print'; L.n = Math.ceil(L.total - 1e-9); L.iv = Math.min(M.printTickMax, M.printTotal / L.n); }
-            else { L.step = 'repack'; }
-          } else {
-            S.crossings++;
-            if (CFG.rules.emptyWhirrOnCrossing) whirr(300);
-            if (S.bank <= 0 || CFG.rules.wallEndsSheet) { end(S.bank <= 0 ? 'dark' : 'wall'); return; }
-            L.step = 'scratch'; scratchBand(run);
-          }
-        }
-        break;
-      case 'print': {
-        const want = Math.min(L.n, Math.floor(L.t / L.iv) + 1);
-        while (L.count < want) {
-          L.count++;
-          const amt = Math.min(1, L.total - L.printed);
-          L.printed += amt; S.bank += amt;
-          const rt = performance.now();
-          if (rt - S.lastPrintTickAt >= M.printTickMin) { S.lastPrintTickAt = rt; printTick(); }
-        }
-        if (L.count >= L.n && L.t >= L.n * L.iv + 60) { L.step = 'repack'; L.t = 0; }
-        break;
-      }
-      case 'scratch':
-        if (L.t >= M.scratch) { L.step = 'repack'; L.t = 0; }
-        break;
-      case 'repack':
-        if (L.t >= M.repack) finishLand();
-        break;
+  function qOf(run) { return Math.pow(clamp(run.s, 0, 1), CFG.pourWarp); }
+  function curvePoint(run, q) {
+    var qq = Math.max(R.P0, q), z = clamp((log10(qq) + 3.5) / 3.5, 0, 1);
+    return { x: log10(qq * run.C), y: Math.log(R.lossAt(run.C, qq, run.k)) + gauss() * CFG.curveNoise * (1 - 0.5 * z) };
+  }
+  function addPts(run) {
+    var q = qOf(run), lq = log10(Math.max(R.P0, q));
+    if (run.lastQ == null) { run.pts.push(curvePoint(run, R.P0)); run.lastQ = log10(R.P0); }
+    var pxPer = L.plot.w / (view.r - view.l), steps = Math.min(60, Math.floor((lq - run.lastQ) * pxPer / 1.2));
+    if (steps < 1) return;
+    for (var i = 1; i <= steps; i++) run.pts.push(curvePoint(run, Math.pow(10, run.lastQ + (lq - run.lastQ) * i / steps)));
+    run.lastQ = lq;
+  }
+  function cpIndex(q) { var c = -1; for (var i = 0; i < CFG.checkpoints.length; i++) if (CFG.checkpoints[i] <= q + 1e-9) c = i; return c; }
+  function tapSample() {
+    var run = G.run; if (!run || G.phase !== 'pour') return false;
+    run.lastTap = now;
+    var ci = cpIndex(qOf(run));
+    if (ci > run.sampledUpTo) { run.sampledUpTo = ci; showBand(makeSample(run, CFG.checkpoints[ci], 'tap'), 'stream'); }
+    else run.pendingTap = now;
+    return true;
+  }
+  function stepSamples(run) {
+    var ci = cpIndex(qOf(run));
+    if (run.pendingTap != null) {
+      if (ci > run.sampledUpTo) { run.sampledUpTo = ci; run.pendingTap = null; showBand(makeSample(run, CFG.checkpoints[ci], 'tap'), 'stream'); }
+      else if (now - run.pendingTap > CFG.tapWaitSec) { run.pendingTap = null; if (ci >= 0) showBand(makeSample(run, CFG.checkpoints[ci], 'tap'), 'stream'); }
     }
+    var q = qOf(run);
+    if (run.autoQ.length && q >= run.autoQ[0]) { run.autoQ.shift(); if (now - run.lastTap > CFG.autoQuietSec && ci >= 0) { run.sampledUpTo = Math.max(run.sampledUpTo, ci); run.lastAuto = now; showBand(makeSample(run, CFG.checkpoints[ci], 'auto'), 'stream'); } }
+    if (run.T > CFG.longPourSec && now - run.lastAuto > CFG.autoEverySec && now - run.lastTap > CFG.autoQuietSec && ci >= 0) { run.lastAuto = now; run.sampledUpTo = Math.max(run.sampledUpTo, ci); showBand(makeSample(run, CFG.checkpoints[ci], 'auto'), 'stream'); }
   }
-  function finishLand() {
-    const run = S.run; run.done = true;
-    S.L = null; S.run = null; S.phase = 'drag'; S.nib.t = -1;
-    motorTo(1, 400);
-    if (S.bank <= 0) { end('dark'); return; }
-    if (S.day >= CFG.clock.endDay - 1e-9) { end('may28'); return; }
-  }
-  // Round 7: a crossing scratches the hatch band across the paper. It stays as a scar.
-  function scratchBand(run) {
-    const lc = Math.log10(S.Cwall);
-    const text = reprintChoice(run);
-    let h = S.hatches.find(x => Math.abs(x.lc - lc) < 1e-9);
-    if (!h) { h = { lc, t0: S.now }; S.hatches.push(h); } else h.t0 = S.now;
-    if (text) S.reprintText = text;
-    S.reprintFor = h;
-    nibScratch(CFG.ms.hatch);
-    if (CFG.rules.wallAdvancesAfterCrossing) { // never drawn: only the words warn you
-      S.Cwall = S.Cwall * Math.pow(10, CFG.rules.wallAdvanceDecades);
-      S.Dwall = tokens(S.Cwall); S.W = S.Dwall / D.passes;
-    }
-  }
-  function reprintChoice(crossRun) {
-    if (S.liftBand && S.liftBand.frays > 0) return S.liftBand.band;
-    if (S.lastFrayedSeen && S.lastFrayedSeen.frays > 0) return S.lastFrayedSeen.band;
-    if (crossRun && crossRun.landSample) return crossRun.landSample.band;
-    return null;
-  }
-
-  // ===========================================================================
-  // Moments: capability crossings and GPT-3 on your own dot
-  // ===========================================================================
-  function startMoment(m) {
-    const words = m.sample ? m.sample.full.split(' ') : [];
-    momentP.textContent = '';
-    const spans = words.map((w, i) => { const sp = document.createElement('span'); sp.textContent = w; momentP.appendChild(sp); if (i < words.length - 1) momentP.appendChild(document.createTextNode(' ')); return sp; });
-    S.moment = { kind: m.kind, sample: m.sample, spans, shown: 0, t: 0, next: 0, stage: 'in', holdAt: 0, outAt: 0 };
-  }
-  function updMoment(dt) {
-    const m = S.moment; if (!m) { S.dim = 0; return; }
-    const M = CFG.ms; m.t += dt;
-    while (m.shown < m.spans.length && m.t >= m.next) { m.spans[m.shown++].className = 'on'; m.next += CFG.samples.wordMs; tokenTick(); }
-    if (m.stage === 'in' && m.shown >= m.spans.length && m.t >= Math.max(M.capDim, m.next)) { m.stage = 'hold'; m.holdAt = m.t; duck(true); }
-    if (m.stage === 'hold' && m.t - m.holdAt >= M.capDuck + M.capSilence) { m.stage = 'out'; m.outAt = m.t; duck(false); }
-    if (m.stage === 'in') S.dim = clamp(m.t / M.capDim, 0, 1);
-    else if (m.stage === 'hold') S.dim = 1;
-    else S.dim = 1 - clamp((m.t - m.outAt) / M.capRestore, 0, 1);
-    if (m.stage === 'out' && m.t - m.outAt >= M.capRestore) { S.moment = null; S.dim = 0; momentP.textContent = ''; }
-  }
-
-  // ===========================================================================
-  // END and the fresh sheet
-  // ===========================================================================
-  function end(reason) {
-    if (S.phase === 'end' || S.phase === 'feed') return;
-    S.frozenView = stripView(); S.frozenView.flare = null;
-    const fromPhase = S.phase;
-    S.phase = 'end';
-    const dry = S.bank <= 0;
-    const M = CFG.ms;
-    const lastRun = S.runs[S.runs.length - 1];
-    S.E = { t: 0, reason, dry, from: fromPhase, t0: dry ? M.dryFade + M.drySilence : M.endMotor, hatchDone: false, gptDone: false, pressDone: false,
-      feedAt: dry ? M.freshDry : M.fresh, echo: null, lastRun };
-    if (lastRun && lastRun.result === 'wall') S.E.echo = { t1: lastRun.tLift, tw: lastRun.tWall };
-    S.L = null; S.momentQ = []; S.nib.dragging = false;
-    clearNews(false);
-    if (dry) dryAudio(); else motorTo(0, M.endMotor);
-    const best = bestClean();
-    S.sheetsEnded++;
-    S.history.push({ sheet: S.sheetNo, seed: S.seed, reason, dark: dry, day: S.day, runs: S.runs.length, bestLog10C: best ? +best.lc.toFixed(3) : null,
-      reachedGpt3: !!(best && best.C >= CFG.paper.gpt3C), wallLog10C: +Math.log10(S.Cwall0).toFixed(3), crossings: S.crossings, bank: +S.bank.toFixed(2) });
-  }
-  function bestClean() { let b = null; for (const r of S.runs) if (r.result === 'clean' && (!b || r.C > b.C)) b = r; return b; }
-  function leftClean() { let b = null; for (const r of S.runs) if (r.result === 'clean' && (!b || r.C < b.C)) b = r; return b; }
-  function updEnd(dt) {
-    const E = S.E, M = CFG.ms; E.t += dt;
-    if (!E.hatchDone && E.t >= E.t0) {
-      E.hatchDone = true;
-      const lc = Math.log10(S.Cwall);
-      if (lc <= S.xR && !S.hatches.some(h => Math.abs(h.lc - lc) < 1e-9)) {
-        const h = { lc, t0: S.now }; S.hatches.push(h);
-        const txt = (S.liftBand && S.liftBand.frays > 0) ? S.liftBand.band : (S.lastFrayedSeen ? S.lastFrayedSeen.band : (E.lastRun && E.lastRun.result === 'wall' && E.lastRun.landSample ? E.lastRun.landSample.band : null));
-        if (txt) { S.reprintText = txt; S.reprintFor = h; }
-        nibScratch(M.hatch);
+  // Priya reads the words. Loud fray or crawl: she offers the filter herself.
+  function onSampleShown(smp) {
+    G.lastFrayAmt = smp.crawl ? 6 : smp.fray;
+    if ((smp.fray >= CFG.priyaAutoAmount || smp.crawl) && !G.filter) {
+      var who = person('priya') ? 'priya' : person('ines') ? 'ines' : null;
+      if (who && !G.priyaOffer) {
+        G.priyaOffer = smp.crawl ? 6 : smp.fray;
+        var at = G.run ? { C: Math.max(R.P0, qOf(G.run)) * G.run.C, lnL: Math.log(R.lossAt(G.run.C, qOf(G.run), G.run.k)) } : (smp.C ? { C: smp.C } : null);
+        noteBy(who, 'frayLoud', at, { life: 12 });
       }
     }
-    if (!E.gptDone && E.t >= E.t0 + M.hatch) { E.gptDone = true; startGptHeadline(); }
-    if (!E.pressDone && E.t >= E.t0 + M.hatch + M.gptDrift) {
-      E.pressDone = true;
-      const best = bestClean();
-      const miracle = !!(best && best.C >= CFG.paper.gpt3C && (!CFG.rules.gpt3MomentNeedsAlive || !E.dry));
-      S.gptPress = { t0: S.now, onLc: miracle && CFG.rules.gpt3OnPlayerDot ? best.lc : Math.log10(CFG.paper.gpt3C), miracle };
-      if (miracle) startMoment({ kind: 'gpt3', sample: null });
+  }
+  function startFilter(id) {
+    var cost = CFG.filterCost * Math.pow(2, G.filters);
+    var days = person('priya') && person('ines') ? CFG.filterDaysInes : CFG.filterDays;
+    G.bank -= cost;
+    G.filter = { end: G.day + days, who: id, cost: cost };
+    G.priyaOffer = 0;
+    snd.tick();
+    G.log.push({ day: Math.floor(G.day), filter: days, cost: cost });
+  }
+  function hangHour() { var tot = 28, x = rng() * tot; for (var h = 0; h < 24; h++) { x -= (h >= 1 && h < 5) ? 2 : 1; if (x <= 0) return h + rng(); } return 3.2; }
+  function hang(run) {
+    var h = hangHour(), infra = hasInfra(), down;
+    if (infra) down = CFG.infraRestartHours / 24;
+    else { var until = (CFG.hangWakeHour - h + 24) % 24; down = until / 24; if (G.day >= CFG.hangCovidFrom && G.day < CFG.hangCovidTo) down += CFG.hangCovidAddDays; }
+    var rewindDays = infra ? U(0, 4 / 24) : U(0, 1);
+    run.s = Math.max(0, run.s - rewindDays * flopsPerDay() / run.C);
+    var q = qOf(run), lq = log10(Math.max(R.P0, q));
+    while (run.pts.length > 2 && run.pts[run.pts.length - 1].x > lq + log10(run.C)) run.pts.pop();
+    run.lastQ = Math.min(run.lastQ == null ? lq : run.lastQ, lq);
+    run.hang = { start: G.day, h: h, restart: G.day + down };
+    run.hangs.push({ start: G.day, end: G.day + down });
+    G.hangsThisMonth++;
+    var lp = run.pts[run.pts.length - 1] || curvePoint(run, q);
+    var mark = { lc: lp.x, lnL: lp.y, time: String(Math.floor(h)).padStart(2, '0') + ':' + String(Math.floor((h % 1) * 60)).padStart(2, '0'), tom: !!person('tom') && G.day >= G.tomOffUntil, first: run.hangs.length === 1 };
+    G.hangMarks.push(mark);
+    snd.cut(); after(0.4, function () { snd.thud(); });
+    staticDirty = true;
+    G.log.push({ day: Math.floor(G.day), hang: mark.time, down: +down.toFixed(2) });
+  }
+  function stepRun(dd) {
+    var run = G.run; if (!run) return;
+    if (run.hang) {
+      if (G.day >= run.hang.restart) { run.hang = null; run.relightT0 = now; snd.motor('train', trainingEq(), 0.3); }
+      else return;
     }
-    if (E.t >= E.feedAt && !S.moment) startFeed();
+    var lam = CFG.hangBase * Math.sqrt(Math.max(0, trainingEq()) / 8) * infraMult();
+    if (run.s > 0.02 && run.s < 0.98 && rng() < 1 - Math.exp(-lam * dd)) { hang(run); return; }
+    run.s += flopsPerDay() * dd / run.C;
+    addPts(run);
+    stepSamples(run);
+    if (run.s >= 1) land(run);
   }
-  let feedSnap = null;
-  function startFeed() {
-    try {
-      feedSnap = feedSnap || document.createElement('canvas');
-      feedSnap.width = cv.width; feedSnap.height = cv.height;
-      feedSnap.getContext('2d').drawImage(cv, 0, 0);
-    } catch (e) { feedSnap = null; }
-    S.feed = { t: 0 };
-    newSheet();
-    S.phase = 'feed';
-    whirr(CFG.ms.feed);
+  function fireCaps(L0, run) {
+    var fresh = [];
+    G.caps.forEach(function (c) { if (!c.fired && L0 <= c.L) { c.fired = true; c.atRun = run.n; if (G.filters === 0 && rng() < CFG.contaminateChance) c.contaminated = true; fresh.push(c); } });
+    return fresh;
   }
-  function updFeed(dt) {
-    S.feed.t += dt;
-    if (S.feed.t >= CFG.ms.feed) {
-      S.phase = 'asleep'; S.feed = null;
-      clearSheetDOM();
-    }
-  }
-  function clearSheetDOM() {
-    sheetEl.style.transform = ''; sheetEl.style.opacity = '';
-    clearNews(true); newsEl.textContent = ''; sampleEl.textContent = ''; reprintEl.className = 'fr-reprint'; reprintEl.textContent = '';
-    for (const k in domCache) delete domCache[k];
-    dateEl.className = 'fr-date'; dayEl.textContent = ''; momentP.textContent = '';
-  }
-
-  // ===========================================================================
-  // DRAG (the clock and payroll run while the nib is live, after the first lift)
-  // ===========================================================================
-  function updDrag(dt) {
-    if (!S.powered || !S.clockStarted) return;
-    const dd = dt / 1000 * CFG.clock.dragDaysPerSec;
-    if (S.day + dd >= CFG.clock.endDay) { payroll(CFG.clock.endDay - S.day); S.day = CFG.clock.endDay; end(S.bank <= 0 ? 'dark' : 'may28'); return; }
-    payroll(dd); S.day += dd;
-    if (S.bank <= 0) end('dark');
-  }
-
-  // ===========================================================================
-  // History: headlines drift right to left across the top and never pause anything
-  // ===========================================================================
-  function updNewsTriggers() {
-    if (!S.powered || S.phase === 'end' || S.phase === 'feed') return;
-    while (S.newsIdx < NEWS.length && S.day >= NEWS[S.newsIdx].day) {
-      if (S.newsIdx === 0 && S.now - S.powerAt < CFG.ms.dateAt) break;
-      S.newsQ.push(NEWS[S.newsIdx++].text);
-    }
-  }
-  function clearNews(all) {
-    S.newsQ = [];
-    for (const a of S.newsActive) { if (all || !a.settle) a.el.remove(); }
-    S.newsActive = all ? [] : S.newsActive.filter(a => a.settle);
-  }
-  function startHeadline(text, settle) {
-    const el = document.createElement('div'); el.className = 'fr-hl' + (settle ? ' settle' : ''); el.textContent = text;
-    const P = S.layout.paper;
-    if (settle) el.style.width = Math.max(120, P.w - 32) + 'px';
-    newsEl.appendChild(el);
-    const a = { el, t0: S.now, w: el.offsetWidth || 400, settle };
-    S.newsActive.push(a); return a;
-  }
-  function startGptHeadline() { startHeadline(GPT3_NEWS, true); }
-  function updNews() {
-    if (S.phase === 'asleep') return;
-    const P0w = S.layout.paper, P = { x: 0, w: P0w.w }, right = P.w;
-    if (S.newsQ.length && S.phase !== 'end' && S.phase !== 'feed') {
-      const lastA = S.newsActive.filter(a => !a.settle).slice(-1)[0];
-      let free = true;
-      if (lastA) { const prog = (S.now - lastA.t0) / CFG.ms.headline; const x = right - prog * (P.w + lastA.w); free = x + lastA.w < right - 48; }
-      if (free) startHeadline(S.newsQ.shift(), false);
-    }
-    for (let i = S.newsActive.length - 1; i >= 0; i--) {
-      const a = S.newsActive[i];
-      if (a.settle) {
-        const e = easeOut((S.now - a.t0) / CFG.ms.gptDrift);
-        const x = S.reduced ? P.x + 16 : lerp(right, P.x + 16, e);
-        a.el.style.transform = 'translate3d(' + x.toFixed(1) + 'px,0,0)';
-        if (S.reduced) a.el.style.opacity = String(clamp((S.now - a.t0) / 400, 0, 1));
-        continue;
-      }
-      const prog = (S.now - a.t0) / CFG.ms.headline;
-      if (prog >= 1) { a.el.remove(); S.newsActive.splice(i, 1); continue; }
-      if (S.reduced) { a.el.style.transform = 'translate3d(' + (P.x + 16) + 'px,0,0)'; a.el.style.opacity = String(Math.min(1, prog * 8, (1 - prog) * 8)); a.el.style.whiteSpace = 'normal'; a.el.style.width = (P.w - 32) + 'px'; }
-      else a.el.style.transform = 'translate3d(' + (right - prog * (P.w + a.w)).toFixed(1) + 'px,0,0)';
-    }
-  }
-
-  // ===========================================================================
-  // Layout
-  // ===========================================================================
-  function readSafe() {
-    try { const cs = getComputedStyle(probeEl); return { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 }; }
-    catch (e) { return { t: 0, r: 0, b: 0, l: 0 }; }
-  }
-  function computeLayout() {
-    const vw = Math.max(1, stage.clientWidth || window.innerWidth), vh = Math.max(1, stage.clientHeight || window.innerHeight);
-    const sa = readSafe(), lapMode = vw >= CFG.layout.laptopMinWidth;
-    const L = { vw, vh, lap: lapMode, sa };
-    if (lapMode) {
-      const c = CFG.layout.laptop, m = c.margin;
-      L.paper = { x: m, y: m, w: vw - 2 * m, h: vh * c.paperTo - m };
-      L.band = { x: (vw - Math.min(c.bandCol, vw - 2 * m)) / 2, w: Math.min(c.bandCol, vw - 2 * m), y0: vh * c.bandFrom + 8, y1: vh * c.bandTo - 6 };
-      const sw = Math.min(L.paper.w, c.maxStrip);
-      L.strip = { x: (vw - sw) / 2, y: Math.round(vh * c.stripAt), w: sw, h: c.stripH, home: c.home };
-      L.dateX = m + 16; L.dateY = m + 16; L.newsY = m + 40;
+  function land(run) {
+    run.landDay = G.day; run.finished = true; run.s = 1;
+    addPts(run);
+    G.run = null; G.runs.push(run);
+    G.phase = 'land';
+    snd.motor('idle', 0, 0.3);
+    var r = run.D / G.Dwall;
+    run.crossed = r > 1;
+    var freeze = run.crossed ? CFG.landWallSec : CFG.landCleanSec;
+    if (run.crossed) {
+      run.L = R.Lline(run.C) * run.k;
+      var qStar = G.Dwall / run.D;
+      var smp = makeSample(run, 1, 'land');
+      G.scars.push({ lc0: log10(qStar * run.C), lc1: log10(run.C), t0: now, text: smp.text });
+      G.rings.push({ C: run.C, L: run.L });
+      showBand(smp, 'stream');
+      snd.hatch(0.9);
     } else {
-      const c = CFG.layout.phone, g = c.gutter;
-      L.paper = { x: 0, y: 0, w: vw, h: vh * c.paperTo };
-      L.band = { x: g + sa.l, w: vw - 2 * g - sa.l - sa.r, y0: vh * c.bandFrom + 6, y1: vh * c.bandTo - 4 };
-      L.strip = { x: g + sa.l, y: Math.round(vh * c.stripAt), w: vw - 2 * g - sa.l - sa.r, h: c.stripH, home: c.home };
-      L.dateX = 16 + sa.l; L.dateY = 16 + sa.t; L.newsY = 40 + sa.t;
+      var Lf = R.Lline(run.C) * run.k;
+      run.L = Lf;
+      var dot = { C: run.C, L: Lf, day: G.day, runN: run.n, pub: false, ship: false, contaminated: false, surname: null, scandal: null };
+      G.dots.push(dot);
+      // passing a rival
+      G.rivals.forEach(function (rv) { var lp = rv.pubs[rv.pubs.length - 1]; if (!rv.passed && lp && lp.day >= 0 && run.C > lp.C && Lf < lp.L) { rv.passed = true; snd.tick(); } });
+      var fresh = fireCaps(Lf, run);
+      fresh.forEach(function (c) { if (c.contaminated) { dot.contaminated = true; if (person('lena')) noteBy('lena', 'leak', { C: run.C, lnL: Math.log(Lf) }); } });
+      var top = fresh.length ? fresh[fresh.length - 1] : null;
+      var smp2 = makeSample(run, 1, 'land', top ? top.id : null);
+      G.cp = { dot: dot, smp: smp2, redTeamed: false };
+      if (run.m < 1 && !G.seen.sunheeTold) { G.seen.sunheeTold = 1; noteBy('sunhee', 'toldYou', { C: run.C, lnL: Math.log(Lf) }); }
+      var miracle = run.C >= CFG.gpt3C && Lf <= CFG.gpt3L * CFG.miracleTol && !G.miracle;
+      if (top) {
+        moodAll(CFG.moodCap);
+        startMoment(smp2.momentText || smp2.text, 'cap');
+        moment.after = function () { showBand(smp2, 'instant'); flickHints(); if (miracle) doMiracle(); else if (G.phase !== 'moment') G.phase = 'idle'; };
+      } else {
+        showBand(smp2, 'stream'); after(0.6, flickHints);
+        if (miracle) after(freeze, doMiracle);
+      }
+      if (G.firstAuthor) { var fa = G.firstAuthor; G.firstAuthor = null; dot.surname = proto(fa).surname + ' et al.'; doPublish(dot, fa); G.cp = null; }
     }
-    L.strip.tx = L.strip.x + L.strip.home; L.strip.tw = L.strip.w - L.strip.home;
-    L.plot = { y0: L.paper.y + (lapMode ? 64 : 60) + (lapMode ? 0 : sa.t), y1: L.paper.y + L.paper.h - 10 };
-    return L;
+    staticDirty = true;
+    G.log.push({ day: Math.floor(G.day), land: run.C, crossed: run.crossed, L: +run.L.toFixed(4) });
+    var myYear = yearN;
+    after(freeze, function () { if (yearN !== myYear || G.over) return; if (G.phase === 'land') G.phase = 'idle'; panToTarget(); motorForPhase(); });
   }
-  function resize() {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    S.layout = computeLayout();
-    const L = S.layout;
-    cv.width = Math.round(L.vw * dpr); cv.height = Math.round(L.vh * dpr);
-    cv.style.width = L.vw + 'px'; cv.style.height = L.vh + 'px';
-    S.dpr = dpr;
-    dateEl.style.left = L.dateX + 'px'; dateEl.style.top = L.dateY + 'px';
-    newsEl.style.top = L.newsY + 'px'; newsEl.style.left = L.paper.x + 'px'; newsEl.style.width = L.paper.w + 'px';
-    bandEl.style.left = L.band.x + 'px'; bandEl.style.width = L.band.w + 'px';
-    bandEl.style.top = L.band.y0 + 'px'; bandEl.style.height = Math.max(24, L.band.y1 - L.band.y0) + 'px';
-    const st = L.strip;
-    stripEl.style.left = st.x + 'px'; stripEl.style.top = st.y + 'px'; stripEl.style.width = st.w + 'px'; stripEl.style.height = st.h + 'px';
-    muteEl.style.right = (L.lap ? Math.max(8, L.vw - st.x - st.w - 12) : 4 + L.sa.r) + 'px';
-    muteEl.style.bottom = (L.lap ? 8 : 4 + L.sa.b) + 'px';
-    for (const a of S.newsActive || []) if (a.settle) a.el.style.width = Math.max(120, L.paper.w - 32) + 'px';
-    if (sampleEl.firstChild) fitBand();
+  function doMiracle() { if (G.miracle || G.over) return; G.miracle = true; startMoment('', 'miracle'); }
+  function flickHints() {
+    if (!G.cp || G.over) return;
+    var at = { x: L.band.x + 8, y: L.ruler.y - 22, fixed: true };
+    if (G.day >= CFG.publishFrom && !G.hints.up) { G.hints.up = 1; noteBy(anyHand(['priya']), 'flickUp', at, { life: 6 }); }
+    else if (canShip(G.cp) && !G.hints.right) { G.hints.right = 1; noteBy(anyHand(['priya']), 'flickRight', at, { life: 6 }); }
+  }
+  function canShip(cp) { return !!cp && G.day >= CFG.shipFrom && G.caps[0].fired && cp.dot.L <= G.caps[0].L + 1e-9; }
+  function capTier(dot) { var t = null; G.caps.forEach(function (c) { if (c.fired && dot.L <= c.L + 1e-9) t = c.id; }); return t; }
+
+  /* ---------------- the checkpoint flick: publish, ship, vault ---------------- */
+  function flickCheckpoint(dir) {
+    var cp = G.cp; if (!cp) return false;
+    if (dir === 'up' && G.day < CFG.publishFrom) return false;
+    if (dir === 'right' && !canShip(cp)) return false;
+    G.cp = null;
+    if (dir === 'up') { var dx = X(log10(cp.dot.C)) - (L.band.x + L.band.w / 2), dy = Y(Math.log(cp.dot.L)) - (L.band.y + L.band.h * 0.7); bandFly = { t0: now, dur: 0.5, dx: dx * 0.6, dy: dy }; band = null; doPublish(cp.dot, null, cp.redTeamed); }
+    else { bandFly = { t0: now, dur: 0.4, dx: L.vw, dy: 0 }; band = null; doShip(cp.dot, cp.redTeamed); }
+    snd.take();
+    G.log.push({ day: Math.floor(G.day), flick: dir, C: cp.dot.C });
+    return true;
+  }
+  function doPublish(dot, firstAuthor, redTeamed) {
+    var apply = function () {
+      dot.pub = true; dot.pending = false; G.lastPublishDay = G.day;
+      staff().forEach(function (p) { if (p.id === firstAuthor) mood(p.id, CFG.moodFirstAuthor); else if (p.ego >= 3) mood(p.id, CFG.moodPublish); });
+      var Cp = dot.C;
+      G.pendings.push({ day: G.day + CFG.rivalSlideDelay, fn: function () { G.rivals.forEach(function (rv) { var c = Math.pow(10, rv.logc); if (c < Cp) rv.logc = log10(c * Math.pow(Cp / c, CFG.rivalSlidePow)); }); } });
+      if (!redTeamed) {
+        var p = dot.contaminated ? 1 : G.filters > 0 ? CFG.scandalPubFiltered : CFG.scandalPub;
+        if (rng() < p) G.scandals.push({ day: G.day + U(CFG.scandalDelay[0], CFG.scandalDelay[1]), dot: dot, kind: 'pub' });
+      }
+      staticDirty = true;
+    };
+    if (G.mer) { dot.pending = true; G.pendings.push({ day: G.day + CFG.meridian.firstLook, fn: apply }); } else apply();
+  }
+  function doShip(dot, redTeamed) {
+    var apply = function () {
+      var tier = capTier(dot) || 'paragraph';
+      G.api = { dot: dot, revenue: CFG.capRevenue[tier] };
+      G.dots.forEach(function (d) { d.ship = false; }); dot.ship = true; dot.pending = false;
+      if (!redTeamed && rng() < CFG.scandalShip) G.scandals.push({ day: G.day + U(CFG.scandalDelay[0], CFG.scandalDelay[1]), dot: dot, kind: 'ship' });
+      staticDirty = true;
+    };
+    if (G.mer) { dot.pending = true; G.pendings.push({ day: G.day + CFG.meridian.firstLook, fn: apply }); } else apply();
+  }
+  function startRedTeam() {
+    if (!G.cp || G.held || !person('lena')) return;
+    G.held = { cp: G.cp, end: G.day + (G.api ? CFG.redTeamDaysApi : CFG.redTeamDays) };
+    G.cp = null; sinkBand();
+    G.log.push({ day: Math.floor(G.day), redteam: +G.held.end.toFixed(1) });
   }
 
-  // ===========================================================================
-  // Rendering: the paper
-  // ===========================================================================
-  function X(lc) { const P = S.layout.paper; return P.x + (lc - S.xL) / (S.xR - S.xL) * P.w; }
-  function Y(ln) { const pl = S.layout.plot; return pl.y0 + (LN_MAX - ln) / (LN_MAX - LN_MIN) * (pl.y1 - pl.y0); }
-  function updPan() {
-    if (!S.pan) return;
-    const e = easeIO((S.now - S.pan.t0) / CFG.ms.pan);
-    S.xL = lerp(S.pan.fL, S.pan.tL, e); S.xR = lerp(S.pan.fR, S.pan.tR, e);
-    if (e >= 1) S.pan = null;
-  }
-  function inkCol() { return S.E && S.E.dry ? mix(COL.ink, COL.dry, clamp(S.E.t / CFG.ms.dryFade, 0, 1)) : COL.ink; }
-  function pathRun(run, u) {
-    const N = run.lx.length, fi = clamp(u, 0, 1) * (N - 1), k = Math.floor(fi);
-    ctx.moveTo(X(run.lx[0]), Y(run.ly[0]));
-    for (let i = 1; i <= k; i++) ctx.lineTo(X(run.lx[i]), Y(run.ly[i]));
-    if (k < N - 1) { const f = fi - k; ctx.lineTo(X(lerp(run.lx[k], run.lx[k + 1], f)), Y(lerp(run.ly[k], run.ly[k + 1], f))); }
-  }
-  function liveRun() { return S.run && (S.phase === 'pour' || S.phase === 'land' || S.phase === 'end') ? S.run : null; }
-  const uOf = p => (p < P0 ? -1 : (Math.log10(p) + 3.5) / 3.5);
-  function drawPaper() {
-    const L = S.layout, P = L.paper, ink = COL.ink;
-    ctx.save();
-    ctx.beginPath(); ctx.rect(P.x, P.y, P.w, P.h); ctx.clip();
-    // Faint log-log decade grid
-    ctx.fillStyle = COL.grid;
-    for (let d = Math.ceil(S.xL - 1e-9); d <= S.xR + 1e-9; d++) ctx.fillRect(Math.round(X(d)), P.y, 1, P.h);
-    for (const v of [2, 5, 10]) ctx.fillRect(P.x, Math.round(Y(Math.log(v))), P.w, 1);
-    // Hatch bands (vermilion, the scar)
-    for (const h of S.hatches) drawHatch(h);
-    if (!S.powered) { ctx.restore(); return; }
-    // The dotted scaling-law line
-    const rev = clamp((S.now - S.powerAt - CFG.ms.lineAt) / CFG.ms.linePrint, 0, 1);
-    if (rev > 0) {
-      ctx.save(); ctx.beginPath(); ctx.rect(P.x, P.y, P.w * rev, P.h); ctx.clip();
-      ctx.strokeStyle = COL.graphite; ctx.lineWidth = 1; ctx.setLineDash([1, 2]);
-      ctx.beginPath(); ctx.moveTo(X(S.xL), Y(lineLn(S.xL)) + 0.5); ctx.lineTo(X(S.xR), Y(lineLn(S.xR)) + 0.5); ctx.stroke();
-      ctx.setLineDash([]); ctx.restore();
+  /* ================================================================
+     THE CALENDAR
+     ================================================================ */
+  function dayRate() { if (G.run) return G.run.hang ? CFG.pourDaysPerSec : G.run.dps; return CFG.idleDaysPerSec; }
+  function clockRuns() { return G.powered && G.firstLift && !G.over && (G.phase === 'idle' || G.phase === 'pour'); }
+  function stepDays(total) {
+    var guard = 0;
+    while (total > 1e-9 && guard++ < 5000) {
+      if (!clockRuns()) return;
+      var nextInt = Math.floor(G.day + 1e-9) + 1;
+      var dd = Math.min(total, 0.05, nextInt - G.day);
+      if (dd < 1e-9) dd = Math.min(total, 1e-6);
+      G.day += dd; total -= dd;
+      G.bank -= rentPerDay() * dd;
+      G.bank += apiRevenue() / CFG.daysPerMonth * dd;
+      if (G.mer && G.day >= G.mer.live) G.mer.credits -= G.mer.cards * CFG.rentPrice[0][1] * 24 * dd;
+      if (G.letter && !letterAnim) { G.letter.fuseLeft -= dd; if (G.letter.fuseLeft > 0) snd.fuse(); }
+      if (G.run) stepRun(dd);
+      // the bank hits zero mid-month: every rented card goes back at once
+      if (G.bank <= 0 && G.rentals.length) { G.rentals = []; G.log.push({ day: Math.floor(G.day), rentalsTaken: true }); }
+      if (Math.abs(G.day - nextInt) < 1e-7) { G.day = nextInt; dailyEvents(nextInt); }
+      if (G.letter) stepFuse();
     }
-    // Finished curves at 35% ink
-    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-    const live = liveRun();
-    for (const run of S.runs) {
-      if (run === live) continue;
-      ctx.globalAlpha = 0.35; ctx.strokeStyle = ink; ctx.lineWidth = 1.5;
-      ctx.beginPath(); pathRun(run, uOf(run.p)); ctx.stroke();
+  }
+  function dailyEvents(d) {
+    if (d >= CFG.endDay) { if (!G.over) endYear('survived'); return; }
+    var m = R.monthOf(d);
+    if (m !== G.month) monthStart(m);
+    if (G.over) return;
+    K.news.forEach(function (n, i) { if (!G.newsDone[i] && d >= n[0]) { G.newsDone[i] = 1; G.headQ.push(n[2]); G.phrases.push({ day: n[0], text: n[1] }); staticDirty = true; if (n[0] === CFG.lineDay) G.lineT0 = now; } });
+    if (d === CFG.marketClosedFrom) withdrawTerms();
+    if (d === K.gpt3Day && !G.gpt3) gpt3Moment();
+    for (var i = G.orders.length - 1; i >= 0; i--) { var o = G.orders[i]; if (d >= o.arrive) { if (o.kind === 'a100') G.ownedA100 += o.n; else G.owned += o.n; G.orders.splice(i, 1); for (var k = 0; k < 8; k++) after(k * 0.03, snd.card); } }
+    G.rentals = G.rentals.filter(function (r) { return d < r.end; });
+    if (G.lent && d >= G.lent.until) G.lent = null;
+    if (G.held && d >= G.held.end) { if (!G.run) { G.cp = G.held.cp; G.cp.redTeamed = true; showBand(G.cp.smp, 'instant'); } else { G.held.cp.redTeamed = true; G.heldDone = G.held.cp; } G.held = null; }
+    if (G.filter && d >= G.filter.end) { G.filter = null; G.filters++; G.W *= CFG.filterW; G.Dwall = CFG.passes * G.W; G.Cwall = R.C_of_tokens(G.Dwall); G.log.push({ day: d, filterDone: G.filters }); }
+    if (G.evals && d >= G.evals.readDay) { var ev = G.evals; G.evals = null; evalsRead(ev); }
+    G.rivals.forEach(function (rv) {
+      rv.logc += 1 / (CFG.daysPerMonth * rv.tau);
+      if (G.rivalTrickDay != null && d >= G.rivalTrickDay) rv.trick = (G.rivalTrickAll || rv.id === 'halcyon') ? CFG.sunheeBend : 1;
+      if (d >= rv.next) {
+        var c = Math.pow(10, rv.logc);
+        rv.pubs.push({ C: c, L: R.Lline(c) * rv.offset * rv.trick, day: d });
+        rv.next = d + rv.period * U(CFG.rivalPeriodJitter[0], CFG.rivalPeriodJitter[1]);
+        staticDirty = true;
+      }
+    });
+    for (i = G.pendings.length - 1; i >= 0; i--) if (d >= G.pendings[i].day) { var pd = G.pendings.splice(i, 1)[0]; pd.fn(); }
+    for (i = G.scandals.length - 1; i >= 0; i--) if (d >= G.scandals[i].day) scandal(G.scandals.splice(i, 1)[0]);
+    if (dom(d) === 11 || dom(d) === 21) slot(d, false);
+  }
+  function monthStart(m) {
+    var first = G.month === -1;
+    G.month = m;
+    G.hangsLastMonth = G.hangsThisMonth; G.hangsThisMonth = 0;
+    var d = Math.round(G.day);
+    // payroll: one hard tick
+    G.bank -= payroll();
+    snd.pay(); jolt();
+    if (G.bank < 0) { endYear('bankrupt'); return; }
+    if (!first) {
+      staff().forEach(function (p) { if (p.ego >= 4 && G.day - G.lastPublishDay > CFG.noPubDays) mood(p.id, CFG.moodNoPub); });
+      clearNotes();
     }
-    ctx.globalAlpha = 1;
-    // Verified line between your leftmost and furthest clean dots
-    const lo = leftClean(), hi = bestClean();
-    if (lo && hi && hi !== lo) { ctx.strokeStyle = ink; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X(lo.lc), Y(lineLn(lo.lc))); ctx.lineTo(X(hi.lc), Y(lineLn(hi.lc))); ctx.stroke(); }
-    // Dots and rings
-    for (const run of S.runs) {
-      if (!run.result || run.result === 'cut' || (run === S.run && S.phase === 'land' && S.L && S.L.step === 'pause')) continue;
-      const x = X(run.lc), y = Y(lineLn(run.lc));
-      if (run.result === 'clean') { ctx.fillStyle = ink; ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill(); }
-      else if (run.result === 'wall') {
-        ctx.strokeStyle = ink; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.stroke();
-        ctx.fillRect(Math.round(x) - 0.5, y - 6, 1, 3); ctx.fillRect(Math.round(x) - 0.5, y + 3, 1, 3);
+    if (G.mer && G.day >= CFG.meridian.queueFrom) {
+      var fr = frontier(), fc = farthestClean(), full = G.mer.cards;
+      G.queueCut = fc * CFG.meridian.fullWithin >= fr ? 0 : fc * CFG.meridian.halfWithin >= fr ? full / 2 : full * 3 / 4;
+    }
+    if (G.run && !G.run.hang) { var q = qOf(G.run); G.evals = { run: G.run, q: q, readDay: d + 2, L: R.lossAt(G.run.C, q, G.run.k), rq: rq(G.run, q) }; }
+    // relevance: the month nobody knocks
+    var silent = false;
+    if (G.day >= CFG.relevanceFrom) {
+      var fr2 = frontier();
+      if ((fr2 > 0 && worldView() < fr2 * CFG.relevanceShare) || G.scandalMonth === m) silent = true;
+    }
+    if (silent && G.silent) { endYear('forgotten'); return; }
+    G.silent = silent;
+    updateTop();
+    slot(d, true);
+  }
+  function evalsRead(ev) {
+    if (ev.rq > 1) return;
+    var run = ev.run, fresh = fireCaps(ev.L, run);
+    if (!fresh.length) return;
+    var top = fresh[fresh.length - 1];
+    fresh.forEach(function (c) { if (c.contaminated && person('lena')) noteBy('lena', 'leak', G.run ? { C: G.run.C } : null); });
+    moodAll(CFG.moodCap);
+    var smp = makeSample(run, ev.q, 'evals', top.id);
+    startMoment(smp.momentText || smp.text, 'cap');
+    moment.after = function () { showBand(smp, 'instant'); };
+  }
+  function scandal(s) {
+    var dot = s.dot;
+    dot.scandal = s.kind === 'pub' ? K.notes.scandalPub : K.notes.scandalShip;
+    withdrawTerms(); G.termBlockUntil = G.day + CFG.scandalNoTermsDays;
+    if (s.kind === 'ship' && G.api && G.api.dot === dot) { G.api = null; dot.ship = false; }
+    mood('priya', CFG.moodScandal); mood('lena', CFG.moodScandal);
+    G.scandalMonth = (R.monthOf(G.day) + 1) % 12;
+    staticDirty = true;
+    G.log.push({ day: Math.floor(G.day), scandal: s.kind });
+  }
+  function gpt3Moment() {
+    G.gpt3 = true; staticDirty = true;
+    var ok = hasLine();
+    if (person('ayaan')) after(ok ? 3.6 : 0.5, function () { noteBy('ayaan', 'toldYou', { C: CFG.gpt3C, lnL: Math.log(R.Lline(CFG.gpt3C)) }); });
+    if (!ok || moment) return;
+    if (G.run) snd.motor('off', 0, 0.3);
+    startMoment('', 'gpt3');
+  }
+
+  /* ---------------- how a year ends ---------------- */
+  function endYear(reason) {
+    if (G.over) return;
+    G.over = { reason: reason, day: G.day };
+    G.phase = 'end'; drag = null; elReadout.style.opacity = 0; elProj.textContent = '';
+    if (G.letter) { G.letter = null; letterAnim = { kind: reason === 'bought' ? 'up' : 'down', t0: now, y0: letterY() }; }
+    G.wait = [];
+    snd.motor('off', 0, 0.3);
+    if (reason === 'bankrupt') {
+      G.dark = true; snd.motorFreq(30, 1.2);
+      staff().forEach(function (p, i) { after(0.12 * i, function () { var b = nameEl(p.id); if (b) b.classList.add('gone'); snd.strike(); }); });
+      after(0.2, function () { root.classList.add('dry'); });
+      after(1.4, function () { snd.silence(0.05); });
+    } else if (reason === 'bought') {
+      elBrand.classList.add('struck'); after(0.6, function () { elBought.textContent = 'HALCYON'; });
+      cv.style.transition = 'opacity .6s linear'; cv.style.opacity = 0.35;
+    } else if (reason === 'forgotten') {
+      after(0.1, function () { root.classList.add('dry'); });
+    }
+    updateTop();
+    G.log.push({ day: Math.floor(G.day), end: reason });
+    var myYear = yearN;
+    after(CFG.nextYearSec, function () { if (yearN !== myYear) return; feedOut(); });
+  }
+  function feedOut() {
+    var myYear = yearN;
+    root.style.transition = 'opacity .45s linear'; root.style.opacity = 0;
+    after(0.5, function () { if (yearN !== myYear) return; snd.restore(); snd.motorFreq(55, 0.05); newYear(); layout(); root.style.opacity = 1; after(0.5, function () { root.style.transition = ''; }); });
+  }
+
+  /* ---------------- power on ---------------- */
+  function powerOn() {
+    snd.start();
+    if (G.powered) return;
+    G.powered = true; G.phase = 'wait'; G.powerT0 = now;
+    root.classList.add('on');
+    snd.motor('idle', 0, 0.8);
+    addPerson('priya');
+    staticDirty = true;
+    after(0.6, function () { if (!G.over && G.month === -1) { monthStart(0); updateTop(); } });
+  }
+
+  /* ================================================================
+     DRAWING
+     ================================================================ */
+  var staticCv = document.createElement('canvas'), sctx = staticCv.getContext('2d'), staticDirty = true;
+  var MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace", HAND = "Caveat, 'Segoe Print', 'Bradley Hand', cursive", SERIF = "Newsreader, Georgia, serif";
+  function setFont(c, px, fam, style) { c.font = (style || '') + ' ' + px + 'px ' + fam; }
+  function drawStatic() {
+    var c = sctx;
+    if (staticCv.width !== cv.width || staticCv.height !== cv.height) { staticCv.width = cv.width; staticCv.height = cv.height; }
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.fillStyle = COL.paper; c.fillRect(0, 0, L.vw, L.vh);
+    var P = L.plot, ry = L.ruler.y, rb = L.ruler.y + L.ruler.h;
+    c.lineWidth = 1; c.strokeStyle = COL.grid; c.beginPath();
+    for (var lc = Math.ceil(view.l); lc <= view.r; lc++) { var x = Math.round(X(lc)) + 0.5; c.moveTo(x, P.y); c.lineTo(x, P.y + P.h); }
+    [2, 3, 4, 6, 8].forEach(function (Lv) { var y = Math.round(Y(Math.log(Lv))) + 0.5; c.moveTo(P.x, y); c.lineTo(P.x + P.w, y); });
+    c.stroke();
+    if (!G.powered) { staticDirty = false; return; }
+    // the calendar ruler
+    c.strokeStyle = COL.grid; c.beginPath(); c.moveTo(P.x, Math.round(rb) - 0.5); c.lineTo(P.x + P.w, Math.round(rb) - 0.5); c.stroke();
+    setFont(c, 9, MONO); c.fillStyle = COL.graphite; c.textAlign = 'center'; c.textBaseline = 'bottom';
+    for (var m = 0; m < 12; m++) {
+      var d0 = R.firstOfMonth(m), xm = Math.round(DX(d0)) + 0.5;
+      c.strokeStyle = COL.grid; c.beginPath(); c.moveTo(xm, rb - 6); c.lineTo(xm, rb); c.stroke();
+      c.fillText(R.MON[m][0], DX(d0 + 15), rb - 1);
+    }
+    G.runs.forEach(function (run) { runBar(c, run, run.landDay); });
+    // headlines: a pencil tick and a phrase rising into the paper
+    setFont(c, 9, MONO, 'italic'); c.textAlign = 'left'; c.textBaseline = 'middle';
+    var lastX = -99, lane = 0;
+    G.phrases.slice().sort(function (a, b) { return a.day - b.day; }).forEach(function (n) {
+      var xn = Math.round(DX(n.day)) + 0.5; lane = xn - lastX < 11 ? lane + 1 : 0; lastX = xn;
+      c.strokeStyle = COL.graphite; c.beginPath(); c.moveTo(xn, ry - 3); c.lineTo(xn, ry + 4); c.stroke();
+      c.save(); c.translate(xn + 4 + lane * 10, ry - 5); c.rotate(-Math.PI / 2); c.fillStyle = COL.graphite; c.fillText(n.text, 0, 0); c.restore();
+    });
+    // scar bands
+    G.scars.forEach(function (sc) { var x0 = X(sc.lc0), x1 = Math.max(X(sc.lc1), x0 + 8); drawHatch(c, x0, x1); });
+    setFont(c, 12, SERIF); c.fillStyle = COL.ink; c.textAlign = 'left'; c.textBaseline = 'top';
+    var reRects = [];
+    G.scars.forEach(function (sc) {
+      if (!sc.text) return;
+      var sx = clamp(X(sc.lc0), P.x + 2, P.x + P.w - 120), w = Math.min(220, P.x + P.w - sx - 2), sy = P.y + 2;
+      for (var tries = 0; tries < 6; tries++) { var hit = reRects.some(function (r) { return sx < r.x + r.w && sx + w > r.x && sy < r.y + r.h && sy + 48 > r.y; }); if (!hit) break; sy += 50; }
+      reRects.push({ x: sx, y: sy, w: w, h: 48 });
+      c.fillStyle = rgba('paper', 0.75); c.fillRect(sx - 2, sy - 1, w + 4, 50);
+      c.fillStyle = COL.ink; wrapText(c, sc.text, sx, sy, w, 16, 3);
+    });
+    // the paper's line, printed on 23 Jan, and GPT-3's ring on it
+    if (G.lineT0 != null) {
+      var prog = reduced() ? 1 : clamp((now - G.lineT0) / 1.2, 0, 1);
+      c.fillStyle = COL.graphite;
+      for (var xx = P.x; xx <= P.x + P.w * prog; xx += 3) { var yy = lineY(Math.pow(10, view.l + (xx - P.x) / P.w * (view.r - view.l))); if (yy > P.y && yy < P.y + P.h) c.fillRect(xx, yy, 1, 1); }
+      if (prog < 1) staticDirty = true;
+      if (!G.gpt3) { c.strokeStyle = COL.graphite; c.lineWidth = 1; c.beginPath(); c.arc(X(log10(CFG.gpt3C)), lineY(CFG.gpt3C), 2.5, 0, Math.PI * 2); c.stroke(); }
+    }
+    if (G.gpt3 && !(moment && moment.kind === 'gpt3')) { c.fillStyle = COL.ink; c.beginPath(); c.arc(X(log10(CFG.gpt3C)), lineY(CFG.gpt3C), 2.5, 0, Math.PI * 2); c.fill(); }
+    // rivals: dashed ladders, dots only where they published
+    var labelRects = [];
+    G.rivals.forEach(function (rv) {
+      c.strokeStyle = rgba('graphite', 0.8); c.lineWidth = 1; c.setLineDash([3, 3]); c.beginPath();
+      rv.pubs.forEach(function (p, i) { var px = X(log10(p.C)), py = Y(Math.log(p.L)); if (i) c.lineTo(px, py); else c.moveTo(px, py); }); c.stroke(); c.setLineDash([]);
+      c.fillStyle = COL.graphite; rv.pubs.forEach(function (p) { c.beginPath(); c.arc(X(log10(p.C)), Y(Math.log(p.L)), 1.5, 0, Math.PI * 2); c.fill(); });
+      var lp = rv.pubs[rv.pubs.length - 1];
+      setFont(c, 10, MONO, 'italic'); c.textAlign = 'left'; c.textBaseline = 'bottom'; c.fillStyle = rv.passed ? COL.grid : COL.graphite;
+      var lx = X(log10(lp.C)) + 4, ly = Y(Math.log(lp.L)) - 4, lbl = rv.name + ' · ' + R.sizeLabel(lp.C);
+      var lw = c.measureText(lbl).width;
+      if (lx + lw > P.x + P.w) { c.textAlign = 'right'; lx = X(log10(lp.C)) - 4; }
+      var rx0 = c.textAlign === 'right' ? lx - lw : lx;
+      for (var tries = 0; tries < 4; tries++) { var hit = labelRects.some(function (r) { return rx0 < r.x + r.w && rx0 + lw > r.x && ly - 11 < r.y && ly > r.y - 11; }); if (!hit) break; ly += 12; }
+      labelRects.push({ x: rx0, y: ly, w: lw });
+      c.fillText(lbl, lx, ly);
+      if (rv.passed) { c.strokeStyle = COL.ink; c.beginPath(); var tx0 = c.textAlign === 'right' ? lx + 3 : lx - 7; c.moveTo(tx0, ly - 5); c.lineTo(tx0 + 2, ly - 2); c.lineTo(tx0 + 6, ly - 9); c.stroke(); }
+    });
+    // finished curves at 35% ink
+    c.save(); c.beginPath(); c.rect(P.x, P.y - 2, P.w, P.h + 4); c.clip();
+    c.strokeStyle = rgba('ink', 0.35); c.lineWidth = 1; c.lineJoin = 'round';
+    G.runs.forEach(function (run) { curvePath(c, run); c.stroke(); });
+    c.restore();
+    // your line: solid between your dots, dotted on to the edge once two sit a decade apart
+    drawOwnLine(c);
+    G.dots.forEach(function (d) {
+      var dx = X(log10(d.C)), dy = Y(Math.log(d.L));
+      c.fillStyle = COL.ink; c.beginPath(); c.arc(dx, dy, 2.5, 0, Math.PI * 2); c.fill();
+      if (d.pub) { c.strokeStyle = COL.ink; c.lineWidth = 1; c.beginPath(); c.arc(dx, dy, 4.5, 0, Math.PI * 2); c.stroke(); }
+      if (d.ship) { c.strokeStyle = COL.ink; c.lineWidth = 1; c.beginPath(); c.moveTo(dx + 6, dy - 3); c.lineTo(dx + 6, dy + 3); c.stroke(); }
+      setFont(c, 14, HAND); c.textAlign = 'left'; c.textBaseline = 'top';
+      if (d.surname) { c.fillStyle = COL.ink; c.fillText(d.surname, Math.min(dx + 7, P.x + P.w - 80), dy + 5); }
+      if (d.scandal) { c.fillStyle = COL.graphite; c.fillText(d.scandal, Math.min(dx + 7, P.x + P.w - 190), dy + (d.surname ? 19 : 5)); }
+    });
+    G.rings.forEach(function (r) { c.strokeStyle = COL.ink; c.lineWidth = 1; c.beginPath(); c.arc(X(log10(r.C)), Y(Math.log(r.L)), 3, 0, Math.PI * 2); c.stroke(); });
+    // hangs: the hour in pencil, circled by Tom
+    G.hangMarks.forEach(function (h) {
+      var hx = X(h.lc), hy = Y(h.lnL);
+      if (hx < P.x || hx > P.x + P.w) return;
+      setFont(c, 14, HAND); c.textAlign = 'left'; c.textBaseline = 'bottom'; c.fillStyle = COL.graphite; c.fillText(h.time, hx + 4, hy - 6);
+      if (h.tom) { c.strokeStyle = COL.ink; c.lineWidth = 1; c.beginPath(); c.ellipse(hx + 18, hy - 14, 18, 8, -0.05, 0, Math.PI * 2); c.stroke(); if (h.first) { c.fillStyle = COL.ink; c.fillText(K.notes.myFault, hx + 38, hy - 5); } }
+    });
+    staticDirty = false;
+  }
+  function drawOwnLine(c) {
+    var ds = G.dots.slice().sort(function (a, b) { return a.C - b.C; }), P = L.plot;
+    if (ds.length < 2) return;
+    c.strokeStyle = COL.ink; c.lineWidth = 1; c.beginPath();
+    c.moveTo(X(log10(ds[0].C)), Y(Math.log(ds[0].L))); c.lineTo(X(log10(ds[ds.length - 1].C)), Y(Math.log(ds[ds.length - 1].L))); c.stroke();
+    if (hasLine()) {
+      var f = ds[ds.length - 1], ratio = f.L / R.Lline(f.C); c.fillStyle = COL.ink;
+      for (var ex = X(log10(f.C)) + 4; ex <= P.x + P.w; ex += 4) { var cc = Math.pow(10, view.l + (ex - P.x) / P.w * (view.r - view.l)), ey = Y(Math.log(R.Lline(cc) * ratio)); if (ey > P.y && ey < P.y + P.h) c.fillRect(ex, ey, 1, 1); }
+    }
+  }
+  function wrapText(c, text, x, y, maxW, lh, maxLines) {
+    var words = text.split(' '), line = '', n = 0;
+    for (var i = 0; i < words.length; i++) {
+      var t = line ? line + ' ' + words[i] : words[i];
+      if (c.measureText(t).width > maxW && line) { c.fillText(line, x, y + n * lh); n++; line = words[i]; if (n >= maxLines) return; }
+      else line = t;
+    }
+    if (line && n < maxLines) c.fillText(line, x, y + n * lh);
+  }
+  function runBar(c, run, endDay) {
+    var y = L.ruler.y + L.ruler.h - 13, x0 = DX(run.launchDay), x1 = Math.max(DX(endDay), x0 + 1.5);
+    if (run.crossed) { c.strokeStyle = COL.ink; c.lineWidth = 1; c.strokeRect(x0 + 0.5, y - 1.5, Math.max(1, x1 - x0 - 1), 2); }
+    else { c.fillStyle = COL.ink; c.fillRect(x0, y - 1, x1 - x0, 2); }
+    c.fillStyle = COL.paper; run.hangs.forEach(function (h) { var hx = DX(h.start); if (hx < x1) c.fillRect(Math.round(hx), y - 2, 1, 4); });
+  }
+  function drawHatch(c, x0, x1) {
+    var P = L.plot; c.save(); c.beginPath(); c.rect(Math.max(x0, P.x), P.y, Math.min(x1, P.x + P.w) - Math.max(x0, P.x), P.h); c.clip();
+    c.strokeStyle = COL.verm; c.lineWidth = 1; c.beginPath();
+    for (var k = -P.h; k < x1 - x0 + P.h; k += 6) { c.moveTo(x0 + k, P.y + P.h); c.lineTo(x0 + k + P.h, P.y); }
+    c.stroke(); c.restore();
+  }
+  function curvePath(c, run) { c.beginPath(); for (var i = 0; i < run.pts.length; i++) { var p = run.pts[i], x = X(p.x), y = Y(p.y); if (i) c.lineTo(x, y); else c.moveTo(x, y); } }
+  function draw() {
+    if (staticDirty) drawStatic();
+    var c = ctx;
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.drawImage(staticCv, 0, 0);
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (G.powered) {
+      var P = L.plot, rb = L.ruler.y + L.ruler.h, run = G.run;
+      if (run) {
+        runBar(c, run, G.day);
+        c.save(); c.beginPath(); c.rect(P.x, P.y - 2, P.w, P.h + 4); c.clip();
+        c.strokeStyle = COL.ink; c.lineWidth = 1.5; c.lineJoin = 'round'; c.lineCap = 'round';
+        curvePath(c, run); c.stroke();
+        var lp = run.pts[run.pts.length - 1];
+        if (lp) { c.fillStyle = COL.ink; c.beginPath(); c.arc(X(lp.x), Y(lp.y), 2.5, 0, Math.PI * 2); c.fill(); }
+        c.restore();
+        if (run.hang && lp) { setFont(c, 15, HAND); c.fillStyle = COL.graphite; c.textAlign = 'left'; c.textBaseline = 'bottom'; }
+      }
+      var tx = Math.round(DX(Math.min(G.day, CFG.endDay))) + 0.5;
+      c.strokeStyle = COL.ink; c.lineWidth = 1; c.beginPath(); c.moveTo(tx, L.ruler.y + 2); c.lineTo(tx, rb - 2); c.stroke();
+      c.fillStyle = COL.ink; c.beginPath(); c.moveTo(tx, rb - 4); c.lineTo(tx - 4, rb); c.lineTo(tx + 4, rb); c.closePath(); c.fill();
+      if (drag) {
+        var C = dragC(), mx = X(log10(C)), ratio = 1, ds = G.dots.slice().sort(function (a, b) { return a.C - b.C; });
+        if (ds.length) ratio = ds[ds.length - 1].L / R.Lline(ds[ds.length - 1].C);
+        var my = Y(Math.log(R.Lline(C) * ratio)), hollow = hasBeliever() && C > drag.st.horC;
+        c.strokeStyle = COL.ink; c.lineWidth = 1.5; c.beginPath(); c.moveTo(mx, my - 6); c.lineTo(mx, my + 6); c.stroke();
+        if (hollow) { c.lineWidth = 1; c.beginPath(); c.arc(mx, my, 3.5, 0, Math.PI * 2); c.stroke(); }
+        c.strokeStyle = COL.ink; c.setLineDash([2, 2]); c.lineWidth = 2; var by = rb - 13; c.beginPath(); c.moveTo(DX(G.day), by); c.lineTo(DX(G.day + daysAt(drag.t, drag.st)), by); c.stroke(); c.setLineDash([]);
       }
     }
-    // GPT-3: an unlabelled hollow graphite ring, pressing in at END as a plain ink point
-    if (rev >= 1) {
-      const g = S.gptPress;
-      if (!g) {
-        const lc = Math.log10(CFG.paper.gpt3C);
-        ctx.strokeStyle = COL.graphite; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(X(lc), Y(lineLn(lc)), 3.5, 0, Math.PI * 2); ctx.stroke();
+    drawCluster(c);
+    drawStrip(c);
+  }
+  function drawHi(M) {
+    var c = hctx; c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, L.vw, L.vh);
+    drawOwnLine(c);
+    G.dots.forEach(function (d) { c.fillStyle = COL.ink; c.beginPath(); c.arc(X(log10(d.C)), Y(Math.log(d.L)), 2.5, 0, Math.PI * 2); c.fill(); });
+    var u = clamp((now - M.t0 - 0.4) / 0.3, 0, 1), gx = X(log10(CFG.gpt3C)), gy = lineY(CFG.gpt3C);
+    c.fillStyle = COL.ink; c.globalAlpha = u; c.beginPath(); c.arc(gx, gy, 2.5 + 5 * (1 - u), 0, Math.PI * 2); c.fill(); c.globalAlpha = 1;
+    if (M.kind === 'miracle') { var f = G.dots.slice().sort(function (a, b) { return b.C - a.C; })[0]; if (f) { c.strokeStyle = COL.ink; c.lineWidth = 1; c.beginPath(); c.arc(X(log10(f.C)), Y(Math.log(f.L)), 4.5 + 4 * (1 - u), 0, Math.PI * 2); c.stroke(); } }
+  }
+
+  /* ---------------- the cluster band: one cell per card, nodes of 8, pods of 64 ---------------- */
+  function cardList() {
+    var list = [], i, q = G.queueCut;
+    function push(k, n, u) { for (var j = 0; j < n; j++) list.push(u != null ? { k: k, u: u } : k); }
+    var ln = lentN();
+    push('own', Math.max(0, G.owned - ln)); push('a100', G.ownedA100); push('lent', ln);
+    G.orders.forEach(function (o) { push('order', o.n, clamp((G.day - o.at) / (o.arrive - o.at), 0, 1)); });
+    push('rent', rentedN());
+    var pend = 0; G.rentals.forEach(function (r) { if (G.day < r.start) pend += r.n; }); push('rentPending', pend);
+    if (G.mer) { if (G.day < G.mer.live) push('merPending', G.mer.cards); else { push('mer', G.mer.cards - q); push('queue', q); } }
+    var sv = servingN();
+    for (i = list.length - 1; i >= 0 && sv > 0; i--) { var k = list[i]; if (k === 'own' || k === 'rent' || k === 'mer' || k === 'a100') { list[i] = 'serve'; sv--; } }
+    return { list: list, training: !!(G.run && !G.run.hang && G.phase !== 'moment'), hung: !!(G.run && G.run.hang) };
+  }
+  function drawCluster(c) {
+    var B = L.cluster;
+    var CL = cardList(), cards = CL.list, n = cards.length;
+    if (!G.powered) {
+      for (var a = 0; a < CFG.ownedStart; a++) { var br = a === 3 ? 0.5 + 0.5 * Math.sin(now * 2 * Math.PI / 1.2) : 0.5 + 0.5 * Math.sin(now * 2 * Math.PI / 4); cellAt(c, a, 'pale', 2, B, CL, br); }
+      elCount.textContent = ''; return;
+    }
+    var unit = n <= 128 ? 1 : n <= 2048 ? 8 : 64, rows = unit === 1 ? 2 : 4;
+    var inkT = now - (G.powerT0 || 0);
+    for (var i = 0, g = 0; i < n; i += unit, g++) {
+      if (g >= rows * clusterCols(B)) break;
+      if (unit === 1 && i < 8 && inkT < 0.06 * (i + 1)) { cellAt(c, g, 'pale', rows, B, CL, 0.5); continue; }
+      cellAt(c, g, cards[i], rows, B, CL, 0);
+    }
+    elCount.textContent = fmtInt(cardsShown());
+  }
+  function clusterCols(B) { return Math.max(64, Math.floor(B.w / Math.min(B.w / 64, 9))); }
+  function cellAt(c, i, kind, rows, B, CL, breath) {
+    var cols = clusterCols(B), pitch = B.w / cols, gapY = rows === 2 ? Math.max(2, B.h - 2 * Math.min(22, (B.h - 4) / 2)) : 2.6, ch = (B.h - (rows - 1) * gapY) / rows, cw = Math.max(1.5, pitch * 0.87);
+    var col = i % cols, row = Math.floor(i / cols), x = B.x + col * pitch, y = B.y + row * (ch + gapY);
+    var k = typeof kind === 'string' ? kind : kind.k, u = typeof kind === 'string' ? 0 : kind.u;
+    if (G.dark) { c.fillStyle = COL.ink; c.fillRect(x, y, cw, ch); return; }
+    if (k === 'pale') { c.strokeStyle = COL.grid; c.globalAlpha = 0.55 + 0.45 * breath; c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, cw - 1, ch - 1); c.globalAlpha = 1; return; }
+    var glow = CL.training && (k === 'own' || k === 'a100' || k === 'rent' || k === 'mer');
+    if (k === 'own' || k === 'a100') { c.fillStyle = COL.ink; c.fillRect(x, y, cw, ch); if (k === 'a100' && cw > 2) { c.strokeStyle = COL.paper; c.lineWidth = 1; c.strokeRect(x + 1.5, y + 1.5, Math.max(0.5, cw - 3), ch - 3); } }
+    else if (k === 'rent' || k === 'mer' || k === 'rentPending') { c.strokeStyle = COL.ink; c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, Math.max(0.5, cw - 1), ch - 1); if (k === 'mer') { c.fillStyle = COL.ink; c.fillRect(x + cw / 2 - 0.5, y + ch / 2 - 0.5, 1, 1); } }
+    else if (k === 'merPending') { c.strokeStyle = COL.graphite; c.setLineDash([1.5, 1.5]); c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, Math.max(0.5, cw - 1), ch - 1); c.setLineDash([]); c.fillStyle = COL.graphite; c.fillRect(x + cw / 2 - 0.5, y + ch / 2 - 0.5, 1, 1); }
+    else if (k === 'queue') { c.strokeStyle = COL.graphite; c.setLineDash([1.5, 1.5]); c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, Math.max(0.5, cw - 1), ch - 1); c.setLineDash([]); }
+    else if (k === 'order') { c.strokeStyle = COL.graphite; c.globalAlpha = 0.2 + 0.8 * u; c.setLineDash([1.5, 1.5]); c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, Math.max(0.5, cw - 1), ch - 1); c.setLineDash([]); c.globalAlpha = 1; }
+    else if (k === 'serve') { c.fillStyle = COL.grid; c.fillRect(x, y, cw, ch); }
+    else if (k === 'lent') { c.strokeStyle = COL.grid; c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, Math.max(0.5, cw - 1), ch - 1); c.beginPath(); c.moveTo(x + 0.5, y + ch - 0.5); c.lineTo(x + cw - 0.5, y + 0.5); c.stroke(); }
+    if (glow && !CL.hung) {
+      var t0 = G.run ? (G.run.relightT0 || G.run.liftT0) : now, sweep = reduced() ? 1 : clamp(((now - t0) / 0.3) * cols - col, 0, 1);
+      if (sweep > 0) {
+        c.fillStyle = COL.fil; c.globalAlpha = (0.8 + 0.05 * Math.sin(now * Math.PI)) * sweep;
+        var gw = (k === 'own' || k === 'a100') ? clamp(cw - 2, 1, 3) : clamp(cw - 3, 1, 2); c.fillRect(x + (cw - gw) / 2, y + 3, gw, ch - 6);
+        c.globalAlpha = 1;
       }
     }
-    // The mark: a 6 px ink tick on the line at the dragged compute
-    const mc = markCompute();
-    if (mc) { const lc = Math.log10(mc), x = Math.round(X(lc)) - 0.5, y = Y(lineLn(lc)); ctx.fillStyle = ink; ctx.fillRect(x, y - 3, 1.5, 6); }
-    // The live curve and the pen
-    const run = live;
-    if (run) {
-      const u = uOf(run.p);
-      if (u >= 0) {
-        let alpha = 1, dy = 0;
-        ctx.globalAlpha = alpha; ctx.strokeStyle = ink; ctx.lineWidth = 1.5;
-        ctx.beginPath(); pathRun(run, u); ctx.stroke();
-        const N = run.lx.length, fi = clamp(u, 0, 1) * (N - 1), k = Math.floor(fi), f = fi - k;
-        const hx = X(k < N - 1 ? lerp(run.lx[k], run.lx[k + 1], f) : run.lx[N - 1]);
-        const hy = Y(k < N - 1 ? lerp(run.ly[k], run.ly[k + 1], f) : run.ly[N - 1]) + dy;
-        if (S.phase === 'pour') { ctx.fillStyle = ink; ctx.beginPath(); ctx.arc(hx, hy, 2.5, 0, Math.PI * 2); ctx.fill(); }
-        penSpeed(hx);
+  }
+  /* ---------------- the bet strip ---------------- */
+  function drawStrip(c) {
+    var S = L.strip, T = L.travel;
+    c.strokeStyle = COL.grid; c.lineWidth = 1; c.beginPath(); c.moveTo(S.x, Math.round(S.y) + 0.5); c.lineTo(S.x + S.w, Math.round(S.y) + 0.5); c.moveTo(S.x, Math.round(S.y + S.h) - 0.5); c.lineTo(S.x + S.w, Math.round(S.y + S.h) - 0.5); c.stroke();
+    c.fillStyle = COL.reserve; c.fillRect(T.x, S.y + 6, T.w, S.h - 12);
+    var st = drag ? drag.st : (G.powered && !G.over ? stopInfo() : null);
+    if (st && st.ok) {
+      if (!drag) {
+        var tgt = st.T;
+        if (!stopShown.T) stopShown.T = tgt;
+        else if (Math.abs(stopShown.T - tgt) > 1e-6 && (!stopShown.anim || stopShown.anim.to !== tgt)) { stopShown.anim = { from: stopShown.T, to: tgt, t0: now }; if (G.firstLift && !G.run) snd.whirr(0.4); }
+        var A = stopShown.anim; if (A) { var uu = reduced() ? 1 : clamp((now - A.t0) / 0.4, 0, 1); stopShown.T = A.from + (A.to - A.from) * ease(uu); if (uu >= 1) stopShown.anim = null; }
       }
-    } else penSpeed(null);
-    // Dry pen: the last 3% of the stroke fades to grey
-    if (S.E && S.E.dry) {
-      const lr = S.E.lastRun;
-      if (lr && lr.lx) {
-        const N = lr.lx.length, uEnd = clamp(uOf(lr.p), 0, 1), u0 = Math.max(0, uEnd - 0.03);
-        const e = clamp(S.E.t / CFG.ms.dryFade, 0, 1);
-        ctx.save(); ctx.strokeStyle = COL.dry; ctx.lineWidth = 2.2; ctx.globalAlpha = e;
-        ctx.beginPath(); const i0 = Math.floor(u0 * (N - 1)), i1 = Math.floor(uEnd * (N - 1));
-        ctx.moveTo(X(lr.lx[i0]), Y(lr.ly[i0])); for (let i = i0 + 1; i <= i1; i++) ctx.lineTo(X(lr.lx[i]), Y(lr.ly[i]));
-        ctx.stroke(); ctx.restore();
+      var Tshow = drag ? st.T : stopShown.T, span = Math.max(1e-6, Tshow - CFG.minDays), pxPerDay = T.w / span;
+      var step = pxPerDay >= 4 ? 1 : 7;
+      if (pxPerDay * step >= 3) { c.strokeStyle = COL.grid; c.beginPath(); for (var dd = step; dd < Tshow; dd += step) { var x = Math.round(T.x + (dd - CFG.minDays) * pxPerDay) + 0.5; if (x <= T.x + 1) continue; c.moveTo(x, S.y + S.h - 14); c.lineTo(x, S.y + S.h - 6); } c.stroke(); }
+      setFont(c, 9, MONO); c.fillStyle = COL.graphite; c.textAlign = 'left'; c.textBaseline = 'top';
+      for (var m = R.monthOf(G.day) + 1; m < 12; m++) {
+        var dp = R.firstOfMonth(m) - G.day; if (dp > Tshow) break; if (dp < CFG.minDays) continue;
+        var px = Math.round(T.x + (dp - CFG.minDays) * pxPerDay) + 0.5;
+        c.strokeStyle = COL.graphite; c.beginPath(); c.moveTo(px, S.y + 2); c.lineTo(px, S.y + S.h - 2); c.stroke();
+        c.fillText(R.MON[m][0], px + 3, S.y + 7);
       }
     }
-    ctx.restore();
+    var t = drag ? drag.t : 0, nx = nibX(t);
+    if (t > 0) { c.fillStyle = COL.ink; c.fillRect(T.x, S.y + 6, nx - T.x, S.h - 12); }
+    c.fillStyle = G.powered ? COL.ink : COL.graphite; c.fillRect(Math.round(nx - 6), S.y, 12, S.h);
   }
-  function drawGptPoint(above) {
-    const g = S.gptPress; if (!g) return;
-    const e = easeOut((S.now - g.t0) / CFG.ms.press);
-    const x = X(g.onLc), y = Y(lineLn(g.onLc));
-    ctx.save();
-    if (above) { ctx.fillStyle = COL.ink; ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill(); ctx.restore(); return; }
-    ctx.globalAlpha = e; ctx.fillStyle = COL.ink; ctx.beginPath(); ctx.arc(x, y, lerp(4.5, 2.5, e), 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
+
+  /* ================================================================
+     INPUT
+     ================================================================ */
+  var ptr = null;
+  function inRect(x, y, r, pad) { pad = pad || 0; return x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad; }
+  function onNib(x, y) { var S = L.strip; return y >= S.y - 10 && y <= S.y + S.h + 10 && x >= S.x - 4 && x <= L.travel.x + CFG.nibHit / 2; }
+  function onDown(e) {
+    if (ptr) return;
+    var x = e.clientX, y = e.clientY;
+    snd.start();
+    if (!G.powered) { powerOn(); e.preventDefault(); return; }
+    if (G.letter && !elLetter.hidden && inRect(x, y, elLetter.getBoundingClientRect(), 6)) {
+      ptr = { id: e.pointerId, x0: x, y0: y, mode: 'letter', last: [{ x: x, y: y, t: performance.now() }] };
+      flick = { dy: 0 }; letterAnim = null;
+      try { root.setPointerCapture(e.pointerId); } catch (er) { }
+      e.preventDefault(); return;
+    }
+    if (G.over) return;
+    if (onNib(x, y) && canBet()) {
+      if (beginDrag(x, y)) { ptr = { id: e.pointerId, mode: 'drag' }; showReadout(x, y); try { root.setPointerCapture(e.pointerId); } catch (er) { } e.preventDefault(); return; }
+    }
+    if (G.cp && y >= L.band.y - 10 && y <= L.band.y + L.band.h + 4 && x >= L.band.x - 8 && x <= L.band.x + L.band.w + 8) {
+      ptr = { id: e.pointerId, x0: x, y0: y, mode: 'cp', last: [{ x: x, y: y, t: performance.now() }] };
+      try { root.setPointerCapture(e.pointerId); } catch (er) { }
+      e.preventDefault(); return;
+    }
+    if (y >= L.paper.y && y <= L.paper.bottom && G.phase === 'pour') { tapSample(); e.preventDefault(); return; }
   }
-  function drawHatch(h) {
-    const P = S.layout.paper, x0 = X(h.lc), right = P.x + P.w;
-    if (x0 >= right) return;
-    const prog = S.reduced ? 1 : clamp((S.now - h.t0) / CFG.ms.hatch, 0, 1);
-    const x1 = x0 + (right - x0) * prog;
-    ctx.save(); ctx.beginPath(); ctx.rect(x0, P.y, x1 - x0, P.h); ctx.clip();
-    ctx.strokeStyle = COL.vermilion; ctx.lineWidth = 1; ctx.beginPath();
-    const start = P.x + Math.floor((x0 - P.h - P.x) / 6) * 6;
-    for (let s = start; s < right; s += 6) { ctx.moveTo(s + 0.5, P.y + P.h); ctx.lineTo(s + 0.5 + P.h, P.y); }
-    ctx.stroke(); ctx.restore();
+  function onMove(e) {
+    if (!ptr || e.pointerId !== ptr.id) return;
+    var x = e.clientX, y = e.clientY;
+    if (ptr.mode === 'letter') {
+      flick.dy = clamp(y - ptr.y0, -140, 90);
+      ptr.last.push({ x: x, y: y, t: performance.now() }); if (ptr.last.length > 6) ptr.last.shift();
+      placeLetter();
+    } else if (ptr.mode === 'drag') { moveDrag(x, y); showReadout(x, y); }
+    else if (ptr.mode === 'cp') {
+      ptr.last.push({ x: x, y: y, t: performance.now() }); if (ptr.last.length > 6) ptr.last.shift();
+      elSample.style.transform = 'translate(' + clamp(x - ptr.x0, 0, 120) + 'px,' + clamp(y - ptr.y0, -80, 0) + 'px)';
+    }
+    e.preventDefault();
   }
-  function markCompute() {
-    if (S.phase === 'pour' || S.phase === 'land') return S.run ? S.run.C : null;
-    if (S.phase === 'drag' && S.powered && (S.nib.dragging || S.nib.t >= 0)) return dragCompute();
+  function flickDir(p, e) {
+    var a = p.last[0], b = p.last[p.last.length - 1], dt = Math.max(1, b.t - a.t), vy = (b.y - a.y) / dt, vx = (b.x - a.x) / dt;
+    var dy = e.clientY - p.y0, dx = e.clientX - p.x0;
+    if ((dx > CFG.flickPx || vx > CFG.flickVel) && Math.abs(dx) > Math.abs(dy)) return 'right';
+    if (dy < -CFG.flickPx || vy < -CFG.flickVel) return 'up';
+    if (dy > CFG.flickPx || vy > CFG.flickVel) return 'down';
     return null;
   }
-  function dragShare() { return S.nib.t < 0 ? null : clamp(S.nib.t, 0, 1); }
-  function dragCompute() { const t = dragShare(); return t == null ? K.homeRunC : computeFor(t * Math.max(0, S.bank) * CFG.money.dollarsPerLight); }
-  function landingDate() { const C = dragCompute(); const T = dragShare() == null ? K.homeRunDays : runDays(C); return fmtShort(S.day + T); }
+  function onUp(e) {
+    if (!ptr || e.pointerId !== ptr.id) return;
+    var p = ptr; ptr = null;
+    try { root.releasePointerCapture(e.pointerId); } catch (er) { }
+    if (p.mode === 'letter') {
+      var dir = flickDir(p, e); if (dir === 'right') dir = null;
+      var ok = dir ? resolveLetter(dir) : false;
+      if (!ok && G.letter) { var y0 = letterY(); flick = null; letterAnim = { kind: 'back', t0: now, y0: y0 }; }
+      flick = null; return;
+    }
+    if (p.mode === 'drag') { endDrag(); return; }
+    if (p.mode === 'cp') {
+      var d2 = flickDir(p, e), done = false;
+      if (d2 === 'up' || d2 === 'right') done = flickCheckpoint(d2);
+      if (!done && !bandFly) elSample.style.transform = '';
+    }
+  }
+  function onCancel(e) {
+    if (!ptr || e.pointerId !== ptr.id) return;
+    var p = ptr; ptr = null;
+    if (p.mode === 'drag') endDrag();   // pointercancel counts as a lift
+    else if (p.mode === 'letter') { flick = null; letterAnim = { kind: 'back', t0: now, y0: letterY() }; }
+    else if (p.mode === 'cp') elSample.style.transform = '';
+  }
+  root.addEventListener('pointerdown', onDown);
+  root.addEventListener('pointermove', onMove);
+  root.addEventListener('pointerup', onUp);
+  root.addEventListener('pointercancel', onCancel);
+  root.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  root.addEventListener('wheel', function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener('touchmove', function (e) { if (e.target && e.target.closest && e.target.closest('#fr')) e.preventDefault(); }, { passive: false });
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+  elMute.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+  elMute.addEventListener('click', function (e) { e.stopPropagation(); snd.start(); snd.setMuted(!snd.muted); syncMute(); });
+  function syncMute() { elMute.textContent = snd.muted ? 'SOUND OFF' : 'SOUND ON'; elMute.setAttribute('aria-pressed', snd.muted ? 'true' : 'false'); }
+  syncMute();
+  document.addEventListener('keydown', function (e) {
+    var k = e.key, tgt = e.target;
+    if (tgt && tgt.classList && tgt.classList.contains('fr-name') && (k === 'Enter' || k === ' ')) return;
+    if (tgt === elMute && (k === 'Enter' || k === ' ')) return;
+    if (!G.powered) { if (k === 'Enter' || k === ' ' || k.indexOf('Arrow') === 0) { powerOn(); e.preventDefault(); } return; }
+    if (G.over) return;
+    if (/^[1-9]$/.test(k)) { var p = G.people[+k - 1]; if (p) pressName(p.id); e.preventDefault(); return; }
+    if (G.letter && !letterAnim && (k === 'ArrowUp' || k === 'ArrowDown')) { resolveLetter(k === 'ArrowUp' ? 'up' : 'down'); e.preventDefault(); return; }
+    if ((k === 'p' || k === 'P') && !G.letter) { flickCheckpoint('up'); e.preventDefault(); return; }
+    if (k === 'ArrowRight' && !G.letter && !drag && G.cp && canShip(G.cp)) { flickCheckpoint('right'); e.preventDefault(); return; }
+    if (k === 'ArrowLeft' || k === 'ArrowRight') {
+      if (!drag && canBet()) { if (!beginDrag(0, 0, true)) return; }
+      if (drag && drag.kb) {
+        var stp = e.shiftKey ? CFG.keyStepShift : CFG.keyStep;
+        if (!drag.snapped) drag.t = clamp(drag.t + (k === 'ArrowRight' ? stp : -stp), 0, 1);
+        updateDragNotes(); showReadout(nibX(drag.t), L.strip.y);
+        e.preventDefault();
+      }
+      return;
+    }
+    if ((k === 'Enter' || k === ' ') && drag && drag.kb) { endDrag(); e.preventDefault(); return; }
+    if ((k === 'Enter' || k === ' ') && !drag && canBet() && tgt === elFocus) { if (beginDrag(0, 0, true)) endDrag(); e.preventDefault(); return; }
+    if (k === 's' || k === 'S') { tapSample(); e.preventDefault(); }
+  });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) snd.sleep(); else { snd.wake(); lastTs = 0; } });
+  window.addEventListener('resize', function () { layout(); });
 
-  // ===========================================================================
-  // Rendering: the strip (the bank as lights, with the machine printed into it)
-  // ===========================================================================
-  function stripView() {
-    const st = S.layout.strip, tw = st.tw, M = CFG.ms;
-    const v = { w: tw / 20, origin: 0, segs: [], asleep: false, wake: null, nib: null, flare: null };
-    if (S.phase === 'end' && S.frozenView) return S.frozenView;
-    if (S.phase === 'asleep' || S.phase === 'feed' || !S.powered) {
-      v.asleep = true; v.segs.push({ kind: 'white', from: 0, to: CFG.money.seedLights, grid: 0 });
-      v.nib = st.tx - CFG.layout.nibW / 2; return v;
-    }
-    if (S.phase === 'drag') {
-      const n = Math.max(0, S.bank); v.w = n > 1e-6 ? tw / n : tw;
-      const t = dragShare(); const flood = t == null ? 0 : t * n;
-      if (flood > 0) v.segs.push({ kind: 'ink', from: 0, to: flood, grid: 0 });
-      v.segs.push({ kind: 'white', from: flood, to: n, grid: 0 });
-      if (S.now - S.powerAt < (28 * M.wakeStagger + M.wakeEach)) v.wake = S.now - S.powerAt;
-      let nx = t == null ? st.tx - CFG.layout.nibW / 2 : st.tx + t * tw;
-      if (S.nib.dragging && S.nib.homeX != null) nx = S.nib.homeX;
-      if (!S.nib.everDragged && !S.reduced && S.now > S.lastNudge) {
-        const ph = (S.now - S.lastNudge) % M.nudgeEvery;
-        if (ph < M.nudgeDur) nx += CFG.layout.nibW / 2 * Math.sin(Math.PI * ph / M.nudgeDur);
-      }
-      v.nib = nx; return v;
-    }
-    const run = S.run; if (!run) return v;
-    const nLift = Math.max(1e-6, run.bankAtLift);
-    v.w = tw / nLift;
-    if (S.phase === 'pour' || (S.phase === 'land' && (S.L.step === 'pause' || S.L.step === 'moment'))) {
-      v.segs.push({ kind: 'ink', from: 0, to: run.ink, grid: 0 });
-      v.segs.push({ kind: 'white', from: run.ink, to: run.ink + Math.max(0, S.bank), grid: run.ink });
-      if (S.phase === 'pour') v.flare = (S.now - S.liftAt) / M.liftWave;
-      return v;
-    }
-    const L = S.L, kept = Math.max(0, L.kept), shown = Math.max(0, L.printed + Math.min(0, L.kept));
-    if (L.step === 'lift') {
-      const e = clamp(L.t / M.inkLift, 0, 1);
-      v.segs.push({ kind: 'ink', from: 0, to: run.ink, grid: 0, alpha: 1 - e, dy: -6 * e });
-      v.segs.push({ kind: 'white', from: run.ink, to: run.ink + kept, grid: run.ink });
-      return v;
-    }
-    const total = run.ink + kept + shown;
-    const wPrint = tw / Math.max(nLift, total);
-    v.w = wPrint;
-    v.segs.push({ kind: 'white', from: run.ink, to: run.ink + kept, grid: run.ink });
-    if (shown > 0) v.segs.push({ kind: 'white', from: run.ink + kept, to: run.ink + kept + shown, grid: run.ink + kept, fresh: true });
-    if (L.step === 'repack') {
-      const e = easeIO(L.t / M.repack), n = Math.max(1e-6, kept + shown);
-      v.origin = run.ink * e; v.w = lerp(wPrint, tw / n, e);
-      if (e > 0.5) v.nib = st.tx - CFG.layout.nibW / 2;
-    }
-    return v;
+  /* ================================================================
+     THE LOOP
+     ================================================================ */
+  function motorForPhase() {
+    if (!G.powered || G.over) return;
+    if (G.run && !G.run.hang) snd.motor('train', trainingEq(), 0.3); else if (!G.run) snd.motor('idle', 0, 0.3);
   }
-  function drawStrip() {
-    const L = S.layout, st = L.strip, M = CFG.ms;
-    const v = stripView();
-    const dryE = S.E && S.E.dry ? clamp(S.E.t / M.dryFade, 0, 1) : 0;
-    const ink = dryE ? mix(COL.ink, COL.dry, dryE) : COL.ink;
-    const pad = CFG.layout.lightPad, top = st.y + pad, h = st.h - 2 * pad;
-    // Channel rulings
-    ctx.fillStyle = COL.grid; ctx.fillRect(st.x, st.y, st.w, 1); ctx.fillRect(st.x, st.y + st.h - 1, st.w, 1);
-    // The eight owned blocks (the DGX-1): two rows of four
-    const bw = 10, bh = Math.min(18, (h - 4) / 2), gap = st.home >= 70 ? 2 : 1;
-    const bx0 = st.x + Math.max(0, Math.floor((st.home - CFG.layout.nibW - 2 - (4 * bw + 3 * gap)) / 2)), by0 = st.y + (st.h - (2 * bh + 4)) / 2;
-    const breatheSlow = S.reduced ? 0 : Math.sin(S.now / 4000 * Math.PI * 2), breatheFast = S.reduced ? 0 : Math.sin(S.now / 1200 * Math.PI * 2);
-    for (let i = 0; i < 8; i++) {
-      const col = i % 4, row = Math.floor(i / 4), x = bx0 + col * (bw + gap), y = by0 + row * (bh + 4);
-      const awake = v.asleep ? 0 : wakeOf(v, col * 2 + row);
-      const breath = i === 5 ? breatheFast : breatheSlow;
-      if (awake <= 0) {
-        ctx.fillStyle = COL.reserve; ctx.fillRect(x, y, bw, bh);
-        ctx.globalAlpha = clamp(0.9 + 0.1 * breath, 0, 1); ctx.strokeStyle = COL.grid; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, bw - 1, bh - 1); ctx.globalAlpha = 1;
-      } else {
-        ctx.fillStyle = COL.reserve; ctx.fillRect(x, y, bw, bh);
-        ctx.globalAlpha = awake * clamp(0.92 + 0.08 * breath, 0, 1); ctx.fillStyle = ink; ctx.fillRect(x, y, bw, bh); ctx.globalAlpha = 1;
-      }
-    }
-    // Lights
-    const merged = v.w < 4;
-    ctx.save(); ctx.beginPath(); ctx.rect(st.tx - 1, st.y, st.tw + 2, st.h); ctx.clip();
-    for (const s of v.segs) {
-      if (s.to - s.from <= 1e-6) continue;
-      const y = top + (s.dy || 0);
-      ctx.globalAlpha = s.alpha == null ? 1 : s.alpha;
-      if (merged) {
-        const x0 = st.tx + (s.from - v.origin) * v.w, x1 = st.tx + (s.to - v.origin) * v.w;
-        if (s.kind === 'ink') { ctx.fillStyle = ink; ctx.fillRect(x0, y, x1 - x0, h); }
-        else {
-          ctx.fillStyle = COL.reserve; ctx.fillRect(x0, y, x1 - x0, h);
-          ctx.strokeStyle = ink; ctx.globalAlpha = 0.4; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y + 0.5, Math.max(0, x1 - x0 - 1), h - 1); ctx.globalAlpha = 1;
-          ctx.fillStyle = COL.grid;
-          for (let k = Math.ceil((s.from - s.grid) / 40) * 40 + s.grid; k < s.to; k += 40) if (k > s.from) ctx.fillRect(Math.round(st.tx + (k - v.origin) * v.w), y + 1, 1, h - 2);
-        }
-        continue;
-      }
-      let k = Math.floor(s.from - s.grid + 1e-9);
-      for (let guard = 0; guard < 4000; guard++, k++) {
-        const a = Math.max(s.from, s.grid + k), b = Math.min(s.to, s.grid + k + 1);
-        if (a >= s.to - 1e-9) break;
-        if (b <= a + 1e-9) continue;
-        const x0 = st.tx + (a - v.origin) * v.w; let x1 = st.tx + (b - v.origin) * v.w;
-        if (b >= s.grid + k + 1 - 1e-9) x1 -= 1;
-        if (x1 - x0 < 0.4) continue;
-        if (s.kind === 'ink') {
-          ctx.fillStyle = ink; ctx.fillRect(x0, y, x1 - x0, h);
-          if (v.flare != null && v.flare < 1.6) { // one wave across the inked lights, left to right
-            const pos = s.to > 0 ? (a + b) / 2 / s.to : 0, f = 1 - Math.abs(v.flare * 1.2 - pos) * 5;
-            if (f > 0) { ctx.globalAlpha = 0.55 * f; ctx.fillStyle = COL.reserve; ctx.fillRect(x0, y, x1 - x0, h); ctx.globalAlpha = 1; }
-          }
-        } else {
-          ctx.fillStyle = COL.reserve; ctx.fillRect(x0, y, x1 - x0, h);
-          let wk = 1;
-          if (v.asleep) wk = 0; else if (v.wake != null) wk = wakeOf(v, 8 + k);
-          const breath = S.reduced ? 0 : 0.06 * Math.sin(S.now / 4000 * Math.PI * 2);
-          ctx.lineWidth = 1;
-          if (wk < 1) { ctx.globalAlpha = (1 - wk) * (1 + breath); ctx.strokeStyle = COL.grid; ctx.strokeRect(x0 + 0.5, y + 0.5, x1 - x0 - 1, h - 1); }
-          if (wk > 0) { ctx.globalAlpha = 0.4 * wk * (1 + breath); ctx.strokeStyle = ink; ctx.strokeRect(x0 + 0.5, y + 0.5, x1 - x0 - 1, h - 1); }
-          ctx.globalAlpha = s.alpha == null ? 1 : s.alpha;
-        }
-      }
-    }
-    ctx.globalAlpha = 1;
-    // Strip echo after a fatal crossing: the bet as a hairline, the part that bought crawl hatched
-    if (S.E && S.E.echo && S.E.t >= S.E.t0) {
-      const e = S.E.echo, x0 = st.tx, x1 = st.tx + e.t1 * st.tw, xw = st.tx + e.tw * st.tw;
-      ctx.strokeStyle = COL.ink; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, top + 0.5, Math.max(1, x1 - x0 - 1), h - 1);
-      ctx.save(); ctx.beginPath(); ctx.rect(xw, top, Math.max(0, x1 - xw), h); ctx.clip();
-      ctx.strokeStyle = COL.graphite; ctx.beginPath();
-      for (let s = xw - h; s < x1; s += 4) { ctx.moveTo(s + 0.5, top + h); ctx.lineTo(s + 0.5 + h, top); }
-      ctx.stroke(); ctx.restore();
-    }
-    ctx.restore();
-    // The nib: a 12 px ink bar the full height of the channel
-    if (v.nib != null && S.phase !== 'end') { ctx.fillStyle = ink; ctx.fillRect(Math.round(v.nib - CFG.layout.nibW / 2), st.y, CFG.layout.nibW, st.h); }
-  }
-  function wakeOf(v, idx) {
-    if (v.wake == null) return 1;
-    return clamp((v.wake - idx * CFG.ms.wakeStagger) / CFG.ms.wakeEach, 0, 1);
-  }
-
-  function render() {
-    const L = S.layout, dpr = S.dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.globalAlpha = 1; ctx.fillStyle = COL.paper; ctx.fillRect(0, 0, L.vw, L.vh);
-    if (S.phase === 'feed' && S.feed) {
-      const e = easeIO(S.feed.t / CFG.ms.feed);
-      if (S.reduced) {
-        if (feedSnap) { ctx.globalAlpha = 1 - e; ctx.drawImage(feedSnap, 0, 0, L.vw, L.vh); ctx.globalAlpha = 1; }
-        ctx.globalAlpha = e; drawScene(); ctx.globalAlpha = 1;
-        sheetEl.style.opacity = String(1 - e);
-      } else {
-        if (feedSnap) ctx.drawImage(feedSnap, -e * L.vw, 0, L.vw, L.vh);
-        ctx.save(); ctx.translate((1 - e) * L.vw, 0); drawScene(); ctx.restore();
-        sheetEl.style.transform = 'translate3d(' + (-e * L.vw).toFixed(1) + 'px,0,0)';
-      }
-    } else drawScene();
-    syncDOM();
-  }
-  function drawScene() {
-    drawPaper();
-    drawStrip();
-    if (S.gptPress && !(S.moment && S.moment.kind === 'gpt3')) drawGptPoint(false);
-    if (S.dim > 0) {
-      const L = S.layout;
-      ctx.globalAlpha = 0.92 * S.dim; ctx.fillStyle = COL.paper; ctx.fillRect(0, 0, L.vw, L.vh); ctx.globalAlpha = 1;
-      if (S.moment && S.moment.kind === 'gpt3') drawGptPoint(true);
-    }
-  }
-
-  // DOM sync, written only when something changed
-  const domCache = {};
-  function setText(el, key, v) { if (domCache[key] !== v) { domCache[key] = v; el.textContent = v; } }
-  function setStyle(el, key, prop, v) { const k = key + prop; if (domCache[k] !== v) { domCache[k] = v; el.style[prop] = v; } }
-  function syncDOM() {
-    const L = S.layout;
-    const live = S.powered && S.phase !== 'feed';
-    if (live && S.now - S.powerAt >= CFG.ms.dateAt) { if (dateEl.className !== 'fr-date on') dateEl.className = 'fr-date on'; setText(dayEl, 'day', fmtLong(S.day)); }
-    // dimming for moments
-    const dimOp = String(1 - 0.92 * S.dim);
-    setStyle(dateEl, 'date', 'opacity', S.dim > 0 ? dimOp : '');
-    setStyle(bandEl, 'band', 'opacity', S.dim > 0 ? dimOp : '1');
-    setStyle(reprintEl, 'rep', 'opacity', S.dim > 0 ? dimOp : '1');
-    setStyle(newsEl, 'news', 'opacity', S.dim > 0 && !(S.moment && S.moment.kind === 'gpt3') ? dimOp : '1');
-    setStyle(muteEl, 'mute', 'opacity', S.dim > 0 ? dimOp : '');
-    // reprinted line on the hatch band
-    if (S.reprintText && S.reprintFor && S.phase !== 'feed' && S.now >= S.reprintFor.t0) {
-      const P = L.paper, right = P.x + P.w, minW = L.lap ? 260 : 210, maxW = L.lap ? 460 : 320;
-      const left = clamp(X(S.reprintFor.lc) + 8, P.x + 8, right - 8 - minW);
-      const width = Math.min(maxW, right - 8 - left);
-      setStyle(reprintEl, 'rep', 'left', left.toFixed(0) + 'px'); setStyle(reprintEl, 'rep', 'width', width.toFixed(0) + 'px');
-      setStyle(reprintEl, 'rep', 'top', (L.newsY + (L.lap ? 26 : 40)).toFixed(0) + 'px');
-      setText(reprintEl, 'reptext', S.reprintText);
-      if (reprintEl.className !== 'fr-reprint on') reprintEl.className = 'fr-reprint on';
-    }
-    // readout: the landing date, riding above the thumb
-    const showRO = S.phase === 'drag' && S.powered && (S.nib.dragging || (S.nib.keyed && S.nib.t >= 0));
-    if (showRO) {
-      if (readoutEl.className !== 'fr-readout on') readoutEl.className = 'fr-readout on';
-      setText(readoutEl, 'ro', landingDate());
-      const st = L.strip, w = readoutEl.offsetWidth || 60;
-      let cx, cy;
-      if (S.nib.dragging) { cx = S.nib.px; cy = S.nib.py - (S.nib.mouse ? CFG.layout.readoutLaptop : CFG.layout.readoutPhone); }
-      else { cx = st.tx + Math.max(0, S.nib.t) * st.tw; cy = st.y - CFG.layout.readoutLaptop; }
-      const g = L.lap ? st.x : 16 + L.sa.l;
-      const x = clamp(cx - w / 2, g, L.vw - g - w);
-      setStyle(readoutEl, 'ro', 'transform', 'translate3d(' + x.toFixed(1) + 'px,' + (cy - 18).toFixed(1) + 'px,0)');
-      if (readoutEl.className !== 'fr-readout on') readoutEl.className = 'fr-readout on';
-    } else if (readoutEl.className !== 'fr-readout') readoutEl.className = 'fr-readout';
-    // mute
-    const showMute = CFG.rules.showMuteControl && S.everPowered;
-    const mc = 'fr-mute' + (showMute ? ' on' : '');
-    if (muteEl.className !== mc) muteEl.className = mc;
-    // a11y value
-    const vn = String(Math.round(Math.max(0, S.nib.t) * 100));
-    if (domCache.aria !== vn) { domCache.aria = vn; stripEl.setAttribute('aria-valuenow', vn); }
-  }
-
-  // ===========================================================================
-  // Main loop
-  // ===========================================================================
   function update(dt) {
-    S.now += dt;
-    updPan();
-    switch (S.phase) {
-      case 'drag': updDrag(dt); break;
-      case 'pour': updPour(dt); break;
-      case 'land': updLand(dt); break;
-      case 'end': updEnd(dt); break;
-      case 'feed': updFeed(dt); break;
-      default: break;
-    }
-    updNewsTriggers();
-    updBand();
-    updMoment(dt);
+    now += dt;
+    runTimers();
+    stepView();
+    if (clockRuns()) stepDays(dayRate() * dt);
+    if (G.letter) stepFuse();
+    if (!G.letter && G.wait.length && !letterAnim && !G.over) showLetter(G.wait.shift());
+    if (G.heldDone && !G.run && G.phase === 'idle') { G.cp = G.heldDone; G.heldDone = null; showBand(G.cp.smp, 'instant'); }
+    stepBand(); stepMoment(); stepHeads(); stepNotes(); stepNames();
+    if (G.run && !G.run.hang && G.phase === 'pour') snd.scratch(0.25); else snd.scratch(0);
   }
-  let lastT = 0;
-  function frame(t) {
-    const rdt = lastT ? Math.min(100, Math.max(0, t - lastT)) : 16; lastT = t;
-    let g = rdt * S.speed;
-    try {
-      while (g > 0) { const step = Math.min(g, 34); update(step); g -= step; }
-      updNews();
-      render();
-    } catch (e) {
-      if (!S.loggedErr) { S.loggedErr = true; try { console.error('frontier frame', e && e.stack ? e.stack : e); } catch (x) { /* ignore */ } }
-    }
+  function frame(ts) {
+    var dtReal = lastTs ? Math.min(0.1, (ts - lastTs) / 1000) : 0.016; lastTs = ts;
+    var total = dtReal * speedMul;
+    while (total > 1e-9) { var d = Math.min(total, 0.05); update(d); total -= d; }
+    placeLetter();
+    updateTop();
+    stepBoxes();
+    draw();
     requestAnimationFrame(frame);
   }
 
-  // ===========================================================================
-  // Input: pointer (touch, mouse, pen) and keys
-  // ===========================================================================
-  function hitNib(x, y) {
-    const st = S.layout.strip;
-    const v = stripView(); const nx = v.nib != null ? v.nib : st.tx;
-    return Math.abs(x - nx) <= CFG.layout.nibHit / 2 && y >= st.y - 18 && y <= st.y + st.h + 18;
+  /* ================================================================
+     TEST HOOK (playtesters and bots)
+     ================================================================ */
+  function stateObj() {
+    var st = G.powered && !G.over ? stopInfo() : null, lr = G.runs[G.runs.length - 1];
+    return {
+      version: CFG.version, seed: G.seed, date: R.fmtDay(Math.min(G.day, CFG.endDay - 1e-6), true), day: +G.day.toFixed(3), month: G.month, phase: G.phase, powered: G.powered, firstLift: G.firstLift,
+      bank: Math.round(G.bank), months: +monthsLeft().toFixed(2), monthsShown: elMN.textContent, burn: Math.round(burn()), payroll: payroll(), stake: +G.stake.toFixed(4),
+      cards: { shown: cardsShown(), owned: G.owned, ownedA100: G.ownedA100, ordered: G.orders.reduce(function (a, o) { return a + o.n; }, 0), rented: rentedN(), meridian: G.mer ? G.mer.cards : 0, meridianLive: merLive(), queueCut: G.queueCut, lent: lentN(), serving: servingN(), trainingEq: +trainingEq().toFixed(1) },
+      people: G.people.map(function (p) { return { id: p.id, role: p.role, salary: p.salary, mood: p.mood, gone: p.gone, why: p.why || null }; }),
+      runs: G.runs.length, running: G.run ? { C: G.run.C, T: G.run.T, s: +G.run.s.toFixed(4), q: +qOf(G.run).toFixed(4), hung: !!G.run.hang, r: +(G.run.D / G.Dwall).toFixed(3) } : null,
+      lastRun: lr ? { C: lr.C, T: lr.T, crossed: lr.crossed, L: lr.L, landDay: lr.landDay, r: +(lr.D / G.Dwall).toFixed(3), blind: lr.blind, b: lr.b } : null,
+      lastSample: G.sample ? { text: G.sample.text, fray: G.sample.fray, crawl: G.sample.crawl, tier: G.sample.tier, kind: G.sample.kind, cap: G.sample.cap } : null,
+      wall: { Cwall: G.Cwall, W: G.W, filters: G.filters, filtering: G.filter ? +(G.filter.end - G.day).toFixed(1) : null, priyaOffer: G.priyaOffer },
+      dots: G.dots.map(function (d) { return { C: d.C, L: +d.L.toFixed(4), pub: d.pub, ship: d.ship, pending: !!d.pending, scandal: d.scandal, surname: d.surname }; }),
+      farthestClean: farthestClean(), checkpoint: G.cp ? { C: G.cp.dot.C, canPublish: G.day >= CFG.publishFrom, canShip: canShip(G.cp) } : null, redTeam: G.held ? +(G.held.end - G.day).toFixed(1) : null,
+      scars: G.scars.length, hangs: G.hangMarks.length,
+      bet: st ? { Tstop: st.T, bind: st.bind, ok: st.ok, Cstop: st.T * st.F, flopsPerDay: st.F } : null,
+      letter: G.letter ? { id: G.letter.id, kind: G.letter.kind, from: G.letter.from, offer: G.letter.offer, up: G.letter.up, down: G.letter.down, grey: !!G.letter.grey, forced: !!G.letter.forced, fuseLeft: +G.letter.fuseLeft.toFixed(2) } : null,
+      waiting: G.wait.map(function (w) { return w.id; }), silent: G.silent,
+      raised: { A: G.A.taken, B: G.B.taken, needA: G.A.need }, meridian: G.mer ? { live: G.mer.live, credits: Math.round(G.mer.credits) } : null, api: G.api ? { revenue: G.api.revenue } : null,
+      rivals: G.rivals.map(function (r) { var lp = r.pubs[r.pubs.length - 1]; return { name: r.name, pubs: r.pubs.length, last: lp.C, passed: r.passed }; }), frontier: frontier(), worldView: worldView(),
+      caps: G.caps.filter(function (c) { return c.fired; }).map(function (c) { return c.id + (c.contaminated ? '*' : ''); }), gpt3: G.gpt3, miracle: G.miracle, december: G.december,
+      over: G.over, geom: { plot: L.plot, strip: L.strip, travel: L.travel, band: L.band, cluster: L.cluster, ruler: L.ruler, vw: L.vw, vh: L.vh,
+        letterRect: (!elLetter.hidden ? (function (r) { return { x: r.left, y: r.top, w: r.width, h: r.height }; })(elLetter.getBoundingClientRect()) : null),
+        names: G.people.map(function (p) { var b = nameEl(p.id); if (!b) return null; var r = b.getBoundingClientRect(); return { id: p.id, x: r.left + r.width / 2, y: r.top + r.height / 2 }; }).filter(Boolean) },
+      log: G.log.slice(-30)
+    };
   }
-  function hitStrip(x, y) { const st = S.layout.strip; return x >= st.x - 12 && x <= st.x + st.w + 12 && y >= st.y - 24 && y <= st.y + st.h + 24; }
-  function nibTFromX(x) { const st = S.layout.strip; return x < st.tx ? -1 : clamp((x - st.tx) / st.tw, 0, 1); }
-  function setNibX(x) {
-    const st = S.layout.strip;
-    S.nib.px = x;
-    S.nib.t = nibTFromX(x);
-    S.nib.homeX = x < st.tx ? clamp(x, st.tx - CFG.layout.nibW / 2, st.tx) : null;
-  }
-  function restX(upT) {
-    const buf = S.nib.buf;
-    if (!buf.length) return S.nib.px;
-    if (upT - S.nib.downT < CFG.ms.liftRead) return buf[0].x;
-    let x = buf[0].x;
-    for (const s of buf) { if (s.t <= upT - CFG.ms.liftRead) x = s.x; else break; }
-    return x;
-  }
-  function onDown(e) {
-    if (e.target === muteEl) return;
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    const x = e.clientX, y = e.clientY;
-    if (S.phase === 'asleep') { e.preventDefault(); S.everPowered = true; power(); return; }
-    if (S.phase === 'drag' && S.powered && !S.nib.dragging && hitNib(x, y)) {
-      e.preventDefault();
-      try { stage.setPointerCapture(e.pointerId); } catch (er) { /* ignore */ }
-      const rt = performance.now();
-      S.nib.dragging = true; S.nib.pid = e.pointerId; S.nib.downT = rt; S.nib.buf = [{ t: rt, x }];
-      S.nib.mouse = e.pointerType === 'mouse'; S.nib.py = y; S.nib.everDragged = true; S.nib.keyed = false;
-      setNibX(x); scratchPulse();
-      return;
-    }
-    if (S.phase === 'pour' && hitStrip(x, y)) { e.preventDefault(); sampleTap(); }
-  }
-  function onMove(e) {
-    if (S.nib.dragging && e.pointerId === S.nib.pid) {
-      e.preventDefault();
-      const rt = performance.now();
-      const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : null;
-      if (evs && evs.length) for (const ce of evs) S.nib.buf.push({ t: rt, x: ce.clientX }); else S.nib.buf.push({ t: rt, x: e.clientX });
-      while (S.nib.buf.length > 2 && S.nib.buf[1].t < rt - 600) S.nib.buf.shift();
-      S.nib.py = e.clientY; setNibX(e.clientX);
-      return;
-    }
-    if (e.pointerType === 'mouse') {
-      let cur = '';
-      if (S.phase === 'asleep') cur = 'pointer';
-      else if (S.phase === 'drag' && hitNib(e.clientX, e.clientY)) cur = 'grab';
-      else if (S.phase === 'pour' && hitStrip(e.clientX, e.clientY)) cur = 'pointer';
-      if (stage.style.cursor !== cur) stage.style.cursor = cur;
-    }
-  }
-  function onUp(e) {
-    if (!(S.nib.dragging && e.pointerId === S.nib.pid)) return;
-    e.preventDefault();
-    const rx = restX(performance.now());
-    setNibX(rx);
-    S.nib.dragging = false; S.nib.pid = null; S.nib.homeX = null;
-    try { stage.releasePointerCapture(e.pointerId); } catch (er) { /* ignore */ }
-    launch(nibTFromX(rx) < 0 ? null : nibTFromX(rx));
-    stage.style.cursor = '';
-  }
-  stage.addEventListener('pointerdown', onDown, { passive: false });
-  stage.addEventListener('pointermove', onMove, { passive: false });
-  stage.addEventListener('pointerup', onUp, { passive: false });
-  stage.addEventListener('pointercancel', onUp, { passive: false });
-  stage.addEventListener('lostpointercapture', e => { if (S.nib.dragging && e.pointerId === S.nib.pid) onUp(e); });
-  stage.addEventListener('touchstart', e => { if (e.target !== muteEl) e.preventDefault(); }, { passive: false });
-  stage.addEventListener('touchmove', e => { e.preventDefault(); }, { passive: false });
-  stage.addEventListener('contextmenu', e => e.preventDefault());
-  stage.addEventListener('dblclick', e => e.preventDefault());
-  document.addEventListener('gesturestart', e => e.preventDefault());
-  muteEl.addEventListener('click', e => { e.stopPropagation(); toggleMute(); });
-
-  function onKey(e) {
-    const k = e.key;
-    if (e.target === muteEl && (k === 'Enter' || k === ' ')) return;
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (k === 'm' || k === 'M') { if (S.everPowered) toggleMute(); return; }
-    if (S.phase === 'asleep') {
-      if (k === 'Enter' || k === ' ' || k === 'ArrowRight' || k === 'ArrowLeft' || k === 's' || k === 'S') { e.preventDefault(); S.everPowered = true; power(); }
-      return;
-    }
-    if (S.phase === 'drag' && S.powered && !S.nib.dragging) {
-      if (k === 'ArrowRight' || k === 'ArrowLeft') {
-        e.preventDefault();
-        const step = e.shiftKey ? 0.10 : 0.02; let t = S.nib.t;
-        if (k === 'ArrowRight') t = t < 0 ? step : Math.min(1, t + step);
-        else t = t < 0 ? -1 : (t <= 1e-9 ? -1 : Math.max(0, t - step));
-        S.nib.t = t; S.nib.keyed = true; S.nib.everDragged = true; S.nib.homeX = null;
-        if (t >= 0) scratchPulse();
-      } else if ((k === 'Enter' || k === ' ') && !e.repeat) { e.preventDefault(); launch(S.nib.t < 0 ? null : S.nib.t); }
-      return;
-    }
-    if (S.phase === 'pour' && (k === 's' || k === 'S')) { e.preventDefault(); sampleTap(); return; }
-    if (k === ' ') e.preventDefault();
-  }
-  window.addEventListener('keydown', onKey);
-  window.addEventListener('resize', resize);
-  window.addEventListener('orientationchange', resize);
-
-  // ===========================================================================
-  // Sound: Web Audio only, after the first touch. Everything is readable on mute.
-  // ===========================================================================
-  const A = { ctx: null };
-  const dB = x => Math.pow(10, x / 20);
-  function audioInit() {
-    if (A.ctx) { try { if (A.ctx.state === 'suspended') A.ctx.resume().catch(() => {}); } catch (e) { /* ignore */ } return; }
-    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-    try {
-      const c = new AC(); A.ctx = c;
-      A.out = c.createGain(); A.out.gain.value = S.muted ? 0 : 1; A.out.connect(c.destination);
-      A.duck = c.createGain(); A.duck.connect(A.out);
-      const len = Math.floor(c.sampleRate * 2);
-      const wb = c.createBuffer(1, len, c.sampleRate), wd = wb.getChannelData(0);
-      for (let i = 0; i < len; i++) wd[i] = Math.random() * 2 - 1;
-      const bb = c.createBuffer(1, len, c.sampleRate), bd = bb.getChannelData(0);
-      let lv = 0; for (let i = 0; i < len; i++) { lv = (lv + 0.02 * (Math.random() * 2 - 1)) / 1.02; bd[i] = lv * 3.5; }
-      A.white = wb;
-      A.motor = c.createGain(); A.motor.gain.value = 0; A.motor.connect(A.duck);
-      A.o1 = c.createOscillator(); A.o1.type = 'sine'; A.o1.frequency.value = 55;
-      A.o2 = c.createOscillator(); A.o2.type = 'sine'; A.o2.frequency.value = 110.6;
-      const g1 = c.createGain(); g1.gain.value = dB(-30); const g2 = c.createGain(); g2.gain.value = dB(-30);
-      A.o1.connect(g1); g1.connect(A.motor); A.o2.connect(g2); g2.connect(A.motor);
-      const bn = c.createBufferSource(); bn.buffer = bb; bn.loop = true;
-      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 300;
-      const gn = c.createGain(); gn.gain.value = dB(-36);
-      bn.connect(lp); lp.connect(gn); gn.connect(A.motor);
-      A.o1.start(); A.o2.start(); bn.start();
-      const sn = c.createBufferSource(); sn.buffer = wb; sn.loop = true;
-      A.sbp = c.createBiquadFilter(); A.sbp.type = 'bandpass'; A.sbp.frequency.value = 3200; A.sbp.Q.value = 0.8;
-      A.scr = c.createGain(); A.scr.gain.value = 0;
-      sn.connect(A.sbp); A.sbp.connect(A.scr); A.scr.connect(A.duck); sn.start();
-      if (c.resume) c.resume().catch(() => {});
-    } catch (e) { A.ctx = null; }
-  }
-  function aOK() { return A.ctx && A.ctx.state !== 'closed'; }
-  function ramp(param, v, ms) {
-    try { const t = A.ctx.currentTime; param.cancelScheduledValues(t); param.setValueAtTime(param.value, t); param.linearRampToValueAtTime(v, t + Math.max(0.005, ms / 1000)); } catch (e) { /* ignore */ }
-  }
-  function motorTo(level, ms) { if (!aOK()) return; ramp(A.motor.gain, level, ms); try { A.o1.frequency.setValueAtTime(55, A.ctx.currentTime); } catch (e) { /* ignore */ } }
-  function blip(f, ms, db, type) {
-    if (!aOK()) return;
-    try {
-      const c = A.ctx, t = c.currentTime, o = c.createOscillator(), g = c.createGain();
-      o.type = type || 'sine'; o.frequency.value = f;
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(dB(db), t + 0.001); g.gain.exponentialRampToValueAtTime(0.00001, t + ms / 1000);
-      o.connect(g); g.connect(A.duck); o.start(t); o.stop(t + ms / 1000 + 0.03);
-    } catch (e) { /* ignore */ }
-  }
-  function noiseHit(ms, f, q, db) {
-    if (!aOK()) return;
-    try {
-      const c = A.ctx, t = c.currentTime, s = c.createBufferSource(), bp = c.createBiquadFilter(), g = c.createGain();
-      s.buffer = A.white; bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
-      g.gain.setValueAtTime(dB(db), t); g.gain.exponentialRampToValueAtTime(0.00001, t + ms / 1000);
-      s.connect(bp); bp.connect(g); g.connect(A.duck); s.start(t, Math.random() * 1.5, ms / 1000 + 0.02);
-    } catch (e) { /* ignore */ }
-  }
-  const tokenTick = () => blip(2400, 6, -34);
-  const printTick = () => blip(1800, 5, -38);
-  const payClick = () => noiseHit(4, 1200, 1.2, -32);
-  function liftNote() {
-    if (!aOK()) return;
-    try {
-      const c = A.ctx, t = c.currentTime;
-      for (const f of [55, 110]) {
-        const o = c.createOscillator(), g = c.createGain(); o.frequency.value = f;
-        g.gain.setValueAtTime(dB(-18), t); g.gain.exponentialRampToValueAtTime(0.00001, t + 1.4);
-        o.connect(g); g.connect(A.duck); o.start(t); o.stop(t + 1.45);
+  function act(name, a) {
+    a = a || {};
+    switch (name) {
+      case 'start': case 'power': powerOn(); return true;
+      case 'take': case 'raise': case 'pass': {
+        if (!G.letter) return false;
+        var okr = resolveLetter(name === 'pass' ? 'down' : 'up');
+        if (a.fast) { letterAnim = null; elLetter.hidden = true; if (!G.letter && G.wait.length && !G.over) { showLetter(G.wait.shift()); letterAnim = null; } }
+        return okr;
       }
-    } catch (e) { /* ignore */ }
-  }
-  function whirr(ms) {
-    if (!aOK()) return;
-    try {
-      const c = A.ctx, t = c.currentTime, o = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain();
-      o.type = 'sawtooth'; o.frequency.value = 90; lp.type = 'lowpass'; lp.frequency.value = 600;
-      const d = clamp(ms, 300, 900) / 1000;
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(dB(-34), t + 0.08); g.gain.linearRampToValueAtTime(0, t + d);
-      o.connect(lp); lp.connect(g); g.connect(A.duck); o.start(t); o.stop(t + d + 0.05);
-    } catch (e) { /* ignore */ }
-  }
-  function nibScratch(ms) {
-    if (!aOK()) return;
-    try { const t = A.ctx.currentTime, g = A.scr.gain; g.cancelScheduledValues(t); g.setValueAtTime(dB(-30), t); g.linearRampToValueAtTime(dB(-34), t + ms / 1000 * 0.8); g.linearRampToValueAtTime(0, t + ms / 1000); A.scrHoldUntil = performance.now() + ms; } catch (e) { /* ignore */ }
-  }
-  function scratchPulse() { if (!aOK()) return; noiseHit(30, 3200, 0.8, -32); }
-  let lastPen = null, lastPenT = 0;
-  function penSpeed(x) {
-    if (!aOK() || (A.scrHoldUntil && performance.now() < A.scrHoldUntil)) { lastPen = x; return; }
-    const rt = performance.now();
-    let target = 0;
-    if (x != null && lastPen != null && rt > lastPenT) { const v = Math.abs(x - lastPen) / ((rt - lastPenT) / 1000); target = dB(-28) * clamp(v / 260, 0, 1); }
-    lastPen = x; lastPenT = rt;
-    try { A.scr.gain.setTargetAtTime(target, A.ctx.currentTime, 0.05); } catch (e) { /* ignore */ }
-  }
-  function duck(on) { if (!aOK()) return; ramp(A.duck.gain, on ? 0 : 1, on ? CFG.ms.capDuck : CFG.ms.capRestore); }
-  function dryAudio() {
-    if (!aOK()) return;
-    try {
-      const t = A.ctx.currentTime;
-      A.sbp.frequency.cancelScheduledValues(t); A.sbp.frequency.setValueAtTime(3200, t); A.sbp.frequency.linearRampToValueAtTime(6000, t + 0.9);
-      ramp(A.scr.gain, 0, CFG.ms.dryFade);
-      A.o1.frequency.cancelScheduledValues(t); A.o1.frequency.setValueAtTime(55, t); A.o1.frequency.linearRampToValueAtTime(30, t + 1.2);
-      ramp(A.motor.gain, 0, 1200);
-      A.scrHoldUntil = performance.now() + 1700;
-      setTimeout(() => { try { A.sbp.frequency.setValueAtTime(3200, A.ctx.currentTime); } catch (e) { /* ignore */ } }, 2000);
-    } catch (e) { /* ignore */ }
-  }
-  function toggleMute(force) {
-    S.muted = typeof force === 'boolean' ? force : !S.muted;
-    if (aOK()) ramp(A.out.gain, S.muted ? 0 : 1, 60);
-    muteEl.textContent = S.muted ? 'SOUND OFF' : 'SOUND ON';
-    muteEl.setAttribute('aria-pressed', S.muted ? 'true' : 'false');
-    return S.muted;
-  }
-
-  // ===========================================================================
-  // Test hook for playtesters and bots (normal players never see it)
-  // ===========================================================================
-  function runSummary(r) {
-    return { log10C: +r.lc.toFixed(3), ink: +r.ink.toFixed(3), share: +r.tLift.toFixed(3), home: r.home, days: +r.T.toFixed(2), pourSec: +(r.P / 1000).toFixed(2),
-      launch: fmtLong(r.launchDay), r: +r.r.toFixed(3), grade: r.grade, result: r.result, p: +r.p.toFixed(3), loss: +r.Lstar.toFixed(3) };
-  }
-  function sampleSummary(s) { return s ? { text: s.band, frays: s.frays, crawl: s.crawl, tier: s.tier, cap: s.capId, kind: s.kind } : null; }
-  window.__frontier = {
-    state() {
-      const best = bestClean();
-      const phase = S.phase;
-      return {
-        phase, powered: !!S.powered, sheet: S.sheetNo, seed: S.seed,
-        date: fmtLong(S.day), day: +S.day.toFixed(3), clockRunning: S.clockStarted && (phase === 'drag' || phase === 'pour'),
-        bank: +S.bank.toFixed(3), payrollMode: CFG.rules.payrollMode, payrollPerDay: +payrollRate().toFixed(4),
-        nib: { t: S.nib.t < 0 ? null : +S.nib.t.toFixed(4), home: S.nib.t < 0, dragging: S.nib.dragging },
-        landingDate: phase === 'drag' && S.powered ? landingDate() : null,
-        dragLog10C: phase === 'drag' && S.powered ? +Math.log10(dragCompute()).toFixed(3) : null,
-        run: S.run ? runSummary(S.run) : null, runs: S.runs.map(runSummary),
-        lastSample: sampleSummary(S.lastSample), bandSample: sampleSummary(S.bandSample),
-        wall: { W: S.W, Dwall: S.Dwall, log10Cwall: +Math.log10(S.Cwall).toFixed(3), log10CwallStart: +Math.log10(S.Cwall0).toFixed(3), crossings: S.crossings, hatches: S.hatches.map(h => +h.lc.toFixed(3)), reprint: S.reprintText },
-        caps: S.caps.map(c => ({ id: c.id, log10C: +c.lc.toFixed(3), fired: c.fired })),
-        bestLog10C: best ? +best.lc.toFixed(3) : null, gpt3Log10C: +Math.log10(CFG.paper.gpt3C).toFixed(3),
-        moment: S.moment ? S.moment.kind : null, landStep: S.L ? S.L.step : null,
-        end: S.E ? { reason: S.E.reason, dark: S.E.dry, t: Math.round(S.E.t) } : null,
-        sheetsEnded: S.sheetsEnded, history: S.history.slice(-200), speed: S.speed, muted: S.muted,
-      };
-    },
-    act(name, payload) {
-      payload = payload || {};
-      switch (name) {
-        case 'power': if (S.phase === 'asleep') { S.everPowered = true; power(); return true; } return false;
-        case 'tap':
-          if (S.phase === 'asleep') { S.everPowered = true; power(); return true; }
-          if (S.phase === 'pour') return sampleTap();
-          return false;
-        case 'sample': return sampleTap();
-        case 'drag': {
-          if (S.phase !== 'drag' || !S.powered) return false;
-          const f = payload.fraction;
-          S.nib.t = (f == null || f < 0 || payload.home) ? -1 : clamp(+f, 0, 1);
-          S.nib.keyed = true; S.nib.everDragged = true; S.nib.homeX = null;
-          return true;
-        }
-        case 'lift': if (S.phase !== 'drag' || !S.powered) return false; return launch(S.nib.t < 0 ? null : S.nib.t);
-        case 'dragLift': {
-          if (S.phase !== 'drag' || !S.powered) return false;
-          const f = payload.fraction; return launch(f == null || f < 0 ? null : clamp(+f, 0, 1));
-        }
-        case 'mute': return toggleMute(payload.on);
-        default: return false;
+      case 'hire': if (G.letter && G.letter.hireId === a.id) return resolveLetter('up'); if (a.force) { addPerson(a.id); return true; } return false;
+      case 'rent': if (G.letter && G.letter.id === 'brokerRent') return resolveLetter('up'); if (a.force) { G.rentals.push({ n: a.gpus || 64, price: rentPriceNow(), start: G.day, end: G.day + CFG.rentTermDays }); return true; } return false;
+      case 'buy': if (G.letter && /^buy/.test(G.letter.id)) return resolveLetter('up'); return false;
+      case 'launch': {
+        if (!canBet()) return false;
+        var st = stopInfo(); if (!st.ok) return false;
+        var T = a.days != null ? a.days : daysAt(a.fraction == null ? 1 : a.fraction, st);
+        return launch(T);
       }
-    },
-    speed(n) { if (typeof n === 'number' && n > 0 && n <= 200) S.speed = n; return S.speed; },
-    config: CFG,
-  };
+      case 'tap': return tapSample();
+      case 'publish': return flickCheckpoint('up');
+      case 'ship': return flickCheckpoint('right');
+      case 'press': pressName(a.id); return true;
+      case 'endMonth': {
+        if (!G.powered || G.over || !G.firstLift) return false;
+        var m0 = G.month, guard = 0;
+        while (G.month === m0 && !G.over && guard++ < 40000) {
+          if (G.letter) return 'letter';
+          if (moment || G.phase === 'land' || G.phase === 'moment') { now += 0.1; runTimers(); stepMoment(); continue; }
+          if (!clockRuns()) break;
+          stepDays(0.25);
+          if (!G.letter && G.wait.length) { letterAnim = null; showLetter(G.wait.shift()); letterAnim = null; }
+        }
+        return G.over ? 'over' : 'month';
+      }
+      case 'step': {
+        // advance the calendar up to a.days, stopping at a letter, a landing or the end (for bots)
+        if (!G.powered || G.over) return false;
+        var target = G.day + (a.days || 1), hadRun = !!G.run, g2 = 0;
+        while (G.day < target && !G.over && g2++ < 40000) {
+          if (G.letter) return 'letter';
+          if (moment || G.phase === 'land' || G.phase === 'moment') { now += 0.1; runTimers(); stepMoment(); continue; }
+          if (!clockRuns()) return 'stopped';
+          stepDays(Math.min(0.1, target - G.day + 1e-9));
+          if (!G.letter && G.wait.length) { letterAnim = null; showLetter(G.wait.shift()); letterAnim = null; }
+          if (hadRun && !G.run) { while ((moment || G.phase === 'land') && g2++ < 40000) { now += 0.1; runTimers(); stepMoment(); } return 'landed'; }
+        }
+        return G.over ? 'over' : 'ok';
+      }
+      case 'newGame': case 'newYear': newYear(a.seed); layout(); return true;
+      default: return false;
+    }
+  }
+  window.__frontier = { state: stateObj, act: act, speed: function (n) { speedMul = clamp(+n || 1, 0.1, 200); return speedMul; }, config: CFG };
 
-  // ===========================================================================
-  // Boot
-  // ===========================================================================
-  newSheet();
-  resize();
+  /* ---------------- go ---------------- */
+  newYear();
+  layout();
   requestAnimationFrame(frame);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { staticDirty = true; layout(); });
 })();
