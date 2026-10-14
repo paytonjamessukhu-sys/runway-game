@@ -1,125 +1,138 @@
-/* FRONTIER: the lab sim. Builder C. Every tunable number and rule switch lives here.
-   Source of truth: spec/sim1.json (the clerk's full sim spec). Where it is silent, council/sim-transcript.md and the
-   approved training-run component spec/slice1.json v7 fill in. Day numbers: day 0 is Wed 1 Jan 2020. */
+/* FRONTIER control room (builder C). Every tunable number and rule switch lives in this one object.
+   Sources: spec/dashboard1.md (the brief), spec/sim1.json (2020 facts, cast, prices), council/sim-panel.md (what to avoid). */
 (function (root) {
   var CFG = {
-    /* ---- calendar and clock ---- */
-    startDateUTC: [2020, 0, 1],
-    endDay: 366,                         // 31 Dec 23:59
-    monthStarts: [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366],
-    pourDaysPerSec: 1.0,                 // pour and hang
-    idleDaysPerSec: 3.0,                 // idle, after the first lift
-    minPourSec: 4.0,                     // a pour lasts max(4 s, T s)
-    landSecClean: 2.2, landSecWall: 3.1, momentSec: 3.5,
-    slotDayOfMonth: [0, 10, 20],         // letters on the 1st (with payroll), the 11th and the 21st
-    endFeedSec: 6.5,                     // a fresh 1 January slides in after any end frame
+    /* ---------- clock ---------- */
+    year: 2020,
+    endDay: 366,                 // the year ends at midnight after day 365 (Thu 31 Dec 2020)
+    daysPerSec: 1,               // 1x = one game day per real second
+    speeds: [1, 2, 4],
+    minRunRealSec: 4,            // a run never pours in under 4 real seconds at 1x (short runs slow the clock)
+    hangMinRealSec: 1.8,         // a hang stays dark at least this long at 1x, so a name can be woken
+    slots: [1, 11, 21],          // days of the month when letters (offers, demands, poaches) can knock
 
-    /* ---- money ---- */
-    seed: 6e6, seedPost: 30e6, stakeStart: 0.80, dgx1: 149000,
-    base: 40000,                         // you, ops, the office: leaves on the 1st
-    upkeep: 150,                         // per owned card per month, on the 1st
-    monthDays: 30.4,
-    monthsCap: 99,
+    /* ---------- money ---------- */
+    seedCash: 6000000, seedPost: 30000000, stakeStart: 0.80, dgx1Price: 149000,
+    base: 40000,                 // you, ops and the office, per month
+    upkeepPerCard: 150,          // power and colocation per owned card, per month
+    lowRunwayMonths: 6,          // below this, everyone worries on payday
+    acquiPerHead: 4000000, acquiRunway: 3,
+    boardBelow: 0.5,             // below 50% stake the board sells to the next bidder
 
-    /* ---- cards ---- */
-    flopsV100Day: 3.456e18, a100x: 2.5, ownedStart: 8,
-    rentEarly: 2.48, rentLate: 3.06, rentLateFromDay: 91, rentRenewLate: 3.50,
-    rentTermDays: 90, renewWindowDays: 30, renewRefuseShare: 0.5,
-    rentSizes: [[0, 64], [31, 128], [60, 256]], // January, February, March to June
-    brokerRentUntilDay: 161, brokerGapDays: 14, brokerBuyFromDay: 31,
-    buyV100: { n: 64, price: 800000, lead: 56 },
-    buyA100: { n: 64, price: 1592000, lead: 112, fromDay: 134 },   // Friday gate step 3: 12 -> 16 weeks
-    covidOrderFrom: 60, covidOrderTo: 181, covidOrderExtra: 42,    // Friday gate step 3: +4 -> +6 weeks
-    apiDay: 162, postApiPriceX: 1.2, postApiLeadExtra: 56,
-    rentOutRate: 1.90, rentOutDays: 30, rentOutMonths: 6, rentOutMinOwned: 16,
-    servingShare: 1 / 8, servingMin: 8, servingMax: 64,
-    meridian: { credits: 50e6, cards: 1024, lead: 56, rate: 2.48, minBest: 1e21, fromDay: 91, firstLook: 7, // gate step 1: 42 -> 56 days
-      fullWithin: 1.5, halfWithin: 10, secondFromDay: 166, secondCards: 512, secondStake: 0.9, queueFromDay: 162 }, // gate step 2: full within 2x -> 1.5x
+    /* ---------- cards ---------- */
+    flops: { v100: 3.456e18, a100: 8.64e18 },  // delivered FLOPs per card-day (40 of 125 TFLOPS tensor peak; A100 2.5x)
+    pfDay: 8.64e19,
+    startV100: 8,                // the DGX-1 in the office
+    ownedHourly: 0.21,           // what an owned card-hour costs in power and colo (for the designer's cost line)
+    rent: {
+      termDays: 90, renewWindow: 30,
+      price: [[0, 2.48], [91, 3.06], [162, 3.50]],            // $/V100-hour: GCP list, AWS list from 1 Apr, scarce after the API
+      cap: [[0, 64], [31, 192], [60, 448], [162, 512]],         // the most the broker will rent you at once, by day
+      afterApiMonthly: 64,       // after 11 Jun a block of 64 a month at most
+      renewRefuseAfterApi: 0.5,
+      block: 64
+    },
+    buy: {
+      dgx1: { label: 'DGX-1', n: 8, type: 'v100', price: 149000, lead: 28, from: 0 },
+      pod: { label: 'V100 pod', n: 64, type: 'v100', price: 800000, lead: 56, from: 0 },
+      dgxa: { label: 'DGX A100', n: 8, type: 'a100', price: 199000, lead: 84, from: 134 },
+      poda: { label: 'A100 pod', n: 64, type: 'a100', price: 1592000, lead: 84, from: 134 }
+    },
+    covidOrderFrom: 60, covidOrderTo: 181, covidOrderExtra: 28,   // orders 1 Mar to 30 Jun take 4 weeks longer
+    apiDay: 162,                 // 11 Jun 2020
+    afterApiPriceMult: 1.2, afterApiLeadExtra: 56,                  // post-GPT-3 scramble: +20% and +8 weeks
+    rentOut: { perHour: 1.90, days: 30, minOwned: 16, share: 0.5 },
+    serving: { share: 1 / 8, min: 8, max: 64 },
 
-    /* ---- raising ---- */
-    seriesA: { far: 1e22, spanDecades: 1, fromDay: 22, early: [30e6, 150e6], late: [60e6, 450e6], closedFrom: 75, closedTo: 166, lateSlotDay: 172, passFactor: 3 },
-    seriesB: { min: 3e22, fromDay: 162, amt: 150e6, post: 1.2e9, postApi: 1.8e9 },
-    counterStake: 0.015, devStake: 0.01, boardBelow: 0.5,
-    acquiPerHead: 4e6, acquiMonths: 3, acquiFromDay: 31,
+    /* ---------- Meridian (fictional cloud giant) ---------- */
+    meridian: { credits: 50000000, cards: 1024, lead: 56, rate: 2.48, needC: 1e21, fromDay: 91, firstLook: 7,
+      queueFrom: 162, queueFull: 2, queueHalf: 10, second: { fromDay: 166, cards: 512, stakeMult: 0.9 } },
 
-    /* ---- the run ---- */
-    probeDays: 0.25,
-    memStopC: 1.36e20,                   // a one-billion-parameter model under the 2020 recipe
-    horizonX: 10, horizonFirstC: 2.765e20,
-    lineC: 2.68e28, lineAlpha: 0.050, startLoss: 10.825, curveNoise: 0.012, onLineTol: 0.015,
-    sunheeBend: 0.975, sunheeAfterDays: 30,
-    blindShare: 0.3, blindLo: 0.02, blindHi: 0.05, blindSmall: 0.005,
-    penWarp: 1.5,                        // the pen is drawn at q = s^1.5
+    /* ---------- raising ---------- */
+    lineDay: 22,                 // 23 Jan: the scaling-laws paper
+    crashDay: 75, marketOpenDay: 166,                              // 16 Mar closes the market, 15 Jun opens it
+    seriesA: { needC: 1e22, decades: 1, onLine: 1.015, fromDay: 22, pre: { cash: 30e6, post: 150e6 }, after: { cash: 60e6, post: 450e6 }, passMult: 3 },
+    seriesB: { needC: 3e22, fromDay: 162, cash: 150e6, post: 1.2e9, postApi: 1.8e9 },
+    scandalBlockDays: 90,
+    counterStake: 0.015, devStake: 0.01, counterRaiseAfter: 148, counterRaise: 1.35,
+
+    /* ---------- the run ---------- */
+    lineC: 2.68e28, lineAlpha: 0.050, startLoss: 10.825, curveNoise: 0.010,
+    gpt3C: 3.14e23, gpt3L: 1.763, gpt3Day: 148, miracleTol: 1.005, miracleCTol: 0.97,
+    tokGPT3: 3.0e11, tokExp: 0.27,                                  // the fixed 2020 recipe: D = 300B x (C / 3.14e23)^0.27
+    offRecipeK: 0.03,            // loss x (1 + k x decades-off-recipe^2) when tokens stray from the recipe
+    memLimit: [1e9, 2e10, 4e11], // max parameters with 0, 1, 2+ systems people (one card; split across 8; pipelines)
+    horizonMult: 10, horizonFirst: 2.765e20,
+    extrapSigma: 0.02,           // per decade past the measured horizon: the run may land this much high
+    scalingSigmaMult: 0.25, lineKnownMult: 0.7,
+    landNoise: 0.004,
+    onLineTol: 1.015,
+    optBend: 0.975, optDelay: 30, // an optimizer person bends every run 2.5% under the line after 30 days
+    pastWallPenalty: 0.04,       // per doubling of tokens past the wall
     checkpoints: (function () { var a = [0.0005, 0.002, 0.01]; for (var i = 1; i <= 20; i++) a.push(+(i * 0.05).toFixed(2)); return a; })(),
-    gpt3C: 3.14e23, gpt3Loss: 1.763, miracleTol: 1.005,
+    autoSampleAt: [0.35, 0.75],
+    paramsMin: 5e7, paramsMax: 5e11, tokensMin: 1e9, tokensMax: 1e12,
+    starter: { N: 1.5e8, D: 2.2e10 },
 
-    /* ---- hangs ---- */
-    hangLambda: 0.035,                   // per run-day, x sqrt(V100-equivalents / 8)
-    hangInfraX: 0.4, hangBothX: 0.2,
-    hangMorningHour: 8, hangCovidExtraDays: 1, hangCovidFrom: 75, hangCovidTo: 181,
-    hangInfraRestartHours: 1, hangInfraCkHours: 4, hangWakeMinutes: 20, hangWakeMood: -10, hangWakeMoodTom: -5,
+    /* ---------- hangs ---------- */
+    hangPerCardDay: 4.0e-4,      // linear in cards: about 0.4 a day on 1,024 V100s
+    hangInfraMult: 0.4, hangBothMult: 0.2,
+    hangCovidFrom: 75, hangCovidTo: 181, hangCovidExtra: 1,       // nobody can get into the building
+    hangInfraDays: 0.04, rewindNoInfra: 0.5, rewindInfra: 0.1, wakeDays: 0.014, wakeMood: 10, wakeMoodInfra: 5,
+    tomBreakHangs: 3,
+    nanShare: 0.25,              // a quarter of failures are NaNs: the loss blows up and the run rolls back, no dark wait
+    nanRewindNoInfra: 1.0, nanRewindInfra: 0.25, nanPauseDays: 0.08,
+    migrateBelow: 0.5, migrateGain: 1.5, migrateRewind: 0.01,   // a run below half its launch speed moves to a pool 1.5x faster
 
-    /* ---- data: the hidden wall (slice one v7) ---- */
-    W_lo: 14e9, W_hi: 40e9, passes: 4,
-    tokA: 2.0e10, tokRef: 8.64e19, tokExp: 0.27,
-    cleanR: 0.733, frayStep: 0.0534, frayAmounts: 5,
-    filterW: 1.862, filterCost: 150000, filterDays: 21, filterDaysInes: 12, priyaAutoK: 4,
+    /* ---------- data wall and filter jobs ---------- */
+    W_lo: 14e9, W_hi: 40e9, passes: 4, rawCrawl: 1.4e12,
+    cleanR: 0.62, frayStep: 0.076, frayMax: 5,
+    filterMult: 1.862, filterCost: 150000, filterDays: 21, filterDaysPair: 12,
 
-    /* ---- capabilities ---- */
+    /* ---------- capabilities and the API ---------- */
     caps: [['paragraph', 2e21, 0.2], ['arithmetic', 1e22, 0.3], ['translation', 6e22, 0.3], ['code', 2.5e23, 0.3]],
-    capRevenue: [30000, 60000, 120000, 250000],
-    contamination: 0.3, capSampleShare: 0.35, capMood: 10,
-
-    /* ---- publish, ship, scandal ---- */
-    publishFromDay: 31, rivalSlideExp: 0.25, rivalSlideDelay: 14,
-    scandalPublish: 0.20, scandalPublishFiltered: 0.10, scandalShip: 0.15, scandalDelay: [20, 60],
-    redTeamDays: 14, redTeamDaysApi: 7, scandalTermBlockDays: 90, scandalMood: -30,
-
-    /* ---- mood ---- */
-    moodStart: 70, egoE: { 2: 450, 3: 550, 4: 650 }, moodGraphite: 25,
-    moodEgo4Idle: -2, moodPublish: 15, moodFirstAuthor: 30, moodCounter: 20,
-
-    /* ---- rivals (fictional) ---- */
-    rivals: [
-      { id: 'halcyon', name: 'Halcyon', c0: 1e21, tau: 5.0, period: 70, off: 1.00 },
-      { id: 'kestrel', name: 'Kestrel', c0: 1.5e19, tau: 3.4, period: 50, off: 1.01 },
-      { id: 'northwind', name: 'Northwind', c0: 3e20, tau: 6.0, period: 45, off: 1.02 }
-    ],
-    rivalJitter: 0.15, passBonus: 0.2, openKestrel: 0.2, openNorthwind: 0.4, openPassNorthwind: 0.1, openDays: 7,
-
-    /* ---- relevance ---- */
-    relevanceFromDay: 91, relevanceShare: 0.01, openViewX: 3, vaultViewX: 0.1,
-
-    /* ---- poach ---- */
-    poachFromDay: 91, poachChance: 0.35, poachMinTeam: 3,
-
-    /* ---- letters ---- */
-    fuse: { broker: 7, poach: 7, rentout: 7, renewal: 7, hire: 10, demand: 10, open: 10, acqui: 10, term: 14, meridian: 14 },
-    flickPx: 40, flickVel: 0.3,
-    decemberDay: 355,                    // 21 Dec: Priya's letter overrides everything
-
-    /* ---- samples (slice one) ---- */
+    capRevenue: { paragraph: 30000, arithmetic: 60000, translation: 120000, code: 250000 },
+    capSampleShare: 0.35, contamination: 0.3, capMood: 10,
     tierStatic: 6.0, tierWords: 4.3, tierGrammar: 3.3, t3Sense: [2.78, 2.48],
-    bandMaxChars: 180, wordMs: 45, crawlLen: [92, 150], tapWaitSec: 0.7,
-    autoSampleQ: [0.35, 0.75], autoQuietSec: 2.5, autoEverySec: 15, autoLongPourSec: 30,
-    covidLineFromDay: 70,
+    covidStringDay: 70,
 
-    /* ---- plot (slice one) ---- */
-    plotLossTop: 11.5, plotLossBottom: 1.55, plotRightMinLog: 24.3, plotLeftMinLog: 16, plotLeftMaxLog: 20, plotLeftBack: 4, panSec: 0.8,
-    lineFromDay: 22,
+    /* ---------- publish, ship, scandal, reputation ---------- */
+    repStart: 5,
+    repPublishBase: 2, repPublishReach: 24, repPerCap: 5, repShip: 4, repScandal: 15, repOpen: 8, repDecay: 1, repDecayAfter: 60,
+    rivalSlideDelay: 14, rivalSlideExp: 0.25,
+    scandalPublish: 0.20, scandalPublishFiltered: 0.10, scandalShip: 0.15, scandalDelay: [20, 60], scandalMood: 30,
+    redTeamDays: 14, redTeamDaysApi: 7,
+    publishMood: 15, firstAuthorMood: 30,
 
-    /* ---- motion (seconds) ---- */
-    letterInSec: 0.4, letterTakeSec: 0.25, letterPassSec: 0.3, headlineDriftSec: 7, headlineMaxPxPerSec: 95, noteFadeSec: 8, noteCharMs: 30, nameCharMs: 40,
-    momentDimSec: 0.4, momentSilenceSec: 1.0, momentRestoreSec: 0.6,
+    /* ---------- relevance (the forgotten rule) ---------- */
+    relevanceGrace: 120,         // the first deadline is 30 Apr
+    relevanceWindow: 100,        // every publish or ship that matters buys 100 more days
+    relevanceShare: 0.01,        // matters = at least 1% of the frontier's compute
 
-    /* ---- layout (px) ---- */
-    laptopMinWidth: 960,
-    phone: { gutter: 16, header: 56, namesW: 52, headY: 72, rulerH: 24, band: 108, cluster: 52, strip: 52, home: 56, letterZone: 170, letterW: 368, letterH: 128 },
-    laptop: { colMax: 1200, side: 24, header: 0.07, paperTo: 0.58, bandTo: 0.71, clusterFrom: 0.72, clusterTo: 0.78, stripFrom: 0.79, strip: 60, home: 72, letterFrom: 0.87, letterW: 560, letterH: 120, namesW: 120, rulerH: 28 },
+    /* ---------- people ---------- */
+    moodStart: 70, moodWorried: 3, raiseAskBelow: 30, raiseAskGap: 60, raiseMult: 1.2,
+    noPaperDays: 60, noPaperMood: 2, counterMood: 20,
+    candidateWindow: 21,         // a candidate stays on the hiring board this many days
+    poachFrom: 91, poachChance: 0.35, poachMinPeople: 3,
+    optTrickDecades: 0.22,
+    demands: { priyaFrom: 70, devAfter: 90, ayaanAfter: 60, sunheeAfter: 45, tomGap: 60, openFrom: 182, openNeedC: 1e21, december: 355, sunheeNeedC: 1e21 },
+    moods: { ayaanFull: 15, ayaanRefused: 40, devYes: 15, tomOff: 20, tomRefused: 30, sunheeYes: 20, raiseYes: 30, raiseNo: 10, december: 20 },
+    repSunheeTrick: 5, repBlessing: 5, tomOffDays: 7, acquiFrom: 31,
 
-    /* ---- sound (dBFS) ---- */
-    sound: { motorDb: -30, motorNoiseDb: -36, idleDb: -36, scratchMaxDb: -28, jagDb: -34, tickDb: -34, liftDb: -18, feedDb: -30,
-      payrollDb: -20, letterDb: -34, takeDb: -22, passDb: -36, fuseDb: -46, hangThudDb: -24, cardDb: -38, strikeDb: -30 }
+    /* ---------- rivals (fictional) ---------- */
+    rivals: [
+      { key: 'halcyon', name: 'Halcyon', kind: 'big-tech-funded lab', c0: 1e21, tau: 5.0, period: 70, offset: 1.00, cap: 2.4e23 },
+      { key: 'kestrel', name: 'Kestrel', kind: 'startup your size', c0: 1.5e19, tau: 3.4, period: 50, offset: 1.01, cap: 1.8e23 },
+      { key: 'northwind', name: 'Northwind', kind: 'open research collective', c0: 3e20, tau: 6.0, period: 45, offset: 1.02, cap: 1.1e23 }
+    ],
+    rivalJitter: 0.15, rivalPassBoost: 0.2, rivalOpenKestrel: 0.2, rivalOpenNorthwind: 0.4,
+
+    /* ---------- score ---------- */
+    score: { modelMax: 100, modelSpanDecades: 4, miracle: 50, perPerson: 5, revenuePer: 50000 },
+
+    /* ---------- chart ---------- */
+    chart: { xMin: 17, xMax: 25, yMin: 1.45, yMax: 12 }
   };
-  if (typeof module !== 'undefined' && module.exports) module.exports = CFG; else root.FRONTIER_CONFIG = CFG;
+  CFG.memC0 = null; // filled by engine (compute where the recipe hits memLimit[0])
+  if (typeof module !== 'undefined' && module.exports) module.exports = CFG; else root.FRONTIER_CFG = CFG;
 })(this);
