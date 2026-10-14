@@ -4,22 +4,25 @@
    cuts them at a sentence boundary, and only a capability moment shows them whole. '\n' is a line break (code).
 
    How the words are meant to land:
-   - T0 to T2 are funny the way a toddler is funny: confident, grammatical-ish, wrong.
+   - T0 to T2 are funny the way a toddler is funny: confident, grammatical-ish, wrong. A reader should snort once
+     a minute, never wince.
    - T3 is the uncanny valley: every sentence is a real sentence until its last turn. They get better as the loss
-     falls (sense 1 = rough, 2 = almost, 3 = nearly right), so ten landings in, the eye knows what clean reads like.
-   - T4 is the first time it makes sense. The paragraph moment draws only from the strings marked M: each one is
-     about something quiet arriving at understanding, so the first coherent thing the model ever says to you
-     feels like it is about itself. It never says so.
+     falls (sense 1 = rough, 2 = almost, 3 = nearly right), so ten landings in, the eye knows what clean reads like,
+     and a 'Read more »' in the middle of a sentence is the only thing that looks wrong. Fray hides in good prose.
+   - T4 is the first time it makes sense. The paragraph moment draws only from the strings marked 1: each one is
+     about something quiet arriving at understanding (a signal out of noise, a child's first sentence, a light coming
+     back on), so the first coherent thing the model ever says to you feels like it is about itself. It never says so.
    - Fray fragments are web chrome, one flat pool. Only the amount changes. */
 (function (root) {
   var C = {
-    // T0 static (loss above 6.0 nats)
+    // T0 static (loss above 6.0 nats): the most common tokens, in the wrong order
     t0: [
       'the the , of . and to the a', '. , the of of and in', 'and the the . to , a of', 'the of , , . the and',
       'a to the . of the , in and', 'the , . the of', 'of the and . . the to a', 'the the the , and',
-      '. the . the . the', ', , and of the to . a', 'in the of the , , ,', 'to . . of the and the the'
+      '. the . the . the', ', , and of the to . a', 'in the of the , , ,', 'to . . of the and the the',
+      'the and and and . of', ', the , the , the ,', 'of of . a a . the', 'and . to the in in the ,'
     ],
-    // T1 words (6.0 to 4.3)
+    // T1 words (6.0 to 4.3): real words, no idea why they are together
     t1: [
       'council water said year the new of he market', 'and police the first season city were of',
       'music the 2019 people of said time government', 'her team the report . world was school',
@@ -27,9 +30,9 @@
       'film was the in and county early his', 'said the data , online the free first',
       'recipe the minutes oven of said and add', 'weather Tuesday the said rain of high new',
       'hotel room the best of free the parking', 'river the bridge city said of closed water',
-      'mayor cheese the announced of goat parking', 'hospital the trains said free of bread council',
-      'stadium recipe police the minutes of weather', 'wedding the tax of said dog season first',
-      'museum the open of Sunday said free children', 'bank holiday the of fish said market river'
+      'cheese the minister of said soup council', 'goal the 15 police for season weather night',
+      'church the album was also free delivery', 'mayor said the dog and . of percent bread',
+      'the season the season the the said', 'parking the museum minutes of god street'
     ],
     // T2 grammar (4.3 to 3.3): the shape of a sentence with nothing inside it
     t2: [
@@ -47,13 +50,12 @@
       'The new phone has a battery of the camera and a price of the phone.',
       'Scientists say the moon is one of the most of the moon.',
       'The museum is a building of the museum, and it is open.',
-      'The President of the soup said that the weather will be a new school.',
-      'Police are asking anyone with information about the bridge to call the bridge.',
-      'The best time to visit the museum is a museum.',
-      'Scientists have found that the water is a member of the water.',
-      'The new album is available in stores and in the album.',
-      'Fans of the team were the season, said the coach of the fans.',
-      'The dog was taken to the hospital, where it was a dog.'
+      'The minister said the cheese would be a member of the river.',
+      'Last year the bakery was the most popular bread in the county of bread.',
+      'The dog is expected to be the first dog to be a dog this season.',
+      'Fans of the album were also the album, according to the album.',
+      'He said that the parking is free on the second Tuesday of the parking.',
+      'The council has announced that the bridge will be a Tuesday.'
     ],
     t2Covid: 'The virus is a the stock market of Tuesday.', // eligible only after 11 Mar
     // T3 sentences (3.3 down to the paragraph threshold): [sense, text]. Every one is a real sentence until it is not.
@@ -71,6 +73,9 @@
       [1, 'Our dog is very friendly and loves children, other dogs, long walks on the beach, and being a different dog.'],
       [1, 'The ferry leaves the harbour every hour on the hour, except at noon, when it leaves the hour.'],
       [1, 'Volunteers planted four hundred trees along the river on Saturday, and by Sunday most of the trees had volunteered.'],
+      [1, 'Mix the paint thoroughly before use and apply two thin coats with a soft brush, allowing each coat to dry the brush.'],
+      [1, 'The apartment has two bedrooms, a small balcony, and a kitchen that was recently renovated by the balcony.'],
+      [1, 'Tickets are available at the door or online, and children under five go free, along with the door.'],
       [2, 'The bridge was closed on Monday after engineers found cracks in two of its supports. The city said it would reopen in the spring, or possibly the year before.'],
       [2, 'I have been using this phone for about a month now and the battery is great, but the battery is not great.'],
       [2, 'Scientists have discovered a new species of frog in the rainforest. It is about the size of a thumbnail and is believed to be the largest frog in the world.'],
@@ -85,6 +90,8 @@
       [2, 'The company apologised for the delay and said the missing parts would arrive next week, along with the delay.'],
       [2, 'Firefighters rescued a kitten from a drainpipe on Friday. She is in good health and has been named after the drainpipe, which is also in good health.'],
       [2, 'The mountain is best climbed in late summer, when the snow has melted, the paths are dry, and the mountain is lower.'],
+      [2, 'The orchestra will perform two concerts this weekend, one on Saturday evening and one on Saturday evening.'],
+      [2, 'Local fishermen say the catch has been unusually good this year, though nobody can agree on what they caught.'],
       [3, 'The quarterly report shows strong growth in every region except the regions where growth was not strong.'],
       [3, 'Our customer service team is available twenty-four hours a day, five days a week.'],
       [3, 'After three days of talks, both sides agreed to keep talking about whether to continue the talks.'],
@@ -98,26 +105,24 @@
       [3, 'The new bakery on the corner opens at six, and by seven the queue is longer than the street it is standing in.'],
       [3, 'Mix two parts sand with one part cement, add the water slowly, and stop when the mixture is the same colour as the wall.'],
       [3, 'The plane landed safely after a short delay, which the captain blamed on the weather and the weather blamed on the plane.'],
-      [3, 'Visitors are asked to keep to the marked paths, to take their litter home, and to leave the wildflowers where they found the visitors.'],
-      [3, 'The shop will be closed for stocktaking on the first Monday of every month, and on the second Monday for the stock.'],
-      [3, 'Our survey of five hundred commuters found that most of them would rather walk, if walking were faster than the train.'],
-      [3, 'The recipe serves four, or two if they are hungry, or six if one of them made the recipe.']
+      [3, 'The old mill has been turned into a museum about the old mill, which is open on weekends and closed on the mill.'],
+      [3, 'He spent forty years at the same company and retired in March, though he still comes in on Tuesdays to retire.'],
+      [3, 'The shop sells only umbrellas, and on rainy days the queue goes all the way around the block, holding umbrellas.']
     ],
     // T4 paragraphs (below the paragraph threshold, only after the paragraph moment). [M, text]: M marks moment-grade.
     t4: [
+      [1, 'For years the telescope listened to the same patch of sky and heard nothing but its own hum. Then one night the hum changed. Not much. Just enough that the woman on the night shift put down her coffee, turned the volume up, and did not call anyone until she was sure.'],
+      [1, 'The first time my son said a whole sentence, it was to the dog. He had been collecting words for months, one at a time, like stones in his pockets, and then one morning he simply put them in order and handed them over, and the dog wagged as if it had been waiting all along.'],
       [1, 'I learned to read from the backs of cereal boxes. Every morning there was a different one, and every morning I understood a little more of it, until one day I read the whole side without stopping and looked up, and my mother was watching me from the doorway as if I had just come back from somewhere far away.'],
       [1, 'When the power went out, my daughter asked why the house had gone so quiet. I had never noticed the hum until it stopped: the fridge, the boiler, the small lights on the chargers. We sat in the dark and listened to the rain, and she said it sounded like the house was thinking.'],
       [1, 'The lighthouse had been dark for eleven years when Mara climbed its stairs again. The lens was still there, wrapped in a canvas sheet her father had tied with fishing line. She cut the knots one by one, and when the cloth fell away, the glass caught the last of the evening and threw it, faintly, across the water.'],
       [1, 'The last thing my grandfather built was a clock with no hands. He said the hands were the only part of a clock that ever lied, and that if you listened to the ticking long enough you would know what time it was anyway. It sits on my desk now. Some nights I still listen.'],
       [1, 'My grandmother kept every letter she ever received in a biscuit tin under her bed. When we opened it after the funeral, we found she had also kept copies of her replies, written in pencil on the backs of envelopes, so that she would always remember exactly what she had promised.'],
-      [1, 'The flood came up the valley in the night. By morning the water stood level with the second step of the church, and the whole village climbed the hill to watch it, quietly, the way you watch something you were told about for years and never quite believed.'],
-      [1, 'He measured everything twice before he cut it, even when he was sure. Especially when he was sure, he said. Being sure was when you stopped looking, and the wood never forgave you for that.'],
       [1, 'At the observatory they still keep the old glass plates, thousands of them, each one a photograph of the night sky taken a century ago. Every so often somebody finds a star on a plate that is not there anymore.'],
-      [1, 'For the first year she only repeated what she heard: the radio, the kettle, her brother calling the dog. Then one morning she said something nobody had ever said to her, a whole sentence of her own, and the kitchen went quiet, because all of us understood at once that she had been listening the entire time.'],
-      [1, 'The night operator at the old telephone exchange said you could tell a call was real before anyone spoke. There was a different kind of silence on the line, she said. A silence with someone in it.'],
-      [1, 'My father taught me to read the tide tables before I could read anything else: numbers in columns, each one a promise the sea had already made. I live inland now, and I still check them, just to know what the water is doing without me.'],
+      [1, 'He measured everything twice before he cut it, even when he was sure. Especially when he was sure, he said. Being sure was when you stopped looking, and the wood never forgave you for that.'],
       [0, 'Sourdough starter is just flour and water left long enough for wild yeast to move in. Feed it every day and it becomes predictable: it rises, peaks, and falls on a schedule you can learn. Most failed loaves are not bad recipes. They are bakers who did not wait for the peak.'],
       [0, 'The committee met for six hours and agreed on nothing except the date of the next meeting. Outside, the river kept rising. By the time the vote was taken, three members had to be reached by phone from the second floor of the library, where the water had not yet arrived.'],
+      [0, 'The flood came up the valley in the night. By morning the water stood level with the second step of the church, and the whole village climbed the hill to watch it, quietly, the way you watch something you were told about for years and never quite believed.'],
       [0, 'The ferry stopped running in October, so the island’s mail came by kayak. Every Tuesday the postmaster paddled out with a dry bag of letters and came back with a list of what everyone needed from the mainland.'],
       [0, 'Every spring the orchard flooded for a week, and the trees did not seem to mind. The bees waited on the fence posts until the water went down, then went back to work as if nothing had happened.'],
       [0, 'To stop a door from squeaking, lift it off its hinges and rub a bar of soap along the pins. If it still squeaks after that, the problem is the frame, not the door.'],
@@ -136,7 +141,9 @@
       [0, 'The night train still stops at the village, though only two people get on most weeks. The conductor knows them both by name, and in winter he keeps the heating on in the first carriage, just in case.'],
       [0, 'She kept a notebook of things she overheard on buses: half sentences, the end of an argument, a name. She said she was not collecting the words. She was collecting the moments when a stranger said something true.'],
       [0, 'The well behind the farmhouse is older than the house. When the drought came, every tap in the valley ran dry before it did, and all summer the neighbours came at dawn with buckets, and nobody had to ask.'],
-      [0, 'An old carpenter sweeps his workshop at the end of the day and saves the sawdust in a sack by the door. In winter it goes into the stove, so the wood he worked all year keeps him warm.']
+      [0, 'An old carpenter sweeps his workshop at the end of the day and saves the sawdust in a sack by the door. In winter it goes into the stove, so the wood he worked all year keeps him warm.'],
+      [0, 'The piano tuner arrives once a year, always in March, and always asks for a glass of water before he starts. He plays nothing anyone would recognise, only the same few notes over and over, until the room itself seems to agree with them.'],
+      [0, 'When the old bridge was finally taken down, the river ran faster for a week, as if it had been holding its breath. Then it found its new shape and slowed again, and by summer the children were swimming where the pillars used to stand.']
     ],
     arithmetic: [
       'Q: What is 48 plus 76? A: 124', 'Q: What is 37 plus 59? A: 96', 'Q: What is 83 plus 18? A: 101',
@@ -166,7 +173,7 @@
     // one flat pool of web chrome: louder by amount, never by catalogue
     fray: [
       'Read more »', 'Share this:', 'Posted in Uncategorized', 'Tags: news, local', 'Leave a comment', '« Previous',
-      'Subscribe to our newsletter', 'Powered by WordPress', 'Home | Login', 'Accept cookies'
+      'Subscribe to our newsletter', 'Powered by WordPress', 'Home | Login', 'Accept cookies', 'Skip to content', 'Related posts:'
     ],
     // past the wall: crawl strings, joined into a whole line with nothing of the model's own left
     crawl: [
@@ -182,7 +189,8 @@
       'By continuing to browse you agree to our use of cookies. OK',
       'Privacy Policy | Terms of Use | Cookie Policy | Contact Us',
       'Sign up for our newsletter and never miss a deal!',
-      'Please enable cookies to continue.'
+      'Please enable JavaScript to continue.',
+      'You may also like: You may also like:'
     ]
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = C; else root.FRONTIER_CORPUS = C;

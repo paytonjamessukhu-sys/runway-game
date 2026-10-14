@@ -1,158 +1,100 @@
-/* FRONTIER world: the fourteen dated factual headlines, the nine fictional researchers, the fictional labs,
-   and every letter and note string, as written in spec/sim1.json.
-   Real companies, products and people appear ONLY in the dated headlines below, as plain fact.
-   Meridian, Halcyon, Kestrel, Northwind, every investor and broker, and all nine researchers are fictional. */
+/* FRONTIER control room: the world. Real 2020 history appears ONLY in W.news, as dated fact.
+   Every lab rival, investor, broker, cloud (Meridian) and researcher is fictional. */
 (function (root) {
   var W = {};
 
-  // [ISO date, headline, pencil phrase on the ruler, effect id]
+  // [ISO date, headline, effect shown under it (the game rule tied to the date, or '')]
   W.news = [
-    ['2020-01-23', 'OpenAI researchers publish ‘Scaling Laws for Neural Language Models’: test loss falls as a smooth power law in model size, data and compute.', 'the line', 'line'],
-    ['2020-01-28', 'Google unveils Meena, a 2.6-billion-parameter chatbot.', 'Meena', ''],
-    ['2020-02-10', 'Microsoft announces Turing-NLG, a 17-billion-parameter language model and the largest published to date, and open-sources DeepSpeed with ZeRO.', 'Turing-NLG', ''],
-    ['2020-03-11', 'The WHO declares COVID-19 a pandemic.', 'pandemic', ''],
-    ['2020-03-16', 'The Dow falls 12.9% in a day, its worst day since 1987, and six Bay Area counties order residents to shelter in place.', 'offices close', 'crash'],
-    ['2020-05-14', 'NVIDIA announces the A100 GPU and the DGX A100 at $199,000.', 'A100', 'a100'],
-    ['2020-05-19', 'Microsoft says it has built a supercomputer for OpenAI with 285,000 CPU cores and 10,000 GPUs.', '10,000 GPUs', ''],
-    ['2020-05-28', 'OpenAI publishes the GPT-3 paper: 175 billion parameters, 300 billion tokens.', 'GPT-3', 'gpt3'],
-    ['2020-06-11', 'OpenAI opens its API to developers in private beta.', 'API', 'api'],
-    ['2020-06-30', 'Google researchers publish GShard, a 600-billion-parameter mixture-of-experts translation model.', 'GShard', ''],
-    ['2020-07-07', 'Google Cloud announces A2 virtual machines with NVIDIA A100 GPUs, in alpha.', 'A2 alpha', ''],
-    ['2020-09-22', 'Microsoft announces an exclusive license to GPT-3.', 'exclusive', ''],
-    ['2020-11-02', 'AWS launches EC2 P4d instances with eight A100 GPUs each.', 'P4d', ''],
-    ['2020-11-30', 'DeepMind’s AlphaFold 2 tops the CASP14 protein-structure assessment.', 'AlphaFold', '']
+    ['2020-01-23', 'OpenAI researchers publish "Scaling Laws for Neural Language Models": test loss falls as a smooth power law in model size, data and compute.', 'The line on your chart. Investors now count dots that land on it.'],
+    ['2020-01-28', 'Google unveils Meena, a 2.6-billion-parameter chatbot.', ''],
+    ['2020-02-10', 'Microsoft announces Turing-NLG, a 17-billion-parameter language model and the largest published to date, and open-sources DeepSpeed with ZeRO.', ''],
+    ['2020-03-11', 'The WHO declares COVID-19 a pandemic.', ''],
+    ['2020-03-16', 'The Dow falls 12.9% in a day, its worst day since 1987, and six Bay Area counties order residents to shelter in place.', 'Venture market closed until 15 Jun. Term sheets in diligence are withdrawn. Hardware orders take 4 weeks longer until 30 Jun; hangs cost a day more without an infra person.'],
+    ['2020-05-14', 'NVIDIA announces the A100 GPU and the DGX A100 at $199,000.', 'DGX A100 now on the market: 2.5x a V100 per card.'],
+    ['2020-05-19', 'Microsoft says it has built a supercomputer for OpenAI with 285,000 CPU cores and 10,000 GPUs.', ''],
+    ['2020-05-28', 'OpenAI publishes the GPT-3 paper: 175 billion parameters, 300 billion tokens, about 3.14e23 training FLOPs.', 'The frontier is now 3.14e23. Staying relevant needs a published result of 3.1e21 or more. Rental capacity halves; hardware lead times +4 weeks and prices +15%.'],
+    ['2020-06-11', 'OpenAI opens its API to developers in private beta.', 'Shipping an API is now possible. Cloud rent rises to $3.50; capacity falls to 64; some renewals are refused. Meridian starts queueing.'],
+    ['2020-06-30', 'Google researchers publish GShard, a 600-billion-parameter mixture-of-experts translation model.', 'COVID order delays and hang penalties end.'],
+    ['2020-07-07', 'Google Cloud announces A2 virtual machines with NVIDIA A100 GPUs, in alpha.', ''],
+    ['2020-09-22', 'Microsoft announces an exclusive license to GPT-3.', ''],
+    ['2020-11-02', 'AWS launches EC2 P4d instances with eight A100 GPUs each.', ''],
+    ['2020-11-30', 'DeepMind’s AlphaFold 2 tops the CASP14 protein-structure assessment.', '']
+  ];
+  // non-headline market notices (fictional brokers and investors), on their dates
+  W.market = [
+    ['2020-02-01', 'Broker capacity rises: up to 128 rented V100s.'],
+    ['2020-03-01', 'Broker capacity rises: up to 256 rented V100s.'],
+    ['2020-04-01', 'Cloud list price rises to $3.06 per V100-hour on renewals and new rentals.'],
+    ['2020-06-15', 'The venture market reopens, at post-GPT-3 prices.'],
+    ['2020-09-01', 'Autumn: broker capacity back to 128 V100s at $3.30.']
   ];
 
-  // The slice-one roster. Every person is fictional. Salaries are fully loaded, per month.
+  // The cast. Every person is fictional. Salaries are fully loaded, per month.
+  // role: data | systems | scaling | infra | evals | optim
   W.people = {
-    priya: { name: 'Priya Raman', first: 'Priya', short: 'Raman', role: 'data', salary: 22000, ego: 3, status: ['reading samples'] },
-    dev: { name: 'Dev Okafor', first: 'Dev', short: 'Okafor', role: 'systems', salary: 30000, ego: 3, status: ['parallelism holds'],
+    priya: { name: 'Priya Raman', first: 'Priya', role: 'data', skill: 3, salary: 22000, ego: 3, she: true,
+      pitch: 'Data. Crawl filtering and dedup.' },
+    dev: { name: 'Dev Okafor', first: 'Dev', role: 'systems', skill: 3, salary: 30000, ego: 3, from: '2020-01-11',
       pitch: 'Your models stop at a billion parameters because they have to fit on one card. I can split them across cards.' },
-    ayaan: { name: 'Ayaan Mehta', first: 'Ayaan', short: 'Mehta', role: 'believer', salary: 18000, salaryLate: 55000, ego: 4, status: ['it keeps going'],
+    ayaan: { name: 'Ayaan Mehta', first: 'Ayaan', role: 'scaling', skill: 3, salary: 18000, salaryLate: 55000, lateFrom: '2020-05-28', ego: 4, from: '2020-01-21',
       pitch: 'I read a preprint. It keeps going. Let me prove it.' },
-    tom: { name: 'Tomasz Wójcik', first: 'Tom', short: 'Wójcik', role: 'infra', salary: 24000, ego: 2, status: ['watching the cluster'],
+    tom: { name: 'Tomasz Wójcik', first: 'Tom', role: 'infra', skill: 3, salary: 24000, ego: 2, from: '2020-02-11',
       pitch: 'Your runs die at 3 AM and nobody notices till breakfast. I’ll fix that.' },
-    lena: { name: 'Lena Hoffmann', first: 'Lena', short: 'Hoffmann', role: 'evals', salary: 24000, ego: 2, status: ['evals'],
+    lena: { name: 'Lena Hoffmann', first: 'Lena', role: 'evals', skill: 3, salary: 24000, ego: 2, she: true, from: '2020-03-11',
       pitch: 'Before anything leaves this building, I try to break it.' },
-    sunhee: { name: 'Sun-hee Park', first: 'Sun-hee', short: 'Park', role: 'optimization', salary: 32000, ego: 4, status: ['schedule’s in'],
-      pitch: 'I read your paper. Your schedule is wrong. Every run can land lower.' },
-    rafael: { name: 'Rafael Costa', first: 'Rafael', short: 'Costa', role: 'systems', salary: 45000, ego: 4, status: ['pipelines'],
-      pitch: 'Heard you lost your parallelism person. I cost more.' },
-    ines: { name: 'Ines Duarte', first: 'Ines', short: 'Duarte', role: 'data', salary: 26000, ego: 2, status: ['dedup queue'],
-      pitch: 'Priya’s dedup runs on one machine. Give me a cluster and it takes twelve days.' },
-    kofi: { name: 'Kofi Mensah', first: 'Kofi', short: 'Mensah', role: 'infra', salary: 26000, ego: 2, status: ['restarts armed'],
+    rafael: { name: 'Rafael Costa', first: 'Rafael', role: 'systems', skill: 4, salary: 45000, ego: 4, from: '2020-03-11',
+      pitch: 'Pipeline parallelism. I split a model across sixty-four cards. I cost more.' },
+    sunhee: { name: 'Sun-hee Park', first: 'Sun-hee', role: 'optim', skill: 4, salary: 32000, ego: 4, she: true, from: '2020-04-11', needRep: 30,
+      pitch: 'Your learning-rate schedule is wrong. Every run can land lower.' },
+    ines: { name: 'Ines Duarte', first: 'Ines', role: 'data', skill: 4, salary: 26000, ego: 2, she: true, from: '2020-06-11',
+      pitch: 'Dedup on a cluster instead of one machine. Filter jobs get much faster.' },
+    kofi: { name: 'Kofi Mensah', first: 'Kofi', role: 'infra', skill: 4, salary: 26000, ego: 2, from: '2020-08-01',
       pitch: 'At a thousand cards something breaks every night. I write the thing that restarts it.' }
   };
+  W.roles = { data: 'Data', systems: 'Systems', scaling: 'Scaling', infra: 'Infra', evals: 'Evals & red-team', optim: 'Optimization' };
 
-  // Letters. {x} fields are filled live by the game.
-  W.letters = {
-    rent: { from: 'BROKER', body: '{n} V100s on demand, live tomorrow. ${price} an hour for 90 days.', pass: 'gone by the {gone}' },
-    rentGrey: 'Meridian: exclusive',
-    spot: { from: 'SECOND-HAND BROKER', body: 'Somebody’s cancelled reservation: {n} V100s for {days} days, live tomorrow. ${price} an hour.', pass: 'gone by the {gone}' },
-    buyV: { from: 'BROKER', body: '64 V100s to own: eight servers with InfiniBand. {price}. Delivery in {weeks} weeks.', pass: 'gone' },
-    buyA: { from: 'BROKER', body: 'Eight DGX A100s: 64 A100s. {price}. Delivery in {weeks} weeks.', pass: 'gone' },
-    renew: { from: 'BROKER', body: 'Your {n} V100s go back on {date}. Renew for 90 days at ${price}?', take: 'keep them to {to}', pass: 'they go back on {date}' },
-    renewNo: { from: 'BROKER', body: 'Capacity unavailable. Your {n} V100s go back on {date}.', grey: 'Capacity unavailable.', pass: 'they go back on {date}' },
-    rentOut: { from: 'BROKER', body: 'We’ll pay $1.90 an hour for half your owned cards. 30 days. Cash now.', pass: 'no cash' },
-    hirePass: { kestrel: 'goes to Kestrel', halcyon: 'goes to Halcyon' },
-    acqui: { from: 'HALCYON', body: 'We’ll buy the team: $4M a head, {total} in all. Your people get rich. FRONTIER disappears.', take: 'it’s over, and everyone is rich', pass: 'keep going', forced: 'The board has accepted.' },
-    termA: { from: 'LEAD INVESTOR', body: 'Series A: {cash} at a {post} post. Two dots, one line. Sign by the {by}.', pass: 'gone; next time they want a dot three times further out' },
-    termB: { from: 'LEAD INVESTOR', body: 'Series B: {cash} at a {post} post. Sign by the {by}.', pass: 'gone' },
-    meridian: { from: 'MERIDIAN CLOUD', body: '$50M in compute credits: {n} V100s reserved for you, ready in {weeks} weeks. Our cloud only. We see every checkpoint first.', take: 'CARDS +{n} in pencil, live {live} · no other cloud · no open weights', pass: 'we’ll talk again after 15 June' },
-    meridian2: { from: 'MERIDIAN CLOUD', body: '{n} V100s, ready in {weeks} weeks, for 10% of FRONTIER.', pass: 'gone' },
-    priority: { from: 'MERIDIAN CLOUD', body: 'Our queue puts labs that are behind at the back. Stay at the front for the rest of the year: {price} a month, from your bank.', take: 'all {n} cards every month', pass: 'the queue decides on each 1st' },
-    poach: { body: '{rival} offers {first} double. Counter with equity?', bodyRaise: '{rival} offers {first} double. Counter with equity and a raise?', pass: '{he} walks to {rival}' },
-    open: { from: 'THE FIELD', body: 'Grad students want the weights of your published model.', take: 'recruits come running · rivals fine-tune it within a week', pass: 'they build on Northwind’s instead', greyMer: 'Meridian: no.', greyBoard: 'The board: no.' },
-    priyaDemand: { body: 'I want first author on our next paper, or I walk.', take: 'your next clean landing is published at once, with her name on it', pass: 'she walks' },
-    devDemand: { body: 'One percent, or Halcyon gets my parallelism code.', take: 'STAKE −1 point', pass: 'he walks' },
-    ayaanDemand: { body: 'Whole cluster on one run, all the way to the stop.', take: 'next run goes to the stop: {days} days, lands {land} · MONTHS {m0} → {m1}', pass: 'his name thins' },
-    tomDemand: { body: 'I need a week off. I’ve been up every night.', take: '7 days without his restarts', pass: 'his name thins' },
-    sunheeDemand: { body: 'I want to publish the schedule trick.', take: 'she stays, and every rival lands 2.5% lower in 30 days', pass: 'she walks to Halcyon' },
-    december: { body: '{a}, {b} and I want to start something safer. We’re telling you first.', take: 'let them go, with your blessing', pass: 'fight to keep them' }
-  };
-  W.rafaelNoDev = 'Heard you need someone who can split a model across cards. I cost more.';
-
-  // First-time lessons, written once per sitting, in pencil, the first time each verb matters. No screens, no cards.
-  W.teach = {
-    asleep: 'touch the paper to begin',
-    months: 'MONTHS: how long the money lasts',
-    cards: 'CARDS: our GPUs',
-    goal: 'reach 31 DEC without going broke, being bought or being forgotten',
-    flick: 'flick up to take · down to let it pass',
-    tapLetter: 'flick it: up takes, down lets it pass',
-    drag: 'drag me → then let go to train',
-    tap: 'tap the paper to read what it says',
-    ring: 'reach this: the biggest run of 2020',
-    seriesA: 'Series A: a dot here, one 10× back',
-    wake: 'press a name to wake them',
-    abort: 'drag me home to stop it',
-    vault: 'leave it, and it stays in the vault',
-    redteam: 'press my name: I’ll red-team it · {days} days',
-    filterCost: '→ press my name: {cost}',
-    filterCostInes: '→ press my name: {days} days, {cost}'
+  // what each role changes, written on the card (filled live with the person's numbers)
+  W.effects = {
+    data: 'Filter jobs: {days} days each, clean tokens x1.86. Reviews every landing for junk, which narrows the wall estimate.',
+    systems: 'With the team, splits one model across up to {split} cards: memory limit {mem} parameters on V100s.',
+    scaling: 'Measured horizon 100x your farthest clean dot (not 10x). Blind runs past it go wrong {blind}% of the time, not 30%.',
+    infra: 'Hangs x{mult} as often, and each costs ~{lost} h instead of ~19 h.',
+    evals: 'Catches leaked test sets at every landing. Red-teams a release in {rt} days: no scandal risk.',
+    optim: '{state} every run lands 2.5% under the line (worth ~1.7x compute). Halves NaNs.'
   };
 
-  // What the sheet says when something decides your year. Plain sentences, in pencil.
-  W.warn = {
-    silent: 'Nobody wrote this month. If nobody is reading us by {next}, we’re forgotten. {fix}',
-    silentFixPub: 'A published dot past {need} would do it.',
-    silentFixScandal: 'The scandal is why.',
-    gpt3Bar: 'After this, nobody reads a lab with less than {need} published.',
-    scandal: 'Scandal: {what}. No letters next month, and no term sheets for 90 days.',
-    queueSoon: 'Meridian’s queue on the 1st: we’re behind, so we lose {n} cards',
-    queueCut: 'queue: {n} cards held back',
-    wontLand: 'won’t land by 31 DEC',
-    stopped: 'stopped. {pct}% of it, and nothing proved',
-    moved: 'moved it to the {pool}',
-    janWall: 'same wall every time. we need someone who can split it.',
-    contamRisk: 'unfiltered crawl. the test set might be in it.',
-    firstAuthor: 'publishing it, Raman et al.'
+  W.decisions = {
+    acqui: { from: 'HALCYON', title: 'Halcyon wants to buy the team',
+      body: 'We’ll buy the team: $4M a head, {total} in all. Your people get rich. FRONTIER disappears.' },
+    strategic: { from: 'HALCYON', title: 'Halcyon makes an offer for the company',
+      body: 'Your {C} result got our attention. {price} for all of FRONTIER, cash. Your people keep their jobs, under us.' },
+    boardNote: 'You own {stake}: below 50%, the board decides. It has accepted.',
+    termA: { from: 'LEAD INVESTOR (FICTIONAL)', title: 'Series A term sheet', body: 'Two dots, one line. {cash} at a {post} post.' },
+    termB: { from: 'GROWTH INVESTOR (FICTIONAL)', title: 'Series B term sheet', body: 'A dot past 3e22 after the API boom. {cash} at a {post} post.' },
+    bridge: { from: 'ANGEL SYNDICATE (FICTIONAL)', title: 'Bridge note', body: '{cash} now for {pct} of the company. No dots required.' },
+    meridian: { from: 'MERIDIAN CLOUD (FICTIONAL)', title: 'Meridian: $50M in compute credits',
+      body: '{n} V100s reserved for you, ready in {weeks} weeks, paid from $50M of credits, never from your bank. Our cloud only. We see every checkpoint 7 days before anyone else, and we decide about open weights.' },
+    meridian2: { from: 'MERIDIAN CLOUD (FICTIONAL)', title: 'Meridian, second offer', body: '{n} V100s, ready in {weeks} weeks, for 10% of FRONTIER. Same terms: our cloud only, first look.' },
+    poach: { title: '{rival} is poaching {first}', body: '{rival} offered {first} double: {offer} a month. {He} has {mood} morale.' },
+    court: { title: '{rival} is courting {first}', body: '{first} has been on your board for {days} days. {rival} made {him} an offer. Hire {him} now at {salary} a month, or {he} goes.' },
+    demandPriya: { title: 'Priya wants first author', body: '“I want first author on our next paper, or I walk.”' },
+    demandDev: { title: 'Dev wants equity', body: '“One percent, or Halcyon gets my parallelism code.”' },
+    demandAyaan: { title: 'Ayaan wants the market rate', body: '“I called it. GPT-3 is exactly where I said. Pay me what the market pays: $55,000 a month.”' },
+    demandTom: { title: 'Tom needs a week off', body: '“I’ve been up every night. I need a week off.”' },
+    demandSunhee: { title: 'Sun-hee wants to publish the schedule trick', body: '“The schedule trick is mine. I want to publish it.”' },
+    scandal: { title: 'Scandal: {what}', body: '{detail}' },
+    open: { from: 'THE FIELD', title: 'Open the weights?', body: 'Grad students want the weights of your published {C} model.' },
+    december: { from: 'PRIYA RAMAN', title: 'Priya is leaving to start something safer', body: '“{names} and I want to start something safer. We’re telling you first.”' },
+    landing: { title: 'Run {id} landed' }
+  };
+  W.scandals = {
+    leak: ['{cap} memorized: leaked test set', 'Reviewers found your {cap} test set inside your training crawl. The headline result was the model reciting answers.'],
+    repro: ['reviewers: results don’t reproduce', 'An outside group could not reproduce your paper’s headline number.'],
+    ship: ['screenshot: the API says something vile', 'A developer posted a screenshot of your API saying something vile. It went everywhere.']
   };
 
-  // One or two plain sentences on the sheet at every ending, before the next year starts.
   W.ends = {
-    head: { bankrupt: 'BANKRUPT', bought: 'BOUGHT', forgotten: 'FORGOTTEN', survived: 'SURVIVED' },
-    bankrupt: 'Payroll on {date} needed {pay} and the bank had {bank}. The lab was spending {burn} a month{rent}.',
-    bankruptRent: ', {rent} of it on rented cards',
-    bought: 'With {months} months of money left you sold the team to Halcyon for {price}. Your people are rich; FRONTIER is gone.',
-    boughtBoard: 'Your stake had fallen below half, so the board sold the team to Halcyon for {price}. Your people are rich; FRONTIER is gone.',
-    forgotten: 'Nobody wrote in {m1} or {m2}. The world writes only to labs with a published dot of at least {need}, a hundredth of the frontier; your best was {pub}.',
-    forgottenNone: 'Nobody wrote in {m1} or {m2}. The world writes only to labs with a published dot of at least {need}, a hundredth of the frontier; you had published nothing.',
-    forgottenScandal: 'Nobody wrote in {m1} or {m2}: a scandal ({what}) silenced one month, and with nothing published past {need}, the next stayed quiet too.',
-    survived: 'Survived: the lab is still standing at New Year, with {months} months of money and {people}.',
-    gap: 'Your farthest clean dot was {far}, {ratio}× short of GPT-3 ({gpt3}).',
-    gapNone: 'You never landed a clean dot.',
-    gapMiracle: 'Your dot sits on GPT-3’s point: you matched the frontier.',
-    gapNear: 'Your farthest clean dot was {far}, within {pct} of GPT-3.',
-    again: 'tap for a fresh 1 January'
-  };
-
-  W.scandalNotes = {
-    arithmetic: 'arithmetic memorized: leaked test set',
-    translation: 'translation memorized: leaked test set',
-    code: 'code memorized: leaked test set',
-    generic: 'reviewers: results don’t reproduce',
-    ship: 'screenshot: says something vile'
-  };
-  W.poolNames = { meridian: 'Meridian cloud', broker: 'broker’s cloud', office: 'office racks', a100: 'A100 racks' };
-
-  // What your people write on the paper. No other text ever appears on it.
-  W.notes = {
-    fray: 'SEO spam. Give me three weeks.',
-    fray3: 'junk in the middle. Three weeks?',
-    fray12: 'reads fine to me',
-    memStop: 'won’t fit on one card',
-    horizonStop: 'we haven’t measured past here',
-    devSplit: 'split across 8',
-    ayaanGoing: 'it keeps going',
-    toldYou: 'told you',
-    tomHang: 'my fault',
-    leak: 'leaked. the test set is in our crawl.',
-    hintPublish: 'flick it up and the world reads it',
-    hintShip: 'or → and we sell it',
-    evals: 'evals: results on the 3rd',
-    queue: 'queue',
-    withMeridian: 'with Meridian'
+    bankrupt: 'BANKRUPT', acquired: 'ACQUIRED', forgotten: 'FORGOTTEN', survived: 'SURVIVED'
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = W; else root.FRONTIER_WORLD = W;

@@ -1,188 +1,154 @@
-/* FRONTIER, the lab sim. Every tunable number and rule switch lives in this one object so balance can be patched.
-   Source of truth: spec/sim1.json, amended by the playtest panel (council/sim-panel.md). Where the panel overrode the
-   spec (reading time, honest strip, abortable runs, explained endings, Karpathy's physics), the comment says so. */
+/* FRONTIER control room, build A ("the strategist").
+   Every tunable number and rule lives in this one object. The engine, the screen and the balance sim
+   (test/balance.mjs) all read it, so a change here changes the game and the sim together.
+   Sources: spec/dashboard1.md (the law), spec/sim1.json (2020 facts, cast, rivals, Meridian, rounds), and the
+   playtest panel (council/sim-panel.md). Dates are ISO strings; the engine turns them into day numbers
+   (day 0 = Wed 1 Jan 2020, day 365 = Thu 31 Dec 2020). */
 (function (root) {
   var CFG = {
-    /* ---------- the clock ---------- */
     year: 2020,
-    endDay: 365,                 // day 365 = Thu 31 Dec 2020; the year ends at 23:59 on it
-    pourDaysPerSec: 1.0,         // pour and hang: one game day per real second
-    idleDaysPerSec: 3.0,         // idle with nothing to read: three game days per second
-    idleLetterDaysPerSec: 1.0,   // panel: idle while a letter is on screen runs at the pour rate, so reading costs nothing extra
-    minPourSec: 4.0,             // a pour lasts max(4 s, T s), re-checked whenever cards change mid-run
-    minPourRepeatSec: 1.5, landRepeatSec: 0.9, repeatAfter: 2,   // panel (Madigan): the third identical dot pours and lands fast
-    pourLongAfterSec: 75,        // panel: a long run speeds up so one pour never takes much more than ~75 s ...
-    pourMaxRate: 2.5,            // ... but never faster than 2.5 game days a second
-    landCleanSec: 2.2, landWallSec: 3.1, momentSec: 3.5, landAbortSec: 1.2,
-    beatGpt3Sec: 1.1,            // 28 May: the GPT-3 headline settles first, then the point presses in
-    kbdFreezeSec: 2.5,           // arrow keys on the nib hold the clock like a thumb does, for this long after the last key
-    endHoldMinSec: 3.0,          // panel: the end frame explains itself and waits for a tap (after at least 3 s) ...
-    endAutoSec: 40,              // ... or feeds a fresh year on its own after 40 s
-    pauseWhenHidden: true,
+    yearDays: 366,                 // 2020 is a leap year; the year ends at the close of day 365
+    daysPerSec: 1,                 // 1x = one game day per real second
+    speeds: [1, 2, 4],
+    step: 0.125,                   // engine sub-step in game days (runs, hangs and money move continuously)
 
     /* ---------- money ---------- */
-    seedCash: 6000000, seedPost: 30000000, stakeStart: 0.80, dgx1: 149000,
-    base: 40000,                 // you, ops, the office, per month
-    upkeepPerOwned: 150,         // per owned card, on every 1st
-    acquiPerHead: 4000000, acquiMonths: 3,
-    monthsCap: 999,              // panel: show the real figure above 99, so a $1.9M rack never reads 'MONTHS 99 → 99'
+    seedCash: 6000000, seedPost: 30000000, stakeStart: 0.80,
+    dgx1Start: 149000,             // the DGX-1 you already bought from the seed
+    base: 40000,                   // you, ops, the office: per month, paid on the 1st
+    upkeepPerCard: 150,            // power and colocation per owned card, per month
+    daysPerMonth: 30.4,
 
-    /* ---------- cards ---------- */
-    flops: { v100: 3.456e18, a100: 8.64e18 },  // per card-day; an A100 counts as 2.5 V100s
-    v100eq: { v100: 1, a100: 2.5 },
-    startOwned: 8,               // the DGX-1
-    rentTermDays: 90,
-    rentPrice: [[0, 2.48], [91, 3.06]],         // $/hr by day: GCP list to 31 Mar, AWS list from 1 Apr
-    renewPriceAfterApi: 3.50, renewRefuseShare: 0.5, renewWindow: 30,
-    rentSizes: { 0: 64, 1: 128, 2: 256, 3: 256, 4: 256, 5: 256 }, // by month index
-    rentUntilDay: 161,           // broker rent letters stop after 10 Jun
-    brokerGapDays: 14,
-    buyV100: { n: 64, price: 800000, leadDays: 56 },
-    buyA100: { n: 64, price: 1592000, leadDays: 112, fromDay: 134 },  // gate step 3: DGX A100 12 -> 16 weeks
-    covidOrderFrom: 60, covidOrderTo: 181, covidOrderExtra: 42,       // gate step 3: orders 1 Mar to 30 Jun +4 -> +6 weeks
-    buyMustArriveBy: 335,        // panel: no buy letter for cards that cannot arrive before 1 Dec
-    apiDay: 162,                 // 11 Jun
-    afterApiPriceMult: 1.2, afterApiLeadExtra: 56,
-    rentOutPerHour: 1.90, rentOutDays: 30, rentOutMonths: 6, rentOutMinOwned: 16,
+    /* ---------- cards and throughput ---------- */
+    // V100: 125 TFLOPS tensor peak at 32% real utilisation = 40 TFLOPS = 3.456e18 FLOPs per card-day.
+    // A100: 312 TFLOPS peak at the same utilisation = 8.64e18 (2.5 V100s).
+    card: {
+      v100: { peak: 125, flops: 3.456e18, mem: 1.0e9, eq: 1, label: 'V100' },
+      a100: { peak: 312, flops: 8.64e18, mem: 1.25e9, eq: 2.5, label: 'A100' }
+    },
+    mfu: 0.32,
+    // data-parallel efficiency falls as one synchronous run spreads over more cards
+    scaleEffFrom: 64, scaleEffPerDoubling: 0.03, scaleEffMin: 0.75,
+    startOwnedV100: 8,
+    pools: ['office', 'a100', 'cloud', 'meridian'],
+    poolNames: { office: 'Office V100s', a100: 'Office A100s', cloud: 'Rented V100s', meridian: 'Meridian V100s' },
+
+    /* ---------- the GPU market ---------- */
+    // rent V100s by the month (30-day terms that renew), billed by the hour, live the next day
+    rentBlock: 8, rentTermDays: 30,
+    rentPrice: [['2020-01-01', 2.48], ['2020-04-01', 3.06], ['2020-06-11', 3.50], ['2020-09-01', 3.30]],
+    rentCap: [['2020-01-01', 64], ['2020-02-01', 128], ['2020-03-01', 256], ['2020-05-28', 128], ['2020-06-11', 64], ['2020-09-01', 128]],
+    renewRefuseFrom: '2020-06-11', renewRefuseShare: 0.35,   // after the API boom some renewals are refused
+    buy: {
+      dgx1: { cards: 8, type: 'v100', price: 149000, leadDays: 42, from: '2020-01-01', label: 'DGX-1 (8 V100)' },
+      dgxa100: { cards: 8, type: 'a100', price: 199000, leadDays: 70, from: '2020-05-14', label: 'DGX A100 (8 A100)' }
+    },
+    buyMaxUnits: 64,
+    covidOrderFrom: '2020-03-01', covidOrderTo: '2020-06-30', covidLeadExtra: 28,
+    boomFrom: '2020-05-28', boomLeadExtra: 28, boomPriceMult: 1.15,
+    rentOutPerHour: { v100: 1.90, a100: 3.80 }, rentOutDays: 30,
     servingShare: 1 / 8, servingMin: 8, servingMax: 64,
-    nodeAbove: 128, podAbove: 2048,
-    // Karpathy: one synchronous run trains on one pool. Pools: your office racks (V100s), your A100 racks, the broker's
-    // cloud, Meridian's cloud. A run binds to the biggest pool at the lift and only that pool's cells glow.
-    pools: ['meridian', 'broker', 'a100', 'office'],
-    // after the API headline a second-hand broker sells short V100 blocks at a premium (panel: money must buy something
-    // that lands in time after June). Greyed under Meridian's exclusivity.
-    spot: { fromDay: 166, untilDay: 320, n: 256, price: 4.40, days: 45, gapDays: 30 },
 
-    /* ---------- Meridian ---------- */
-    // gate steps 1, 2 and 4: lead 42 -> 56 days, full queue within 1.5x, allocation 1,024 -> 768 -> 640 (the strategy sim:
-    // at 768 the careful reader reached GPT-3 in 58% of years; at 640, 25%)
-    meridianCredits: 50000000, meridianRate: 2.48, meridianCards: 640, meridianLead: 56, meridianNeedC: 1e21, meridianFromDay: 91,
-    meridianFirstLook: 7, meridianQueueFromDay: 162, meridianQueueFull: 1.5, meridianQueueHalf: 10,  // gate step 2: full within 2x -> 1.5x
-    meridian2FromDay: 166, meridian2Cards: 320, meridian2Stake: 0.9,
-    // panel: keep money pressure after the raises. Meridian sells a place at the front of its queue, paid from the bank.
-    priority: { fromDay: 162, perCardMonth: 4000, fuse: 10 },
-    queueWarnDays: 6,            // a pencil warning by the cluster this many days before a queue cut
+    /* ---------- Meridian (fictional cloud giant) ---------- */
+    meridian: {
+      credits: 50000000, rate: 2.48, cards: 768, leadDays: 56, needC: 1e21, from: '2020-04-01',
+      firstLookDays: 7, queueFrom: '2020-06-11', queueFull: 1.5, queueHalf: 10,
+      second: { from: '2020-06-15', cards: 384, stakeMult: 0.9 },
+      priorityPerCardMonth: 2500     // pay from the bank to stay at the front of the queue
+    },
 
-    /* ---------- raises ---------- */
-    lineFromDay: 22,             // 23 Jan: the line prints
-    crashDay: 75, marketOpenDay: 166, termAfterCrashSlotDay: 172, // 16 Mar closes, 15 Jun opens, the 21 June slot
-    seriesA: { needC: 1e22, decades: 1, decadesTol: 0.98, onLine: 1.015, fromDay: 0, pre: { cash: 30e6, post: 150e6 }, after: { cash: 60e6, post: 450e6 }, passMult: 3 },
-    seriesB: { needC: 3e22, cash: 60e6, post: 600e6, postApi: 900e6 },   // panel: a smaller B keeps money pressure alive after the summer raises
-    counterStake: 0.015, devStake: 0.01, boardBelow: 0.5,
-    counterRaiseAfterGpt3: 0.35, // after 28 May a counter-offer is a raise as well as equity (salary x 1.35)
+    /* ---------- fundraising ---------- */
+    lineDay: '2020-01-23',           // the scaling-laws paper: dots count for investors from today
+    crash: '2020-03-16', marketOpen: '2020-06-15',
+    seriesA: { needC: 1e22, decades: 1, onLine: 1.015, diligenceDays: 10,
+      pre: { cash: 30e6, post: 150e6 }, after: { cash: 60e6, post: 450e6 }, passMult: 3 },
+    seriesB: { needC: 3e22, after: '2020-06-11', diligenceDays: 14, cash: 150e6, post: 1.2e9, postApi: 1.8e9 },
+    bridge: { cash: 4e6, stake: 0.12, crashCash: 2e6, gapDays: 60, minRep: 5 },
+    boardBelow: 0.5,
+    repValue: [0.8, 1.25],           // a round's post-money scales from x0.8 at reputation 0 to x1.25 at 100
 
-    /* ---------- the run ---------- */
-    lineC: 2.68e28, lineAlpha: 0.050, startLoss: 10.825, curveNoise: 0.012,
-    gpt3C: 3.14e23, gpt3Loss: 1.763, miracleTol: 1.005, miracleCTol: 0.97,  // panel: a clean dot within 3% of GPT-3's compute counts
-    gpt3SnapDecades: 0.035,      // the drag mark settles onto GPT-3's point when it is this close (log10)
-    // Karpathy: anchor the fixed 2020 recipe on GPT-3 itself, D = 300B x (C / 3.14e23)^0.27, so 3.14e23 is 175B on 300B
-    tokGPT3: 3.0e11, tokExp: 0.27,
-    memParams: 1e9,              // a 1B-parameter model fits on one 32 GB V100 with Adam; memC is derived from the recipe
-    probeDays: 0.25,
-    horizonMult: 10, horizonFirst: 2.765e20,
-    blindShare: 0.3, blindHi: [0.02, 0.05], blindLo: [0, 0.005],
+    /* ---------- the run: scaling law and loss model ---------- */
+    lineC: 2.68e28, lineAlpha: 0.050,          // Kaplan et al. 2020: L(C) = (2.68e28 / C)^0.050 nats
+    startLoss: 10.825,                         // ln(50,257): a model that knows nothing
+    gpt3: { C: 3.14e23, L: 1.763, N: 175e9, D: 300e9, day: '2020-05-28', tolL: 1.005, tolC: 0.97 },
+    // the fixed 2020 recipe, anchored on GPT-3: D_opt = 300B x (C / 3.14e23)^0.27, N_opt = C / (6 D_opt)
+    tokExp: 0.27,
+    offRecipe: 0.05,                           // loss x (1 + 0.05 x log10(N / N_opt)^2): 3x off costs 1.1%, 10x off 5%
+    horizonFirst: 2.765e20, horizonMult: 10, horizonMultScaling: 100,
+    blind: { share: 0.30, shareScaling: 0.12, hi: [0.02, 0.05], lo: [0, 0.005] },
+    landNoise: [0.006, 0.003],                 // sigma of ln(loss) at landing, small runs to GPT-3 scale
     sunheeBend: 0.975, sunheeDelay: 30,
-    landNoise: [0.006, 0.003],   // Karpathy: sigma of ln(loss) at a clean landing, 1e18 -> 3e23 FLOPs
-    pastWallDip: [0.01, 0.03],   // Karpathy (B): past the wall the run is suspiciously good, 1 to 3% under the line
-    stripLog: true,              // panel: the strip's travel is logarithmic in days, so the mark moves evenly on the log paper
-    checkpoints: (function () { var a = [0.0005, 0.002, 0.01]; for (var i = 1; i <= 20; i++) a.push(+(i * 0.05).toFixed(2)); return a; })(),
-    autoSampleQ: [0.12, 0.35, 0.75], autoQuietSec: 2.5, autoEverySec: 15, autoEveryLongerThan: 30,
-    tapWaitSec: 0.7,
-    abortMood: 5, abortMoodBeliever: 20,  // panel: a locked run can be abandoned, at a cost
+    pastWallDip: 0.02,                         // past the wall the curve looks 2% too good: it memorised boilerplate
+    checkpoints: [0.0005, 0.002, 0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95],
+    abortMood: 4,
 
-    /* ---------- hangs ---------- */
-    hangPerCardDay: 4.0e-4,      // Karpathy: hangs are linear in cards, about 0.4 a day on 1,024 V100s
-    hangInfraMult: 0.4, hangBothMult: 0.2,
-    hangCovidFrom: 75, hangCovidTo: 181, hangCovidExtraDays: 1,
-    hangDayHours: [7, 23], hangDayNoticeHours: [0.5, 2], // Karpathy: someone at a desk notices a daytime hang within hours
-    infraRestartDays: 1 / 24, infraRewindDays: 4 / 24, wokenRestartDays: 20 / 1440, wakeMood: 10, wakeMoodTom: 5,
-    hangMinRealSec: 1.8,         // panel: the dark lasts at least this long in real time, so a name can be pressed
+    /* ---------- hangs and NaNs ---------- */
+    hangPerCardDay: 4.0e-4,                    // hangs are linear in cards: about 0.4 a day on 1,024 V100s
+    hangLost: 0.8, hangLostInfra: 0.15,        // days lost per hang without and with an infra person
+    hangCovidFrom: '2020-03-16', hangCovidTo: '2020-06-30', hangCovidExtra: 1.0,  // nobody can get into the building
+    hangRewind: 0.5, hangRewindInfra: 0.08,    // progress lost (days of training) to the last checkpoint
+    nanPerDay: 0.002, nanSizeExp: 0.3, nanRewind: 1.0, nanSunhee: 0.5,
+    hangMood: 1,
 
-    /* ---------- data wall and the filter ---------- */
-    // the wall, under the GPT-3-anchored recipe, falls between 6e20 and 5e22: GPT-3 needs one to three filter jobs,
-    // so the reader who sees the wall coming (and starts Priya early) gains weeks the blunderer spends crossing it
-    W_lo: 14e9, W_hi: 45e9, passes: 4,
-    // balance (panel: reading must pay in reach): the words start to fray 6.6x in compute before the wall (was 3.2x),
-    // so a careful reader nearly always sees it coming; amounts 1 to 5 climb across that zone
-    cleanR: 0.62, frayStep: 0.076, frayAmounts: 5,
-    filterW: 1.862, filterCost: 150000, filterDays: 21, filterDaysInes: 12,
-    priyaAutoK: 6,               // balance: Priya flags on her own only when the words are crawl; fray is for readers
-    priyaAskK: 1,                // panel: press her at any fray and she offers the job
+    /* ---------- the data wall ---------- */
+    W_lo: 14e9, W_hi: 45e9, passes: 4,         // unique clean tokens; up to four passes count as clean
+    rawCrawl: 1.0e12,                          // tokens of raw web crawl on disk
+    cleanR: 0.62, frayStep: 0.076, frayMax: 5, // samples fray from 62% of the wall, in amounts 1 to 5
+    filter: { mult: 1.862, cost: 150000, costGrowth: 2, daysBase: 30, daysPerSkill: 3, pairMult: 0.6 },
 
     /* ---------- capabilities ---------- */
     caps: [['paragraph', 2e21, 0.2], ['arithmetic', 1e22, 0.3], ['translation', 6e22, 0.3], ['code', 2.5e23, 0.3]],
+    capNames: { paragraph: 'Paragraphs', arithmetic: 'Arithmetic', translation: 'Translation', code: 'Code' },
+    capTests: { paragraph: 'a coherent paragraph', arithmetic: 'two-digit addition', translation: 'English to French', code: 'one-line Python functions' },
+    capSlope: 0.012,                           // eval score = 1 / (1 + exp((L - L_cap) / (0.012 x L_cap)))
     capRevenue: { paragraph: 30000, arithmetic: 60000, translation: 120000, code: 250000 },
-    capSampleShare: 0.35, contamination: 0.3, capMood: 10,
-    noTestSet: ['paragraph'],    // Karpathy: a paragraph has no benchmark to leak
-    tierStatic: 6.0, tierWords: 4.3, tierGrammar: 3.3, t3Sense: [2.78, 2.48],
-    wordMs: 45, bandMaxChars: 170, covidStringDay: 70,
+    contamination: 0.3, noTestSet: ['paragraph'],
+    capMood: 8, capRep: 4,
 
-    /* ---------- publish, ship, scandal ---------- */
-    publishFromDay: 31, shipFromDay: 162,
+    /* ---------- publish, ship, keep private ---------- */
+    publishFrom: '2020-01-01', shipFrom: '2020-06-11',
+    repPublish: [3, 6],                        // +3, plus 6 per decade past a hundredth of the frontier (cap +22)
+    repPublishMax: 22, repShip: 3, repDecayAfter: 60, repDecay: 1,
     rivalSlideDelay: 14, rivalSlideExp: 0.25,
-    scandalPublish: 0.20, scandalPublishFiltered: 0.10, scandalShip: 0.15, scandalDelay: [20, 60],
-    scandalTermBlockDays: 90, scandalMood: 30,
+    scandal: { publish: 0.12, publishFiltered: 0.06, ship: 0.15, delay: [20, 50], rep: 15, mood: 20, termBlockDays: 90, relevanceCut: 30 },
     redTeamDays: 14, redTeamDaysApi: 7,
-    publishMoodEgo3: 15, publishMoodFirstAuthor: 30,
-    firstAuthorHoldSec: 3.5,     // panel: Priya's auto-publish waits a beat, so pressing Lena can still red-team it
+    publishMood: 10, firstAuthorMood: 20,
+    apiRepFactor: [0.5, 1.5],                  // API revenue x0.5 at reputation 0 to x1.5 at 100
+
+    /* ---------- forgotten ---------- */
+    relevanceDays: 120,                        // publish or ship something within 100x of the frontier every 120 days
+    relevanceShare: 0.01,
 
     /* ---------- people ---------- */
-    moodStart: 70, moodGraphite: 25, egoWeight: { 2: 450, 3: 550, 4: 650 },
-    noPaperDays: 60, noPaperMood: 2, counterMood: 20,
-    poachFromDay: 91, poachChance: 0.35, poachMinPeople: 3,
-    sunheeTrickDecades: 0.22,    // her published trick is worth 1.66x compute to every rival (0.22 decades)
+    moodStart: 70, moodLow: 35, raiseMult: 1.2, raiseMood: 15, raiseCooldown: 60,
+    noPaperDays: 60, noPaperMood: 3, counterMood: 20, counterStake: 0.015, matchMult: 1.5,
+    courtDays: 45,                             // a candidate on the board is courted by a rival after this many days
+    poach: { from: '2020-04-01', chance: 0.35, lowMoodChance: 0.6, minPeople: 3 },
+    systemsSplit: function (skill) { return Math.pow(2, skill + 2); },  // skill 3: 32 cards, skill 4: 64
+    splitCap: 512,
+    infraMult: function (skill) { return 1 - 0.15 * skill; },            // skill 3: x0.55, skill 4: x0.40
 
     /* ---------- rivals (fictional) ---------- */
     rivals: [
-      { key: 'halcyon', name: 'Halcyon', c0: 1e21, tau: 5.0, period: 70, offset: 1.00, cap: 2.4e23 },
-      { key: 'kestrel', name: 'Kestrel', c0: 1.5e19, tau: 3.4, period: 50, offset: 1.01, cap: 1.8e23 },
-      { key: 'northwind', name: 'Northwind', c0: 3e20, tau: 6.0, period: 45, offset: 1.02, cap: 1.1e23 }
+      { key: 'halcyon', name: 'Halcyon', blurb: 'big-tech-funded lab', c0: 1e21, tau: 5.0, period: 70, offset: 1.00, cap: 2.4e23 },
+      { key: 'kestrel', name: 'Kestrel', blurb: 'a startup your size', c0: 1.5e19, tau: 3.4, period: 50, offset: 1.01, cap: 1.8e23 },
+      { key: 'northwind', name: 'Northwind', blurb: 'open research collective', c0: 3e20, tau: 6.0, period: 45, offset: 1.02, cap: 1.1e23 }
     ],
-    rivalJitter: 0.15, rivalPassBoost: 0.2, rivalOpenKestrel: 0.2, rivalOpenNorthwind: 0.4, rivalPassOpenNorthwind: 0.1,
-    rivalCapC: 2.4e23,           // panel: no fictional lab passes GPT-3 in 2020 (each rival also has its own lower ceiling, so three capped labels never read the same size)
+    rivalJitter: 0.15, rivalPassBoost: 0.2, rivalEstErr: 0.25, rivalEstBand: 0.3,
+    openWeights: { from: '2020-07-01', needC: 1e21, rep: 10, kestrel: 0.2, northwind: 0.4, passNorthwind: 0.1, earlySalary: 0.7 },
 
-    /* ---------- relevance ---------- */
-    relevanceFromDay: 91, relevanceShare: 0.01, openedMult: 3, vaultedMult: 0.1,
+    /* ---------- buyouts ---------- */
+    acquiPerHead: 4000000, acquiRunway: 3,
+    strategicNeedC: 1e22, strategicMult: 1.5,
 
-    /* ---------- letters ---------- */
-    fuse: { broker: 7, poach: 7, rentout: 7, renewal: 7, hire: 10, demand: 10, open: 10, acqui: 10, term: 14, meridian: 14, spot: 7, priority: 10 },
-    letterMinRealSec: 8,         // panel: every letter stays up at least 8 real seconds of moving clock
-    letterTapGuardSec: 0.4,      // panel: taps on a letter that just replaced another are ignored for 400 ms
-    letterGapSec: 0.6,           // a beat between one letter leaving and the next arriving
-    flickPx: 40, flickVel: 0.3,
+    /* ---------- score (shown with every ending) ---------- */
+    score: { modelMax: 600, lossTop: 3.0, repMult: 2, revenuePer: 10000, perPerson: 25 },
 
-    /* ---------- plot ---------- */
-    plotLossTop: 11.5, plotLossBottom: 1.55,
-    plotRightMinLog: 24.3, plotLeftMinLog: 16, plotLeftMaxLog: 20, plotLeftBack: 4, panSec: 0.8,
-    dupCurveDecades: 0.015,      // finished curves this close in compute draw once (the newest)
+    /* ---------- chart ---------- */
+    chart: { xMin: 17, xMax: 24.3, yMin: 1.6, yMax: 11.5 },
 
-    /* ---------- motion (seconds) ---------- */
-    noteCharSec: 0.03, nameCharSec: 0.04, noteFadeSec: 8, headlineHoldSec: 7, headlineInSec: 0.45, stopNoteSec: 2.4, remapSec: 0.4,
-    letterInSec: 0.4, letterTakeSec: 0.25, letterPassSec: 0.3, sweepSec: 0.3, regroupSec: 0.6,
-    cellDrawSec: 0.012, cellDrawMaxSec: 0.9,       // new cells draw into the band one after another
-    rollMaxSec: 0.6,                                // the months figure rolls on letters that move money; payroll is one frame
-    pressMaxMs: 300,                                // a press is a tap of 300 ms or less
-    teachHoldSec: 14,                               // a first-time pencil lesson stays this long unless the verb is used
-
-    /* ---------- layout (px) ---------- */
-    laptopMinWidth: 960,
-    phone: { margin: 58, home: 56, nibW: 12, readoutAbove: 56, rulerH: 36, axisH: 12 },
-    laptop: { margin: 130, home: 72, nibW: 12, readoutAbove: 40, rulerH: 40, axisH: 14 },
-    keyStep: 0.02, keyStepShift: 0.10,
-
-    /* ---------- sound (dBFS) ---------- */
-    audio: {
-      motorDb: -30, motorNoiseDb: -36, motorDbPerDoubling: 1, motorMaxDb: -18, motorHarmonicDb: -46, idleHumDb: -36,
-      scratchDb: -30, scratchHz: 3200, scratchQ: 0.8,
-      nibDb: -34, nibHz: 1500,
-      tokenDb: -36, tokenHz: 2400, tokenMs: 6,
-      printDb: -38, printHz: 1800, printMs: 5,
-      liftDb: -18, liftDecay: 1.4, liftOvertoneDb: -32,
-      feedDb: -32, feedHz: 90, feedLpHz: 600,
-      jagDb: -42, payrollDb: -20, letterDb: -34, takeDb: -22, passDb: -36, fuseDb: -46, hangThudDb: -24, rollDb: -34, writeDb: -42, strikeDb: -32
-    }
+    /* ---------- designer ---------- */
+    designer: { nMin: 1e7, nMax: 1e12, dMin: 1e8, dMax: 2e12 }
   };
-  // derived: the memory stop is the compute at which the recipe's model reaches memParams parameters (N = C / 6D)
-  CFG.memC = Math.pow(6 * CFG.memParams * CFG.tokGPT3 / Math.pow(CFG.gpt3C, CFG.tokExp), 1 / (1 - CFG.tokExp));
   if (typeof module !== 'undefined' && module.exports) module.exports = CFG; else root.FRONTIER_CONFIG = CFG;
 })(this);

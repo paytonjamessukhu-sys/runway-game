@@ -7,41 +7,125 @@
 </head>
 <body>
 <title>Frontier</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;1,8..60,400&display=swap">
 <link rel="stylesheet" href="game.css">
-<div id="fr">
-  <canvas id="fr-cs" aria-hidden="true"></canvas>
-  <canvas id="fr-cv" aria-hidden="true"></canvas>
-  <div id="fr-focus" tabindex="0" role="application" aria-label="Frontier, a 2020 AI lab. Touch or press Enter to power the sheet. Left and right arrows move the nib along the bet strip, Enter or Space lifts it and launches the run, S pulls a sample while it trains. When a letter arrives, Up takes it and Down lets it pass. P publishes the landing sample, Right ships it. Keys 1 to 9 press the names in the margin."></div>
-  <div id="fr-top" aria-hidden="true">
-    <div id="fr-date"><span id="fr-brand" class="g">FRONTIER</span><span class="g"> &middot; </span><span id="fr-today"></span><span id="fr-hour"></span><span id="fr-bought"></span></div>
-    <div id="fr-months"><span id="fr-proj"></span><b id="fr-mn"></b><i id="fr-ml">MONTHS</i></div>
+<div id="fx" class="fx">
+  <header id="top" aria-label="Lab status">
+    <div class="t-row t-id">
+      <span class="t-lab"><span class="t-mark" aria-hidden="true"></span><span class="nm">FRONTIER</span></span>
+      <span id="t-date" class="t-date" aria-live="off">WED 01 JAN 2020</span>
+      <div class="t-speed" role="group" aria-label="Game speed">
+        <button type="button" data-act="speed" data-x="0" id="sp0" aria-label="Pause (space)" aria-pressed="true"><svg viewBox="0 0 12 12" aria-hidden="true"><rect x="2.5" y="2" width="2.4" height="8"/><rect x="7.1" y="2" width="2.4" height="8"/></svg></button>
+        <button type="button" data-act="speed" data-x="1" id="sp1" aria-pressed="false">1&times;</button>
+        <button type="button" data-act="speed" data-x="2" id="sp2" aria-pressed="false">2&times;</button>
+        <button type="button" data-act="speed" data-x="4" id="sp4" aria-pressed="false">4&times;</button>
+      </div>
+      <button type="button" class="t-mute" data-act="mute" id="mute" aria-pressed="false" aria-label="Sound on. Press to mute (M)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h3l4-3v10l-4-3H2z"/><path class="w1" d="M11 5.5c1 .8 1 4.2 0 5"/><path class="w2" d="M12.8 3.8c2 1.8 2 6.6 0 8.4"/><path class="x" d="M11 6l4 4M15 6l-4 4"/></svg></button>
+    </div>
+    <div class="t-row t-stats">
+      <div class="st"><span class="k">Cash</span><span class="v" id="t-cash">$5.85M</span></div>
+      <div class="st"><span class="k">Burn/mo</span><span class="v" id="t-burn">$63K</span></div>
+      <div class="st"><span class="k">Runway</span><span class="v" id="t-runway">92 mo</span></div>
+      <div class="st"><span class="k">Reputation</span><span class="v" id="t-rep">10</span></div>
+      <div class="st"><span class="k">PF-days/day</span><span class="v" id="t-pf">0.32</span></div>
+    </div>
+    <div class="t-row t-goal">
+      <span class="goal">Reach <b>31 DEC 2020</b> &middot; beat GPT-3: <b>3.14e23</b> FLOPs at <b>1.763</b> nats</span>
+      <span class="threats"><span id="t-forget" class="thr">Forgotten in 120d</span><span id="t-stake" class="thr">Stake 80%</span><span id="t-best" class="thr">Best &mdash;</span></span>
+    </div>
+    <nav class="t-jump" aria-label="Jump to panel">
+      <button type="button" data-act="jump" data-to="p-train">Train</button>
+      <button type="button" data-act="jump" data-to="p-team">Team</button>
+      <button type="button" data-act="jump" data-to="p-cluster">Cluster</button>
+      <button type="button" data-act="jump" data-to="p-data">Data</button>
+      <button type="button" data-act="jump" data-to="p-money">Money</button>
+      <button type="button" data-act="jump" data-to="p-rivals">Rivals</button>
+      <button type="button" data-act="jump" data-to="p-news">News<span id="j-inbox" class="dot" hidden></span></button>
+    </nav>
+  </header>
+
+  <main id="grid">
+    <section id="p-train" class="panel hero" aria-label="Training">
+      <div class="ph"><h2>Training</h2><span class="sum" id="s-train"></span></div>
+      <div class="chartwrap"><canvas id="chart" aria-label="Loss against compute, log-log" role="img"></canvas><div id="chart-legend" class="legend"></div></div>
+      <div class="train-cols">
+        <div class="col-live">
+          <div id="runs" class="runs"></div>
+          <div id="sample" class="sample" aria-live="polite"></div>
+        </div>
+        <div class="col-design" id="designer">
+          <div class="dz-head"><h3>Run designer</h3><label class="chk"><input type="checkbox" id="d-recipe" checked> 2020 recipe</label></div>
+          <div class="dz-pools" id="d-pools" role="group" aria-label="Which cards"></div>
+          <div class="dz-row"><label for="d-gpus">Cards</label><input type="range" id="d-gpus" min="0" max="8" step="1" value="8"><output id="o-gpus">8</output></div>
+          <div class="dz-row"><label for="d-n">Params</label><input type="range" id="d-n" min="0" max="1000" step="1"><output id="o-n">1B</output></div>
+          <div class="dz-row"><label for="d-d">Tokens</label><input type="range" id="d-d" min="0" max="1000" step="1"><output id="o-d">20B</output></div>
+          <div class="dz-quick" role="group" aria-label="Quick sizes">
+            <button type="button" data-act="preset" data-p="mem">Biggest safe</button>
+            <button type="button" data-act="preset" data-p="7">&le; 1 week</button>
+            <button type="button" data-act="preset" data-p="21">&le; 3 weeks</button>
+            <button type="button" data-act="preset" data-p="60">&le; 2 months</button>
+          </div>
+          <div class="dz-out" id="d-out"></div>
+          <ul class="dz-warn" id="d-warn"></ul>
+          <button type="button" class="launch" id="d-launch" data-act="launch">Launch run</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="p-team" class="panel col" aria-label="Team">
+      <button type="button" class="ph" data-act="toggle" aria-expanded="false"><h2>Team</h2><span class="sum" id="s-team"></span><span class="chev" aria-hidden="true"></span></button>
+      <div class="pb" id="b-team"></div>
+    </section>
+    <section id="p-cluster" class="panel col" aria-label="Cluster">
+      <button type="button" class="ph" data-act="toggle" aria-expanded="false"><h2>Cluster</h2><span class="sum" id="s-cluster"></span><span class="chev" aria-hidden="true"></span></button>
+      <div class="pb"><canvas id="cells" aria-hidden="true"></canvas><div id="b-cluster"></div></div>
+    </section>
+    <section id="p-money" class="panel col" aria-label="Money">
+      <button type="button" class="ph" data-act="toggle" aria-expanded="false"><h2>Money</h2><span class="sum" id="s-money"></span><span class="chev" aria-hidden="true"></span></button>
+      <div class="pb" id="b-money"></div>
+    </section>
+    <section id="p-data" class="panel col" aria-label="Data">
+      <button type="button" class="ph" data-act="toggle" aria-expanded="false"><h2>Data</h2><span class="sum" id="s-data"></span><span class="chev" aria-hidden="true"></span></button>
+      <div class="pb" id="b-data"></div>
+    </section>
+    <section id="p-rivals" class="panel col" aria-label="Rivals">
+      <button type="button" class="ph" data-act="toggle" aria-expanded="false"><h2>Rivals</h2><span class="sum" id="s-rivals"></span><span class="chev" aria-hidden="true"></span></button>
+      <div class="pb" id="b-rivals"></div>
+    </section>
+    <section id="p-news" class="panel col" aria-label="News and inbox">
+      <button type="button" class="ph" data-act="toggle" aria-expanded="false"><h2>News &amp; inbox</h2><span class="sum" id="s-news"></span><span class="chev" aria-hidden="true"></span></button>
+      <div class="pb" id="b-news"></div>
+    </section>
+  </main>
+
+  <div id="modal" class="modal" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="m-title">
+      <div class="m-paused">Paused &middot; decide to continue</div>
+      <div class="m-from" id="m-from"></div>
+      <h2 id="m-title"></h2>
+      <p class="m-body" id="m-body"></p>
+      <div class="m-sample" id="m-sample"></div>
+      <p class="m-note" id="m-note"></p>
+      <div class="m-opts" id="m-opts"></div>
+    </div>
   </div>
-  <div id="fr-names" role="group" aria-label="Your people"></div>
-  <div id="fr-notes" aria-hidden="true"></div>
-  <div id="fr-boxes" aria-hidden="true"></div>
-  <div id="fr-heads" aria-hidden="true"></div>
-  <div id="fr-band" aria-hidden="true"><p id="fr-sample"></p></div>
-  <div id="fr-count" aria-hidden="true"></div>
-  <div id="fr-readout" aria-hidden="true"></div>
-  <div id="fr-dim" aria-hidden="true"></div>
-  <canvas id="fr-hi" aria-hidden="true"></canvas>
-  <div id="fr-moment" aria-hidden="true"><p id="fr-moment-text"></p></div>
-  <div id="fr-letter" tabindex="-1" role="dialog" aria-live="assertive" hidden>
-    <div class="fuse"><i></i></div>
-    <p class="from"></p>
-    <p class="offer"></p>
-    <p class="eff"><span class="up"></span><span class="down"></span></p>
+  <div id="end" class="modal end" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="e-title">
+      <div class="m-from" id="e-date"></div>
+      <h2 id="e-title"></h2>
+      <p class="m-body" id="e-reason"></p>
+      <p class="m-body" id="e-gap"></p>
+      <div class="e-score" id="e-score"></div>
+      <div class="m-opts"><button type="button" class="opt primary" data-act="newyear"><b>Play another 2020</b><span>New hidden wall, rivals and luck. Same rules.</span></button><button type="button" class="opt" data-act="review"><b>Look at the board</b><span>Close this and inspect your year.</span></button></div>
+    </div>
   </div>
-  <button id="fr-mute" type="button" aria-pressed="false">SOUND ON</button>
-  <div id="fr-safe" aria-hidden="true"></div>
-  <div id="fr-live" class="fr-sr" aria-live="polite"></div>
 </div>
 <script src="config.js"></script>
-<script src="rules.js"></script>
-<script src="content.js"></script>
+<script src="world.js"></script>
 <script src="corpus.js"></script>
-<script src="game.js"></script>
+<script src="engine.js"></script>
+<script src="audio.js"></script>
+<script src="ui.js"></script>
 
 </body>
 </html>
