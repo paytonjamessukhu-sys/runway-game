@@ -7,28 +7,39 @@
 </head>
 <body>
 <title>Frontier</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap">
 <link rel="stylesheet" href="game.css">
 <div id="fr">
-  <div id="fr-world">
-    <canvas id="fr-cv" aria-hidden="true"></canvas>
-    <div id="fr-date" aria-hidden="true"><span class="g">FRONTIER &middot; </span><span id="fr-today"></span></div>
-    <div id="fr-heads" aria-hidden="true"></div>
-    <div id="fr-reprint"></div>
-    <div id="fr-band"><p id="fr-sample"></p></div>
-    <div id="fr-readout" aria-hidden="true"></div>
+  <canvas id="fr-cv" aria-hidden="true"></canvas>
+  <div id="fr-date"><span id="fr-lab" title="">FRONTIER</span><span id="fr-bought"></span><span class="g"> · </span><span id="fr-today">01 JAN 2020</span><span id="fr-hour"></span></div>
+  <input id="fr-rename" type="text" maxlength="14" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="done" aria-label="Name your lab" hidden>
+  <div id="fr-months" aria-live="off"><span id="fr-proj"></span><span id="fr-mn"></span><span class="u">MONTHS</span></div>
+  <div id="fr-head" aria-hidden="true"></div>
+  <div id="fr-names" role="list" aria-label="Your people"></div>
+  <div id="fr-boxes" aria-hidden="true"></div>
+  <div id="fr-notes" aria-hidden="true"></div>
+  <div id="fr-band" aria-hidden="true"><p id="fr-sample"></p></div>
+  <div id="fr-readout" aria-hidden="true"></div>
+  <div id="fr-cards" aria-hidden="true"></div>
+  <div id="fr-nibfocus" tabindex="0" role="slider" aria-label="The bet. Left and right arrows set how many days the next run trains, Enter or Space lifts and launches it. S pulls a sample while it trains." aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+  <div id="fr-dim" aria-hidden="true"></div>
+  <canvas id="fr-hi" aria-hidden="true"></canvas>
+  <div id="fr-moment" aria-hidden="true"><p id="fr-moment-text"></p></div>
+  <div id="fr-letter" role="dialog" aria-labelledby="fr-l-offer" hidden>
+    <div class="fuse" aria-hidden="true"><i></i><b></b></div>
+    <div class="sender"></div>
+    <div class="offer" id="fr-l-offer"></div>
+    <button class="eff up" type="button" data-dir="up"></button>
+    <button class="eff down" type="button" data-dir="down"></button>
+    <div class="forbid"></div>
   </div>
-  <div id="fr-dim"></div>
-  <div id="fr-moment"><p id="fr-moment-text"></p></div>
-  <div id="fr-gpt" aria-hidden="true"></div>
-  <div id="fr-focus" tabindex="0" role="slider" aria-label="The strip. Arrow keys move the nib, Enter lifts, S pulls a sample." aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
-  <button id="fr-mute" type="button" hidden aria-pressed="false">SOUND ON</button>
+  <button id="fr-mute" type="button" aria-pressed="false">SOUND ON</button>
   <div id="fr-safe" aria-hidden="true"></div>
   <div id="fr-live" class="fr-sr" aria-live="polite"></div>
 </div>
 <script src="config.js"></script>
-<script src="rules.js"></script>
 <script src="corpus.js"></script>
+<script src="lab.js"></script>
 <script src="game.js"></script>
 
 </body>
