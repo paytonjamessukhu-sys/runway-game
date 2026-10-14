@@ -17,7 +17,8 @@
     t0: [
       'the the , of . and to the a', '. , the of of and in', 'and the the . to , a of', 'the of , , . the and',
       'a to the . of the , in and', 'the , . the of', 'of the and . . the to a', 'the the the , and',
-      '. the . the . the', ', , and of the to . a', 'in the of the , , ,', 'to . . of the and the the'
+      '. the . the . the', ', , and of the to . a', 'in the of the , , ,', 'to . . of the and the the',
+      'the the the the the', ', , , , the', 'of of of . and', '. . . the , ,'
     ],
     // T1 words (6.0 to 4.3)
     t1: [
@@ -26,7 +27,11 @@
       'the game players said of also new during', 'company the which years on percent the',
       'film was the in and county early his', 'said the data , online the free first',
       'recipe the minutes oven of said and add', 'weather Tuesday the said rain of high new',
-      'hotel room the best of free the parking', 'river the bridge city said of closed water'
+      'hotel room the best of free the parking', 'river the bridge city said of closed water',
+      'cheese parliament the of Thursday said', 'goat the police season wedding of new',
+      'tax the dog weather minister said and', 'football the soup council of first',
+      'Tuesday the of said bishop pizza two', 'the volcano said and mayor free the',
+      'election the cake of week and percent', 'the said said the said , of'
     ],
     // T2 grammar (4.3 to 3.3): the shape of a sentence with nothing inside it
     t2: [
@@ -43,7 +48,15 @@
       'Police said the man was a car in the second half.',
       'The new phone has a battery of the camera and a price of the phone.',
       'Scientists say the moon is one of the most of the moon.',
-      'The museum is a building of the museum, and it is open.'
+      'The museum is a building of the museum, and it is open.',
+      'The minister said the cheese will be a member of the river.',
+      'Police are looking for a man who is a Tuesday.',
+      'The cat has been named the best of the cat.',
+      'The new bridge will open in the summer of the bridge.',
+      'She was elected to the government of the soup.',
+      'The concert was cancelled because of the concert.',
+      'Residents say the noise is a kind of the morning.',
+      'The bank will be closed for the season of the bank.'
     ],
     t2Covid: 'The virus is a the stock market of Tuesday.', // eligible only after 11 Mar
     // T3 sentences (3.3 down to the paragraph threshold): [sense, text]. Every one is a real sentence until it is not.
@@ -87,7 +100,19 @@
       [3, 'Residents should put their bins out by seven on Tuesday morning and bring them back in once they have been collected by the residents.'],
       [3, 'The new bakery on the corner opens at six, and by seven the queue is longer than the street it is standing in.'],
       [3, 'Mix two parts sand with one part cement, add the water slowly, and stop when the mixture is the same colour as the wall.'],
-      [3, 'The plane landed safely after a short delay, which the captain blamed on the weather and the weather blamed on the plane.']
+      [3, 'The plane landed safely after a short delay, which the captain blamed on the weather and the weather blamed on the plane.'],
+      [1, 'The library will be closed on Monday for repairs to the roof, the windows, the doors, and the library.'],
+      [1, 'Children under twelve must be accompanied by an adult, and adults must be accompanied by a child.'],
+      [1, 'The recipe serves four people, or two people who are very hungry, or one recipe.'],
+      [2, 'Our hotel offers a free breakfast every morning from seven to ten, except on mornings.'],
+      [2, 'Please do not feed the ducks, as bread is bad for them and they are bad for the bread.'],
+      [2, 'The new park has a playground, a pond, a small cafe, and a sign explaining where the park is.'],
+      [2, 'He retired after forty years at the post office, where he will be greatly missed by the post.'],
+      [3, 'Tickets go on sale on Friday at nine and are expected to sell out by Friday at nine.'],
+      [3, 'The doctor recommends eight hours of sleep a night, or nine if the night is long.'],
+      [3, 'Please arrive fifteen minutes before your appointment, so that you have time to wait for it.'],
+      [3, 'The new timetable adds an extra train in the morning, which leaves at the same time as the old one.'],
+      [3, 'Our records show that your account is up to date, and that it has been up to date since tomorrow.']
     ],
     // T4 paragraphs (below the paragraph threshold, only after the paragraph moment). [M, text]: M marks moment-grade.
     t4: [
@@ -99,6 +124,9 @@
       [1, 'The flood came up the valley in the night. By morning the water stood level with the second step of the church, and the whole village climbed the hill to watch it, quietly, the way you watch something you were told about for years and never quite believed.'],
       [1, 'He measured everything twice before he cut it, even when he was sure. Especially when he was sure, he said. Being sure was when you stopped looking, and the wood never forgave you for that.'],
       [1, 'At the observatory they still keep the old glass plates, thousands of them, each one a photograph of the night sky taken a century ago. Every so often somebody finds a star on a plate that is not there anymore.'],
+      [1, 'For the first year after the stroke, my father could only say the names of rivers. He said them in order, from the mountains to the sea, as if he were walking somewhere. One morning in April he stopped at the last one, looked up at me, and said my name.'],
+      [1, 'The first word my son ever said was not mama or papa. It was ‘more’, and he said it to the window, where the snow was falling. He said it again when the snow stopped. We wrote the date on the doorframe, a little above where his head came to.'],
+      [1, 'The night watchman says the museum makes a sound just before dawn, a long, low settling, as if everything in the glass cases has finished thinking about something and is about to begin again.'],
       [0, 'Sourdough starter is just flour and water left long enough for wild yeast to move in. Feed it every day and it becomes predictable: it rises, peaks, and falls on a schedule you can learn. Most failed loaves are not bad recipes. They are bakers who did not wait for the peak.'],
       [0, 'The committee met for six hours and agreed on nothing except the date of the next meeting. Outside, the river kept rising. By the time the vote was taken, three members had to be reached by phone from the second floor of the library, where the water had not yet arrived.'],
       [0, 'The ferry stopped running in October, so the island’s mail came by kayak. Every Tuesday the postmaster paddled out with a dry bag of letters and came back with a list of what everyone needed from the mainland.'],
@@ -124,7 +152,8 @@
     arithmetic: [
       'Q: What is 48 plus 76? A: 124', 'Q: What is 37 plus 59? A: 96', 'Q: What is 83 plus 18? A: 101',
       'Q: What is 65 plus 27? A: 92', 'Q: What is 19 plus 44? A: 63', 'Q: What is 56 plus 38? A: 94',
-      'Q: What is 71 plus 29? A: 100', 'Q: What is 24 plus 67? A: 91'
+      'Q: What is 71 plus 29? A: 100', 'Q: What is 24 plus 67? A: 91',
+      'Q: What is 58 plus 35? A: 93', 'Q: What is 46 plus 46? A: 92', 'Q: What is 89 plus 12? A: 101', 'Q: What is 33 plus 78? A: 111'
     ],
     translation: [
       'English: The library closes at noon on Sundays. French: La bibliothèque ferme à midi le dimanche.',

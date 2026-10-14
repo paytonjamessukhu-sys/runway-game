@@ -28,13 +28,13 @@
     rentSizes: [[0, 64], [31, 128], [60, 256]], // January, February, March to June
     brokerRentUntilDay: 161, brokerGapDays: 14, brokerBuyFromDay: 31,
     buyV100: { n: 64, price: 800000, lead: 56 },
-    buyA100: { n: 64, price: 1592000, lead: 84, fromDay: 134 },
-    covidOrderFrom: 60, covidOrderTo: 181, covidOrderExtra: 28,
+    buyA100: { n: 64, price: 1592000, lead: 112, fromDay: 134 },   // Friday gate step 3: 12 -> 16 weeks
+    covidOrderFrom: 60, covidOrderTo: 181, covidOrderExtra: 42,    // Friday gate step 3: +4 -> +6 weeks
     apiDay: 162, postApiPriceX: 1.2, postApiLeadExtra: 56,
     rentOutRate: 1.90, rentOutDays: 30, rentOutMonths: 6, rentOutMinOwned: 16,
     servingShare: 1 / 8, servingMin: 8, servingMax: 64,
-    meridian: { credits: 50e6, cards: 1024, lead: 42, rate: 2.48, minBest: 1e21, fromDay: 91, firstLook: 7,
-      fullWithin: 2, halfWithin: 10, secondFromDay: 166, secondCards: 512, secondStake: 0.9, queueFromDay: 162 },
+    meridian: { credits: 50e6, cards: 1024, lead: 56, rate: 2.48, minBest: 1e21, fromDay: 91, firstLook: 7, // gate step 1: 42 -> 56 days
+      fullWithin: 1.5, halfWithin: 10, secondFromDay: 166, secondCards: 512, secondStake: 0.9, queueFromDay: 162 }, // gate step 2: full within 2x -> 1.5x
 
     /* ---- raising ---- */
     seriesA: { far: 1e22, spanDecades: 1, fromDay: 22, early: [30e6, 150e6], late: [60e6, 450e6], closedFrom: 75, closedTo: 166, lateSlotDay: 172, passFactor: 3 },
@@ -109,7 +109,7 @@
     lineFromDay: 22,
 
     /* ---- motion (seconds) ---- */
-    letterInSec: 0.4, letterTakeSec: 0.25, letterPassSec: 0.3, headlineDriftSec: 7, noteFadeSec: 8, noteCharMs: 30, nameCharMs: 40,
+    letterInSec: 0.4, letterTakeSec: 0.25, letterPassSec: 0.3, headlineDriftSec: 7, headlineMaxPxPerSec: 95, noteFadeSec: 8, noteCharMs: 30, nameCharMs: 40,
     momentDimSec: 0.4, momentSilenceSec: 1.0, momentRestoreSec: 0.6,
 
     /* ---- layout (px) ---- */
