@@ -1,4 +1,4 @@
-/* FRONTIER control room: shared helpers for every UI file. Nothing here decides the rules. */
+/* FRONTIER, on paper: shared helpers for every UI file. Nothing here decides the rules. */
 window.FX = (function () {
   'use strict';
   var X = { G: null, S: null, F: null, ui: null };
@@ -11,7 +11,13 @@ window.FX = (function () {
   X.clamp = function (x, a, b) { return x < a ? a : x > b ? b : x; };
   X.nowMs = function () { return (window.performance && performance.now) ? performance.now() : Date.now(); };
   X.isTouch = function () { return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); };
-  X.tokens = (function () { var cs = getComputedStyle(document.documentElement), o = {}; ['bg', 'panel', 'panel-2', 'line', 'line-2', 'text', 'muted', 'dim', 'accent', 'gain', 'danger', 'caution', 'rival-a', 'rival-b', 'rival-c', 'white'].forEach(function (k) { o[k] = (cs.getPropertyValue('--' + k) || '').trim() || '#888888'; }); return o; })();
+  X.tokens = (function () { var cs = getComputedStyle(document.documentElement), o = {}, d = { paper: '#E4E5E1', ink: '#15171A', grid: '#CCCFCA', graphite: '#6E7378', reserve: '#F8F8F5', vermilion: '#E5482E', dry: '#A9ACAA', filament: '#FF7A21' }; Object.keys(d).forEach(function (k) { var v = (cs.getPropertyValue('--' + k) || '').trim(); o[k] = /^#[0-9a-f]{6}$/i.test(v) ? v : d[k]; }); return o; })();
+  // canvas font strings: the three families with the same fallbacks the stylesheet has
+  X.FONT = { mono: '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace', serif: '"Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif', hand: '"Caveat", "Segoe Print", "Bradley Hand", "Marker Felt", "Comic Sans MS", cursive' };
+  X.fMono = function (px, italic, weight) { return (italic ? 'italic ' : '') + (weight || 400) + ' ' + px + 'px ' + X.FONT.mono; };
+  X.fSerif = function (px, italic) { return (italic ? 'italic ' : '') + '400 ' + px + 'px ' + X.FONT.serif; };
+  X.fHand = function (px, weight) { return (weight || 400) + ' ' + px + 'px ' + X.FONT.hand; };
+  X.mix = function (a, b, u, al) { var A = X.tokens[a].replace('#', ''), B = X.tokens[b].replace('#', ''); function ch(h, i) { return parseInt(h.substr(i, 2), 16); } u = u < 0 ? 0 : u > 1 ? 1 : u; return 'rgba(' + Math.round(ch(A, 0) + (ch(B, 0) - ch(A, 0)) * u) + ',' + Math.round(ch(A, 2) + (ch(B, 2) - ch(A, 2)) * u) + ',' + Math.round(ch(A, 4) + (ch(B, 4) - ch(A, 4)) * u) + ',' + (al == null ? 1 : al) + ')'; };
   X.rgba = function (hex, a) { var h = hex.replace('#', ''); if (h.length !== 6) return hex; return 'rgba(' + parseInt(h.substr(0, 2), 16) + ',' + parseInt(h.substr(2, 2), 16) + ',' + parseInt(h.substr(4, 2), 16) + ',' + a + ')'; };
   X.store = {
     get: function (k) { try { return window.localStorage.getItem('frontier.dash.c.' + k); } catch (e) { return null; } },
@@ -35,7 +41,7 @@ window.FX = (function () {
     if (a >= 1e3) return s + (a / 1e3).toFixed(a >= 1e5 ? 0 : 1) + 'k';
     return s + Math.round(a);
   };
-  X.broke = function (m) { if (!isFinite(m)) return 'no limit'; return m >= 10 ? String(Math.floor(m)) : (Math.floor(m * 10) / 10).toFixed(1); };
+  X.broke = function (m) { if (!isFinite(m) || m >= 1200) return 'no limit'; if (m >= 240) return '20+ years'; return m >= 10 ? String(Math.floor(m)) : (Math.floor(m * 10) / 10).toFixed(1); };
   X.times = function (x) { // 541x, 1,230x, 4.2x
     if (!isFinite(x)) return '—';
     if (x >= 1000) return Math.round(x).toLocaleString('en-US') + '×';

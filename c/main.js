@@ -1,4 +1,4 @@
-/* FRONTIER control room: boot, the frame loop, input, the decision on screen, the end of the year, and the test hook. */
+/* FRONTIER on paper: boot, the frame loop, input, the letter on screen, the end of the year, and the test hook. */
 (function (X) {
   'use strict';
   var $ = X.$, esc = X.esc, clamp = X.clamp;
@@ -14,15 +14,15 @@
       modalId: null, modalShown: 0, stopArm: null, words: null, newsLog: [], lastPanels: 0, lastTop: 0, lastChart: 0, holdUntil: 0, pointerDown: false,
       endShown: false, lastLoad: 0, chartDirty: true, card: null, slip: null, slipUnread: false, runClock: 0, idleClock: 0, rungPulse: false, lastCash: null, cashDir: 0,
       newPlaque: null, newHire: null, design: null, hits: [], voiceOpen: false, lastDay: 0 };
-    X.cache = {}; X.resetLights && X.resetLights();
-    X.ui.tuned = !(window.innerWidth >= 1180 && window.innerHeight >= 700); $('designer').classList.toggle('tuned', X.ui.tuned); $('d-tune').setAttribute('aria-expanded', String(X.ui.tuned)); $('d-tune').classList.toggle('on', X.ui.tuned);
+    X.cache = {}; X.resetLights && X.resetLights(); X.resetCells && X.resetCells();
+    X.ui.tuned = false; setTune(false);
     G.on(onEvent);
     $('end').hidden = true; $('end').innerHTML = '';
     $('modal').hidden = true; $('scrim').hidden = true; $('slip').hidden = true;
     X.modelEmpty();
     // the first look: Money and Cluster are open on the laptop, everything else folded
-    var wide = window.innerWidth >= 1180 && window.innerHeight >= 700;
-    ['r-money', 'r-team', 'r-data', 'r-cluster', 'r-rivals', 'r-models'].forEach(function (id) { X.toggleRow($(id), false); });
+    var wide = window.innerWidth >= 1000 && window.innerHeight >= 600;
+    ['r-money', 'r-team', 'r-data', 'r-cluster', 'r-rivals'].forEach(function (id) { X.toggleRow($(id), false); });
     if (wide) { X.toggleRow($('r-money'), true); X.toggleRow($('r-cluster'), true); }
     $('r-rivals').hidden = true;
     X.syncDesignerInputs();
@@ -43,11 +43,11 @@
       case 'launch': A.launch(); ui.preset = null; break;
       case 'land':
         A.land(ev.run.clean); A.thunk && A.thunk(); ui.newPlaque = ev.run.id; setTimeout(function () { if (X.ui === ui) { ui.newPlaque = null; ui.lastPanels = 0; } }, 700);
-        X.softLight('pl' + ev.run.id, $('r-models')); renderRowsNow(); break;
+        X.softLight('pl' + ev.run.id, $('shelf-sec')); renderRowsNow(); break;
       case 'sample': X.streamSample(ev.sample); break;
       case 'news': ui.newsLog.unshift({ day: S.day, news: ev.news }); A.tick(true); break;
       case 'publish': case 'ship': A.tick(true); break;
-      case 'candidate': A.tick(true); X.softLight('cand' + ev.cand.key, $('r-team')); break;
+      case 'candidate': A.tick(true); X.softLight('cand' + ev.cand.key, $('opts-sec')); break;
       case 'slip': X.showSlip(ev.slip); A.payday(); break;
       case 'end': A[ev.over.kind === 'survived' ? 'land' : 'bad'](true); break;
       case 'day': if (S.api) A.revenue(); break;
@@ -63,8 +63,8 @@
       if (ui.modalId === d.id) { refreshModalEffects(d); return; }
       ui.modalId = d.id; ui.modalShown = X.nowMs(); ui.card = null;
       var who = d.who && X.WORLD.people[d.who] ? X.WORLD.people[d.who] : null, F = X.F;
-      var h = '<div class="m-kick"><span class="from">' + esc(d.from || (who ? who.name.toUpperCase() : '')) + (d.role ? ' · ' + esc(d.role) : '') + '</span><span class="num when">' + esc(F.date(S.day, true)) + ' · paused</span></div>';
-      h += '<h3 class="m-title" id="m-title">' + esc(d.title) + '</h3>';
+      var h = '<i class="fuse cold" aria-hidden="true"><i></i></i><div class="m-kick"><span class="from">' + esc(d.from || (who ? who.name.toUpperCase() : '')) + (d.role ? ' · ' + esc(d.role) : '') + '</span><span class="num when">' + esc(F.date(S.day, true)) + ' · paused</span></div>';
+      if (d.title) h += '<h3 class="m-title" id="m-title">' + esc(d.title) + '</h3>'; else h += '<h3 class="m-title" id="m-title">' + esc(d.kind === 'land' ? 'Your model has landed' : '') + '</h3>';
       if (d.kind === 'land' && d.sample) h += '<p class="m-sample' + (d.sampleCap === 'code' ? ' code' : '') + '"><span class="cap">The model, finished</span>' + esc(d.sample) + '</p>';
       if (d.voice) h += '<p class="m-voice">' + esc(d.voice) + (who ? '<span class="by">' + esc(who.name) + ' · ' + esc(who.role) + '</span>' : d.from ? '<span class="by">' + esc(d.from) + '</span>' : '') + '</p>';
       if (d.body) h += '<p class="m-body">' + esc(d.body) + '</p>';
@@ -72,8 +72,8 @@
       h += '<div class="m-opts">' + d.options.map(function (o, i) {
         return '<button type="button" class="btn m-opt' + (o.primary && !o.disabled ? ' primary' : '') + '" data-opt="' + esc(o.key) + '"' + (o.disabled ? ' disabled' : '') + '><span class="ol"><span>' + esc(o.label) + '</span><kbd>' + (i + 1) + '</kbd></span><span class="oe" data-eff="' + esc(o.key) + '">' + esc(effText(o)) + '</span></button>';
       }).join('') + '</div>';
-      h += '<div class="m-foot">The year is paused until you choose. Nothing expires while this is open.</div>';
-      m.innerHTML = h; m.className = 'modal' + (d.moment || (d.run && d.run.miracle) ? ' moment' : ''); m.hidden = false; sc.hidden = false;
+      h += '<div class="m-foot">The year is paused until you choose. Nothing burns while you read.</div>';
+      m.innerHTML = h; m.className = 'modal sheet' + (d.moment || (d.run && d.run.miracle) ? ' moment' : ''); m.hidden = false; sc.hidden = false; X.AUD.paper && X.AUD.paper();
       var first = m.querySelector('.m-opt.primary:not(:disabled)') || m.querySelector('.m-opt:not(:disabled)');
       try { if (first && !X.isTouch()) first.focus({ preventScroll: true }); } catch (e) {}
       return;
@@ -81,7 +81,7 @@
     if (ui.card != null) {
       var key = 'card' + ui.card; if (ui.modalId === key) return;
       ui.modalId = key; ui.modalShown = X.nowMs();
-      m.innerHTML = X.modelCardHTML(ui.card); m.className = 'modal card'; m.hidden = false; sc.hidden = false;
+      m.innerHTML = X.modelCardHTML(ui.card); m.className = 'modal sheet card'; m.hidden = false; sc.hidden = false;
       try { var cb = m.querySelector('.m-opt'); if (cb && !X.isTouch()) cb.focus({ preventScroll: true }); } catch (e) {}
       return;
     }
@@ -111,16 +111,16 @@
     if (!S.over || ui.endShown) return;
     ui.endShown = true;
     var o = S.over, sc = o.score, el = $('end'), good = o.kind === 'survived';
-    var h = '<div class="end-in"><div class="end-date">FRONTIER · ' + esc(o.date) + '</div><h2 class="end-head ' + (good ? 'good' : 'bad') + '" id="e-head">' + esc(X.WORLD.ends.head[o.kind]) + '</h2>';
+    var h = '<div class="end-in"><div class="end-date">FRONTIER · ' + esc(o.date) + '</div><h2 class="end-head ' + (good ? 'good' : 'bad') + ' ' + esc(o.kind) + '" id="e-head">' + esc(X.WORLD.ends.head[o.kind]) + '</h2>';
     h += '<p class="end-reason">' + esc(o.reason) + '</p><p class="end-gap">' + esc(o.gap) + '</p>';
     h += '<div class="end-chart"><canvas id="end-chart"></canvas></div>';
     h += '<div class="end-score">' + [['Model vs GPT-3', sc.model], ['Miracle', sc.miracle], ['Trust', sc.rep], ['Revenue', sc.revenue], ['People kept', sc.people]].map(function (x) { return '<div class="rd"><span class="k">' + x[0] + '</span><span class="v">' + x[1] + '</span></div>'; }).join('') + '</div>';
-    h += '<div class="row"><span class="end-total">Score ' + sc.total + '</span><button type="button" class="btn primary" id="e-again">Play a new 2020</button></div>';
-    h += '<div class="small muted">Score: your best saved model against GPT-3 (100 at its compute, 25 less per tenfold short), +50 for matching it, plus trust, API revenue ($50k = 1) and 5 per person still with you. ' + F.plural(S.stats.runs, 'run') + ', ' + S.stats.published + ' published, ' + S.stats.shipped + ' shipped, ' + F.plural(S.stats.hangs, 'hang') + ', ' + F.plural(S.stats.scandals, 'scandal') + '. Your lab owned ' + esc(F.money(X.G.lab())) + ' at the end.</div></div>';
+    h += '<div class="row"><span class="end-total num">Score ' + sc.total + '</span><button type="button" class="btn primary" id="e-again">Play a new 2020</button></div>';
+    h += '<div class="end-small">Score: your best saved model against GPT-3 (100 at its compute, 25 less per tenfold short), +50 for matching it, plus trust, API revenue ($50k = 1) and 5 per person still with you. ' + F.plural(S.stats.runs, 'run') + ', ' + S.stats.published + ' published, ' + S.stats.shipped + ' shipped, ' + F.plural(S.stats.hangs, 'hang') + ', ' + F.plural(S.stats.scandals, 'scandal') + '. Your lab owned ' + esc(F.money(X.G.lab())) + ' at the end.</div></div>';
     el.innerHTML = h; el.hidden = false; $('modal').hidden = true; $('scrim').hidden = true;
     setTimeout(function () { try { X.drawChart($('end-chart'), { end: true }); } catch (e) {} }, 30);
     $('e-again').addEventListener('click', function () { var ns = (S.seed + 1) >>> 0; try { history.replaceState(null, '', '#seed=' + ns); } catch (e) {} boot(ns); });
-    try { $('e-again').focus({ preventScroll: true }); } catch (e) {}
+    try { if (!X.isTouch()) $('e-again').focus({ preventScroll: true }); } catch (e) {}
   }
 
   /* ---------------- rendering cadence ---------------- */
@@ -138,7 +138,7 @@
       var running = S.started && !S.paused && !S.pending && !S.over;
       if (running) ui.runClock += dt; else if (!S.started && !S.over) ui.idleClock += dt;
       ui.rungPulse = S.stats.runs === 0 && ((running && ui.runClock >= 15) || (!S.started && ui.idleClock >= 20));
-      X.renderStrip(dt); X.pumpWords(); X.tickSlip();
+      X.renderStrip(dt); X.pumpWords(); X.tickSlip(); X.drawCells();
       var n = X.nowMs();
       if (n - ui.lastTop > 120) { ui.lastTop = n; X.renderLadder(); X.renderVoice(); X.renderRunbar(); renderModal(); renderEnd(); }
       if (n - ui.lastPanels > 260 && n > ui.holdUntil) { ui.lastPanels = n; X.renderDesigner(); X.renderRows(); }
@@ -177,14 +177,13 @@
     var target = r && r.target ? r.target * (id === 'paragraph' || id === 'arith' || id === 'translate' || id === 'api' ? 1.7 : 1.02) : 0;
     var d = target ? G.designFor(target, ui.pool) : null;
     if (d) { ui.params = d.params; ui.recipe = true; ui.tokens = G.recipeTokens(d.params); ui.gpusTouched = false; ui.preset = null; X.syncDesignerInputs(); X.renderDesigner(); ui.chartDirty = true; }
-    var el = $('designer'); try { el.scrollIntoView({ behavior: X.reduced() ? 'auto' : 'smooth', block: 'center' }); } catch (e) {}
+    var el = $('opt-run'); try { $('opts').scrollTo({ left: 0, top: 0, behavior: X.reduced() ? 'auto' : 'smooth' }); } catch (e) {}
     el.classList.remove('hl'); void el.offsetWidth; el.classList.add('hl'); setTimeout(function () { el.classList.remove('hl'); }, 1600);
   }
-  function verbAction(v) {
-    if (v === 'hire') X.openRow('r-team', 'hire-block');
-    else if (v === 'rent') X.openRow('r-cluster', 'rent-block');
-    else if (v === 'data') X.openRow('r-data', 'data-block');
-    else if (v === 'raise') X.openRow('r-money', 'raise-block');
+  function setTune(on) {
+    var ui = X.ui, tn = $('tune'); ui.tuned = !!on; if (tn) tn.hidden = !on;
+    var b = $('d-tune'); if (b) { b.setAttribute('aria-expanded', String(!!on)); b.classList.toggle('on', !!on); }
+    ui.chartDirty = true; if (on) { X.renderDesigner(); X.AUD.paper && X.AUD.paper(); }
   }
 
   document.getElementById('fx').addEventListener('click', function (e) {
@@ -193,13 +192,14 @@
     var t = tgt.closest('button');
     if (!t) {
       var rh = tgt.closest('.row-h'); if (rh) X.toggleRow(rh.parentNode);
+      if (tgt.closest('#cellsrow')) X.openRow('r-cluster');
       if (tgt.id === 'scrim' && ui.card != null) closeCard();
       return;
     }
     if (t.disabled && !t.classList.contains('verb')) return;
     if (t.hasAttribute('data-opt')) { var ok = t.getAttribute('data-opt'); if (ok === '__close') { closeCard(); return; } choose(ok, t); return; }
     if (t.hasAttribute('data-rung')) { rungAction(t.getAttribute('data-rung'), t); return; }
-    if (t.hasAttribute('data-verb')) { verbAction(t.getAttribute('data-verb')); return; }
+    if (t.id === 'money') { X.openRow('r-money'); return; }
     if (t.hasAttribute('data-preset')) { X.applyPreset(t.getAttribute('data-preset')); return; }
     if (t.hasAttribute('data-pool')) { ui.pool = t.getAttribute('data-pool'); ui.poolTouched = true; ui.gpusTouched = false; ui.preset = null; X.renderDesigner(); ui.chartDirty = true; return; }
     if (t.hasAttribute('data-tile')) {
@@ -214,7 +214,8 @@
     if (t.id === 'slip-x') { X.hideSlip(false); return; }
     if (t.id === 'lg-x') { X.toggleLedger(false); return; }
     if (t.id === 'vq') { ui.voiceOpen = !ui.voiceOpen; X.cache.voice = null; X.renderVoice(); return; }
-    if (t.id === 'd-tune') { ui.tuned = !ui.tuned; $('designer').classList.toggle('tuned', ui.tuned); t.setAttribute('aria-expanded', String(ui.tuned)); t.classList.toggle('on', ui.tuned); ui.chartDirty = true; return; }
+    if (t.id === 'd-tune') { setTune(!ui.tuned); return; }
+    if (t.id === 'tune-x') { setTune(false); return; }
     if (t.id === 'd-launch') { launch(t); return; }
     var a = t.getAttribute('data-act'); if (!a) return;
     if (a === 'stop') { var sid = +t.getAttribute('data-id'); if (ui.stopArm && ui.stopArm.id === sid && X.nowMs() - ui.stopArm.t < 3000) { ui.stopArm = null; doAct('stop', { id: sid }, null); } else { ui.stopArm = { id: sid, t: X.nowMs() }; X.cache.runbar = null; X.renderRunbar(); } return; }
@@ -247,7 +248,7 @@
     var S = X.S, G = X.G, ui = X.ui;
     var tag = (e.target && e.target.tagName) || '', typing = tag === 'INPUT' && e.target.type !== 'range' && e.target.type !== 'checkbox';
     if (typing) return;
-    if (e.key === 'Escape') { if (ui.card != null) { closeCard(); return; } if (!$('ledger').hidden) { X.toggleLedger(false); return; } if (ui.slip) { X.hideSlip(false); return; } }
+    if (e.key === 'Escape') { if (ui.card != null) { closeCard(); return; } if (ui.tuned) { setTune(false); return; } if (!$('ledger').hidden) { X.toggleLedger(false); return; } if (ui.slip) { X.hideSlip(false); return; } }
     if (S.over) return;
     if (S.pending) {
       var k = parseInt(e.key, 10);
@@ -263,7 +264,8 @@
     if (e.key === 'p' || e.key === 'P') { G.act('pause'); X.renderStrip(0.016); return; }
   });
   document.addEventListener('visibilitychange', function () { X.AUD.suspend(document.hidden); lastT = 0; });
-  window.addEventListener('resize', function () { X.ui.chartDirty = true; });
+  window.addEventListener('resize', function () { X.ui.chartDirty = true; X.cache.people = null; });
+  try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if (X.ui) { X.ui.chartDirty = true; X.drawCells && X.drawCells(true); } }); if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', function () { if (X.ui) { X.ui.chartDirty = true; } }); } catch (e) {}
   window.addEventListener('orientationchange', function () { X.ui.chartDirty = true; });
   document.addEventListener('click', function (e) { var lg = $('ledger'); if (lg && !lg.hidden && !e.target.closest('#ledger') && !e.target.closest('#t-month')) X.toggleLedger(false); }, true);
 

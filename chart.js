@@ -1,291 +1,251 @@
-/* FRONTIER, the paper: the curve drawn as ink on cold log paper.
-   Error score (lower is better) against compute, both on log scales, on a decade grid. The dotted graphite line is "the loss you should get
-   for the compute you spent"; your finished runs are thin ink curves, the live run is a pen with a dot at its tip, your saved models are dots
-   (a ring when published, a bar when it is an API), rivals are graphite dots with small labels, GPT-3 is the ring, the data wall is a
-   vermilion hatch, and one ink dimension line runs from your biggest dot to the ring and says how many times short you are.
-   Under the plot runs the calendar: month initials, the days your runs ran, history's phrases on their dates, and today's cursor. */
-(function () {
+/* The paper. Error score against compute on cold log-log paper, drawn the way the reference sheet draws it: a grey decade grid,
+   the scaling law as a dotted graphite hairline, finished runs as thin ink curves, the live run as a 1.5 px pen with a dot at its tip,
+   rivals as graphite dots with small mono labels, the GPT-3 ring, the data wall as a vermilion hatch, and one dimension line
+   from your biggest dot to the ring, labelled with the strip's "times short". */
+(function (X) {
   'use strict';
-  var FX = window.FX, CFG = FX.CFG, FE = FX.FE, W = FX.W, log10 = FE.log10, clamp = FE.clamp;
-  var COL = null, FONT = null;
-  function readColors() {
-    var css = getComputedStyle(FX.root);
-    function g(n, d) { var v = (css.getPropertyValue(n) || '').trim(); return v || d; }
-    COL = { paper: g('--paper', '#E4E5E1'), ink: g('--ink', '#15171A'), grid: g('--grid', '#CCCFCA'), graphite: g('--graphite', '#6E7378'), reserve: g('--reserve', '#F8F8F5'), verm: g('--vermilion', '#E5482E'), dry: g('--dry', '#A9ACAA') };
-    FONT = { mono: g('--mono', 'monospace'), serif: g('--serif', 'serif'), hand: g('--hand', 'cursive') };
+  var log10 = X.log10, clamp = X.clamp, rgba = X.rgba;
+
+  function sizeCanvas(cv) {
+    var r = cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+    var w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    return { w: r.width, h: r.height, dpr: dpr };
   }
-  FX.readPaperColors = function () { COL = null; };
-  function rgba(hex, a) { var n = parseInt(hex.slice(1), 16); return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; }
-  var geom = null;
-  FX.chartGeom = function () { return geom; };
-  var MON = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
-
-  function boxHits(b, list) { var n = 0; for (var i = 0; i < list.length; i++) { var o = list[i]; if (b.x < o.x + o.w && b.x + b.w > o.x && b.y < o.y + o.h && b.y + b.h > o.y) n += o.k || 1; } return n; }
-
-  FX.drawChart = function () {
-    var E = FX.E, S = FX.S, ui = FX.ui; if (!S) return;
-    var cv = FX.$('chart'); if (!cv) return;
-    var wrap = cv.parentNode, w = wrap.clientWidth, h = wrap.clientHeight; if (w < 10 || h < 10) return;
-    if (!COL) readColors();
-    var dpr = Math.min(2, window.devicePixelRatio || 1), W2 = Math.round(w * dpr), H2 = Math.round(h * dpr);
-    if (cv.width !== W2 || cv.height !== H2) { cv.width = W2; cv.height = H2; }
-    var c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
-    var laptop = w >= 560, mono = function (px, it, wt) { return (it ? 'italic ' : '') + (wt || 400) + ' ' + px + 'px ' + FONT.mono; }, hand = function (px, wt) { return (wt || 400) + ' ' + px + 'px ' + FONT.hand; };
-    var marginPx = parseFloat(getComputedStyle(FX.root).getPropertyValue('--margin')) || 58;
-    var padL = marginPx, padR = laptop ? 12 : 8, padT = laptop ? 30 : 38, rulerH = 40, axisH = 16;
-    var plotX = padL, plotW = w - padL - padR, plotY = padT, plotH = Math.max(60, h - padT - axisH - rulerH - 4), plotR = plotX + plotW, plotB = plotY + plotH;
-    var x0 = CFG.chart.xMin, x1 = CFG.chart.xMax, yLo = Math.log(CFG.chart.yMin), yHi = Math.log(CFG.chart.yMax);
-    function X(lc) { return plotX + (lc - x0) / (x1 - x0) * plotW; }
-    function Y(L) { return plotY + (yHi - Math.log(clamp(L, CFG.chart.yMin, CFG.chart.yMax))) / (yHi - yLo) * plotH; }
-    function dayX(day) { return plotX + clamp(day / (CFG.yearDays), 0, 1) * plotW; }
-    geom = { X: X, Y: Y, w: w, h: h, dots: [], plot: { x: plotX, y: plotY, w: plotW, h: plotH } };
-    var t = performance.now(), red = FX.reduced(), occ = [];
-    var fs = laptop ? 10 : 9;
-    c.textBaseline = 'alphabetic'; c.lineJoin = 'round'; c.lineCap = 'round';
-    function halo(txt, x, y, a) { c.lineWidth = 3; c.strokeStyle = rgba(COL.paper, a == null ? 0.9 : a); c.strokeText(txt, x, y); }
-    function place(x, y, bw, bh, cands, optional) {
-      var list = cands.concat([[8, -bh - 14], [-bw - 8, -bh - 14], [8, 22], [-bw - 8, 22], [-bw / 2, -bh - 28], [-bw / 2, 34]]), best = null, bestN = Infinity;
-      for (var i = 0; i < list.length; i++) {
-        var b = { x: clamp(x + list[i][0], plotX + 1, plotR - bw - 1), y: clamp(y + list[i][1], plotY, plotB - bh - 2), w: bw, h: bh, k: 50 };
-        var nh = boxHits({ x: b.x - 6, y: b.y - 2, w: bw + 12, h: bh + 4 }, occ);
-        if (!nh) { occ.push(b); return b; }
-        if (nh < bestN) { bestN = nh; best = b; }
-      }
-      if (optional) return null;
-      best = best || { x: clamp(x + cands[0][0], plotX + 1, plotR - bw - 1), y: clamp(y + cands[0][1], plotY, plotB - bh - 2), w: bw, h: bh, k: 50 };
-      occ.push(best); return best;
-    }
-
-    // ---- the decade grid: log-log paper
-    c.lineWidth = 1; c.strokeStyle = COL.grid; c.beginPath();
-    for (var d = Math.ceil(x0); d <= Math.floor(x1); d++) { var gx = Math.round(X(d)) + 0.5; c.moveTo(gx, plotY); c.lineTo(gx, plotB); }
-    [2, 3, 4, 6, 10].forEach(function (L) { var gy = Math.round(Y(L)) + 0.5; c.moveTo(plotX, gy); c.lineTo(plotR, gy); });
-    c.stroke();
-    // numbers on the paper, in pencil: the loss on its lines, compute decades along the foot (no units: the caption says what a tick is)
-    c.font = mono(fs); c.fillStyle = rgba(COL.graphite, 0.9); c.textAlign = 'left';
-    [10, 6, 4, 3, 2].forEach(function (L) { var gy = Math.round(Y(L)); var lab = String(L); halo(lab, plotX + 3, gy - 2); c.fillText(lab, plotX + 3, gy - 2); occ.push({ x: plotX + 1, y: gy - 12, w: c.measureText(lab).width + 5, h: 12 }); });
-    c.textAlign = 'center'; var lastLab = -99;
-    for (d = Math.ceil(x0); d <= Math.floor(x1); d++) { var lx = X(d), lab2 = '1e' + d, tw = c.measureText(lab2).width; if (lx - tw / 2 < lastLab + 4 || lx + tw / 2 > w + 2) continue; c.fillText(lab2, lx, plotB + 12); lastLab = lx + tw / 2; }
-
-    // ---- teaching, in pencil: what the two axes are
-    c.textAlign = 'left'; c.fillStyle = rgba(COL.graphite, 0.95);
-    c.font = 'italic ' + (laptop ? 15 : 14) + 'px ' + FONT.hand;
-    c.fillText(W.pencil.yAxis, plotX + 4, laptop ? 18 : 15);
-    c.textAlign = laptop ? 'right' : 'left';
-    c.fillText(W.pencil.xAxis, laptop ? plotR - 4 : plotX + 4, laptop ? 18 : 30);
-    c.textAlign = 'left';
-    occ.push({ x: plotX, y: 0, w: plotW, h: padT - 2 });
-
-    // ---- the calendar band: month initials, the days your runs ran, history on its dates, today
-    var rulerTop = plotB + axisH + 4, ry = rulerTop + rulerH - 13;
-    c.strokeStyle = COL.grid; c.beginPath(); c.moveTo(plotX, rulerTop - 2.5); c.lineTo(plotR, rulerTop - 2.5); c.moveTo(dayX(0), ry + 0.5); c.lineTo(dayX(366), ry + 0.5); c.stroke();
-    c.fillStyle = COL.graphite; c.font = mono(fs); c.textAlign = 'left';
-    for (var m = 0; m < 12; m++) { var mdx = Math.round(dayX(E.D('2020-' + (m < 9 ? '0' : '') + (m + 1) + '-01'))); c.fillRect(mdx, ry - 2, 1, 5); c.fillText(MON[m], mdx + 3, ry + 11); }
-    // history's phrases (factual dates, shortened): newest written in full, older ones that would collide collapse to a tick
-    var phrases = [];
-    S.news.forEach(function (n) { if (!n.real) return; var iso = null; W.news.forEach(function (wn) { if (wn[1] === n.text) iso = wn[0]; }); var sh = iso && W.newsShort[iso]; if (sh) phrases.push({ day: n.day, text: sh }); });
-    phrases.sort(function (a, b) { return b.day - a.day; });
-    var rowsUsed = [[], []], rowY = [rulerTop + 3, rulerTop + 13]; c.font = mono(fs - 0.5, true);
-    phrases.forEach(function (p) {
-      var tx = Math.round(dayX(p.day)) + 0.5, tw = c.measureText(p.text).width, px = clamp(tx + 2, plotX, plotR - tw), row = -1;
-      for (var ri = 0; ri < 2 && row < 0; ri++) { var ok = rowsUsed[ri].every(function (b) { return px + tw + 6 < b.x || px > b.x + b.w + 6; }); if (ok) row = ri; }
-      if (row >= 0) rowsUsed[row].push({ x: px, w: tw });
-      c.globalAlpha = row >= 0 ? 0.9 : 0.5; c.fillStyle = COL.graphite; c.fillRect(tx - 0.5, ry - 6, 1, 6);
-      if (row >= 0) { c.strokeStyle = rgba(COL.graphite, 0.5); c.beginPath(); c.moveTo(tx, ry - 6); c.lineTo(tx, rowY[row] + 3); c.stroke(); halo(p.text, px, rowY[row] + 8); c.fillText(p.text, px, rowY[row] + 8); }
-      c.globalAlpha = 1;
-    });
-    // run bars on the baseline
-    S.runs.forEach(function (r) {
-      if (r.state === 'aborted' && !r.pts.length) return;
-      var xa = dayX(r.launchDay), xb = Math.max(xa + 1.5, dayX(r.state === 'train' ? S.day : (r.landDay != null ? r.landDay : S.day))), yb = ry - 1;
-      if (r.state === 'landed' && r.clean === false) { c.strokeStyle = COL.ink; c.lineWidth = 1; c.strokeRect(xa + 0.5, yb + 0.5, Math.max(1, xb - xa - 1), 2); }
-      else { c.fillStyle = r.state === 'aborted' ? COL.dry : COL.ink; c.fillRect(xa, yb, xb - xa, 2); }
-      c.fillStyle = COL.paper; (r.hangs || []).forEach(function (hd) { var hx = Math.round(dayX(typeof hd === 'number' ? hd : (hd.day != null ? hd.day : r.launchDay))); if (hx >= xa && hx <= xb) c.fillRect(hx, yb - 1, 1, 4); });
-    });
-    var tdx = Math.round(dayX(Math.min(S.day, 366))) + 0.5; c.fillStyle = COL.ink; c.fillRect(tdx - 1, ry - 5, 2, 8);
-
-    // ---- the data wall: the uncertain band where the clean text runs out, hatched in vermilion (danger, and nothing else)
-    var recC = function (D) { return CFG.gpt3.C * Math.pow(D / CFG.gpt3.D, 1 / CFG.tokExp); };
-    var wLo = recC(S.wallLo), wHi = recC(S.wallHi), wx0 = X(log10(wLo)), wx1 = X(log10(wHi));
-    if (wx0 < plotR) {
-      c.save(); c.beginPath(); c.rect(plotX, plotY, plotW, plotH); c.clip();
-      var a0 = Math.max(plotX, wx0), a1 = Math.min(plotR, wx1);
-      c.lineWidth = 1;
-      if (a1 > a0) { c.save(); c.beginPath(); c.rect(a0, plotY, a1 - a0, plotH); c.clip(); c.strokeStyle = rgba(COL.verm, 0.5); c.beginPath(); for (var k = a0 - plotH; k < a1 + 2; k += 8) { c.moveTo(k, plotB); c.lineTo(k + plotH, plotY); } c.stroke(); c.restore(); }
-      if (wx1 < plotR) { c.save(); c.beginPath(); c.rect(Math.max(plotX, wx1), plotY, plotR - Math.max(plotX, wx1), plotH); c.clip(); c.strokeStyle = rgba(COL.verm, 0.17); c.beginPath(); for (var k2 = wx1 - plotH; k2 < plotR + 2; k2 += 14) { c.moveTo(k2, plotB); c.lineTo(k2 + plotH, plotY); } c.stroke(); c.restore(); }
-      c.restore();
-      occ.push({ x: a0, y: plotY, w: Math.max(0, a1 - a0), h: plotH, k: 0.2 });
-      // the pencil that says what the hatch is, standing along its left edge
-      if (a1 > a0 + 6 && a0 < plotR - 14) {
-        c.save(); c.font = 'italic ' + (laptop ? 14 : 13) + 'px ' + FONT.hand;
-        var wt = W.pencil.wall; if (c.measureText(wt).width > plotH - 16) wt = 'the data wall';
-        var wtw = c.measureText(wt).width, wpx = clamp(a0 + 13, plotX + 12, plotR - 6);
-        occ.push({ x: wpx - 14, y: plotB - 8 - wtw - 2, w: 18, h: wtw + 4, k: 30 });
-        c.translate(wpx, plotB - 8); c.rotate(-Math.PI / 2); c.textAlign = 'left';
-        halo(wt, 0, 0, 0.95); c.fillStyle = rgba(COL.graphite, 0.95); c.fillText(wt, 0, 0); c.restore();
-      }
-    }
-
-    // ---- the Series A mark: what the money wants, until it is raised (dim until the third rung is lit)
-    var LD = E.ladder(), rung = LD.rungs[LD.lit], aLit = rung && rung.id === 'seriesA';
-    if (!S.raise.aDone && log10(S.raise.aNeed) <= x1) {
-      var ax = Math.round(X(log10(S.raise.aNeed))) + 0.5, ay = Y(E.Lline(S.raise.aNeed));
-      c.strokeStyle = aLit ? COL.ink : rgba(COL.graphite, 0.5); c.lineWidth = 1; c.beginPath(); c.moveTo(ax, plotY); c.lineTo(ax, ay - 4); c.moveTo(ax, ay + 4); c.lineTo(ax, ay + 10); c.stroke();
-      var atxt = aLit ? W.pencil.seriesA : 'Series A'; c.font = hand(aLit ? 15 : 14, aLit ? 600 : 400); var aw = c.measureText(atxt).width;
-      c.fillStyle = aLit ? COL.ink : rgba(COL.graphite, 0.9); c.textAlign = 'left'; var axx = ax - aw - 4 < plotX + 2 ? ax + 4 : ax - aw - 4;
-      halo(atxt, axx, plotY + 14); c.fillText(atxt, axx, plotY + 14); occ.push({ x: axx, y: plotY + 3, w: aw, h: 14, k: 20 });
-    }
-
-    // ---- the line: the loss you should get for the compute you spent (a dotted graphite hairline)
-    var lineOn = S.day >= E.DAY.line;
-    c.save(); c.strokeStyle = lineOn ? COL.graphite : rgba(COL.graphite, 0.5); c.lineWidth = 1; c.setLineDash([1, 3]); c.beginPath();
-    for (var lc = x0; lc <= x1 + 1e-9; lc += 0.05) { var ly = Y(E.Lline(Math.pow(10, lc))); if (lc === x0) c.moveTo(X(lc), ly); else c.lineTo(X(lc), ly); }
-    c.stroke(); c.setLineDash([]); c.restore();
-    // its caption rides along the line, in pencil, just above it near the left, where the paper is empty
-    var cl = laptop ? 17.2 : 17.1, cx = X(cl), cy = Y(E.Lline(Math.pow(10, cl))), cl2 = cl + 1, ang = Math.atan2(Y(E.Lline(Math.pow(10, cl2))) - cy, X(cl2) - cx);
-    c.save(); c.translate(cx, cy); c.rotate(ang); c.fillStyle = rgba(COL.graphite, 0.95); c.textAlign = 'left'; c.font = 'italic ' + (laptop ? 14 : 13) + 'px ' + FONT.hand;
-    var capLines = laptop ? [W.pencil.line] : ['the loss you should get', 'for the compute you spent'];
-    capLines.forEach(function (ln, i) { halo(ln, 4, -6 - (capLines.length - 1 - i) * 13); c.fillText(ln, 4, -6 - (capLines.length - 1 - i) * 13); });
-    c.restore();
-    for (var cc = cl; cc < cl + (laptop ? 3.2 : 2.3); cc += 0.25) occ.push({ x: X(cc) - 6, y: Y(E.Lline(Math.pow(10, cc))) - 8 - capLines.length * 14 + 4, w: 12, h: 12 + capLines.length * 12 });
-
-    // ---- GPT-3
-    var gx3 = X(log10(CFG.gpt3.C)), gy3 = Y(CFG.gpt3.L), real = S.day >= E.DAY.gpt3;
-    occ.push({ x: gx3 - 9, y: gy3 - 9, w: 18, h: 18, k: 5 });
-
-    // ---- rivals: graphite dots, dashed ladders, small mono labels
-    S.rivals.forEach(function (rv) {
-      var pts = rv.pubs.filter(function (p) { return log10(p.C) >= x0; }).map(function (p) { return [X(log10(p.C)), Y(p.L), p]; });
-      c.save(); c.strokeStyle = rgba(COL.graphite, 0.5); c.fillStyle = COL.graphite; c.lineWidth = 1;
-      if (pts.length > 1) { c.setLineDash([3, 3]); c.beginPath(); pts.forEach(function (p, i) { if (i) c.lineTo(p[0], p[1]); else c.moveTo(p[0], p[1]); }); c.stroke(); c.setLineDash([]); }
-      pts.forEach(function (p) { c.beginPath(); c.arc(p[0], p[1], 1.7, 0, 6.2832); c.fill(); occ.push({ x: p[0] - 3, y: p[1] - 3, w: 6, h: 6 }); });
-      c.restore();
-    });
-    S.rivals.forEach(function (rv) {
-      var lp = rv.pubs[rv.pubs.length - 1]; if (!lp || log10(lp.C) < x0) return;
-      var px = X(log10(lp.C)), py = Y(lp.L), nn = E.recipeForC ? E.recipeForC(lp.C).N : 0;
-      c.font = mono(laptop ? 11 : 10, true); var lab = rv.name + (nn ? ' · ' + FE.bigNum(nn) : ''), tw = c.measureText(lab).width;
-      var dys = [3, -15, 16, -28, 29, -41, 42, -54, 55, -67, -80], cands = []; dys.forEach(function (dy) { cands.push([5, dy]); cands.push([-tw - 5, dy]); });
-      var b = place(px, py, tw, 12, cands);
-      var ly0 = b.y + 6, lxe = b.x > px ? b.x - 2 : b.x + tw + 2;
-      if (Math.abs(ly0 - py) > 12) { c.strokeStyle = rgba(COL.graphite, 0.45); c.lineWidth = 0.75; c.beginPath(); c.moveTo(px, py); c.lineTo(lxe, ly0); c.stroke(); }
-      c.textBaseline = 'top'; c.textAlign = 'left'; halo(lab, b.x, b.y); c.fillStyle = rgba(COL.graphite, 1); c.fillText(lab, b.x, b.y); c.textBaseline = 'alphabetic';
-    });
-
-    // ---- your runs: finished curves at 35% ink, the live run a pen with a dot at its tip
-    function strokeRun(r, style, lw) {
-      c.save(); c.beginPath(); c.rect(plotX, 0, plotW, plotB + 2); c.clip(); c.strokeStyle = style; c.lineWidth = lw; c.beginPath();
-      var lx = -1e9, ly2 = -1e9, started = false;
-      for (var i = 0; i < r.pts.length; i++) {
-        var p = r.pts[i], lcx = log10(p[0] * r.C); if (lcx < x0 - 0.2) continue;
-        var px = X(lcx), py = Y(p[1]);
-        if (started && i < r.pts.length - 1 && Math.abs(px - lx) < 0.6 && Math.abs(py - ly2) < 0.6) continue;
-        if (!started) { c.moveTo(px, py); started = true; } else c.lineTo(px, py); lx = px; ly2 = py;
-      }
-      c.stroke(); c.restore();
-    }
-    var seen = [];
-    for (var ri2 = S.runs.length - 1; ri2 >= 0; ri2--) {
-      var rr = S.runs[ri2]; if (rr.state === 'train' || rr.state === 'aborted' || !rr.pts.length) continue;
-      var lc2 = log10(rr.C); if (seen.some(function (v) { return Math.abs(v - lc2) < 0.08; })) continue; seen.push(lc2);
-      strokeRun(rr, rgba(COL.ink, 0.35), 1);
-    }
-    S.runs.forEach(function (r) {
-      if (r.state !== 'train' || !r.pts.length) return;
-      strokeRun(r, r.hang ? rgba(COL.ink, 0.55) : COL.ink, 1.5);
-      var hp = r.pts[r.pts.length - 1], hx = X(Math.max(x0, log10(hp[0] * r.C))), hy = Y(hp[1]);
-      // where it is headed: a pencil dotted line to the ring where it is expected to land
-      var tx2 = X(log10(r.C)), ty2 = Y(r.projAtLaunch);
-      c.save(); c.strokeStyle = rgba(COL.graphite, 0.8); c.lineWidth = 1; c.setLineDash([1, 3]); c.beginPath(); c.moveTo(hx, hy); c.lineTo(tx2, ty2); c.stroke(); c.setLineDash([]);
-      c.beginPath(); c.arc(tx2, ty2, 4, 0, 6.2832); c.stroke(); c.restore();
-      occ.push({ x: tx2 - 6, y: ty2 - 6, w: 12, h: 12 });
-      c.fillStyle = r.hang ? COL.verm : COL.ink; c.beginPath(); c.arc(hx, hy, 2.8, 0, 6.2832); c.fill();
-      if (!red && !r.hang) { c.strokeStyle = rgba(COL.ink, 0.25); c.lineWidth = 1; c.beginPath(); c.arc(hx, hy, 5 + 1.5 * Math.sin(t / 260), 0, 6.2832); c.stroke(); }
-      var pct = (r.hang ? 'dropped ' : '') + Math.round(r.q * 100) + '%'; c.font = mono(fs + 1, false, 500); c.textAlign = hx > w - 80 ? 'right' : 'left';
-      var tx3 = hx + (c.textAlign === 'left' ? 7 : -7); halo(pct, tx3, hy - 6); c.fillStyle = r.hang ? COL.verm : COL.ink; c.fillText(pct, tx3, hy - 6); c.textAlign = 'left';
-    });
-    // the pen's own path, as obstacle for labels
-    S.runs.forEach(function (r) { if (r.state === 'train' && r.pts.length) { for (var q = 0.02; q <= 1; q += 0.06) { var qx = X(log10(Math.max(q, 0.0005) * r.C)); occ.push({ x: qx - 4, y: Y(r.projAtLaunch) - 4, w: 8, h: 8, k: 0.1 }); } } });
-
-    // ---- your saved models: solid dots; a ring when published; a bar when it is an API; a vermilion strike for a scandal
-    var far = E.farthestClean(), farRun = null, newest = null;
-    S.runs.forEach(function (r) { if (r.state === 'landed') newest = r; });
-    S.runs.forEach(function (r) {
-      if (r.state !== 'landed') return;
-      var lcx = log10(r.Cland); if (lcx < x0) return;
-      var x = X(lcx), y = Y(r.loss);
-      if (r.clean && r.Cland === far) farRun = { x: x, y: y, r: r };
-      var thunk = ui.thunkRun === r.id && ui.thunkAt && t - ui.thunkAt < 700;
-      if (ui.thunkRun === r.id && !ui.thunkAt) ui.thunkAt = t;
-      occ.push({ x: x - 7, y: y - 7, w: 14, h: 14, k: 5 });
-      c.save(); c.fillStyle = COL.ink; c.strokeStyle = COL.ink; c.lineWidth = 1.2;
-      if (r.clean) { c.beginPath(); c.arc(x, y, laptop ? 3.4 : 3, 0, 6.2832); c.fill(); }
-      else { c.beginPath(); c.arc(x, y, laptop ? 3.4 : 3, 0, 6.2832); c.stroke(); }
-      if (thunk && !red) { var u = (t - ui.thunkAt) / 450; if (u < 1) { c.strokeStyle = rgba(COL.ink, 0.45 * (1 - u)); c.lineWidth = 1; c.beginPath(); c.arc(x, y, 3 + 9 * (1 - Math.pow(1 - u, 3)), 0, 6.2832); c.stroke(); } }
-      c.strokeStyle = COL.ink; c.lineWidth = 1;
-      if (r.published) { c.beginPath(); c.arc(x, y, laptop ? 6 : 5.2, 0, 6.2832); c.stroke(); }
-      if (r.shipped) { c.fillStyle = COL.ink; c.fillRect(x + 7, y - 0.5, 7, 1); }
-      if (r.scandal) { c.strokeStyle = COL.verm; c.lineWidth = 1.3; c.beginPath(); c.moveTo(x - 7, y + 7); c.lineTo(x + 7, y - 7); c.stroke(); }
-      c.restore();
-      geom.dots.push({ x: x, y: y, id: r.id });
-    });
-    if (ui.thunkAt && t - ui.thunkAt > 800) { ui.thunkAt = 0; ui.thunkRun = null; }
-    // the newest model is named in pencil beside its dot
-    if (newest && log10(newest.Cland) >= x0) {
-      c.font = mono(fs + 0.5, false, 500); var nm = E.modelName(newest), nw = c.measureText(nm).width, nx = X(log10(newest.Cland)), ny = Y(newest.loss);
-      var nb = place(nx, ny, nw, 12, [[-nw / 2, 9], [7, 6], [-nw - 7, 6], [-nw / 2, -22]], true);
-      if (nb) { c.textBaseline = 'top'; halo(nm, nb.x, nb.y); c.fillStyle = COL.ink; c.fillText(nm, nb.x, nb.y); c.textBaseline = 'alphabetic'; }
-    }
-
-    // ---- the ring: GPT-3 (dotted pencil before 28 May, an ink dot with its ring after)
-    c.save();
-    if (!real) {
-      c.strokeStyle = COL.graphite; c.lineWidth = 1; c.setLineDash([2, 2]); c.beginPath(); c.arc(gx3, gy3, laptop ? 5 : 4.5, 0, 6.2832); c.stroke(); c.setLineDash([]);
-    } else {
-      c.fillStyle = COL.ink; c.beginPath(); c.arc(gx3, gy3, laptop ? 4.5 : 3.8, 0, 6.2832); c.fill();
-      c.strokeStyle = rgba(COL.ink, 0.6); c.lineWidth = 1; c.beginPath(); c.arc(gx3, gy3, (laptop ? 4.5 : 3.8) + 3.5, 0, 6.2832); c.stroke();
-    }
-    c.restore();
-    c.font = real ? mono(laptop ? 11 : 10, false, 500) : 'italic ' + (laptop ? 15 : 14) + 'px ' + FONT.hand; var gl = real ? 'GPT-3' : W.pencil.ring, glw = c.measureText(gl).width;
-    var gb = place(gx3, gy3, glw, real ? 12 : 14, [[-glw / 2, -26], [-glw - 8, -8], [8, -8], [-glw / 2, 8]]);
-    c.textBaseline = 'top'; c.textAlign = 'left'; halo(gl, gb.x, gb.y); c.fillStyle = real ? COL.ink : COL.graphite; c.fillText(gl, gb.x, gb.y); c.textBaseline = 'alphabetic';
-
-    // ---- the designer's ghost: where the run you are planning would land (a pencil cross with its doubt)
-    var g = ui.lastDesign, ghost = null;
-    if (S.phase === 'play' && g && g.cards > 0 && g.C > 0) {
-      var gxx = X(clamp(log10(g.C), x0, x1)), gyy = Y(g.proj);
-      ghost = { x: gxx, y: gyy };
-      c.save(); c.strokeStyle = g.ok ? COL.ink : COL.graphite; c.lineWidth = 1; c.setLineDash([2, 2]);
-      c.beginPath(); c.moveTo(gxx, Y(g.hi)); c.lineTo(gxx, Y(g.lo)); c.stroke(); c.setLineDash([]);
-      c.beginPath(); c.moveTo(gxx - 5, gyy); c.lineTo(gxx + 5, gyy); c.moveTo(gxx, gyy - 5); c.lineTo(gxx, gyy + 5); c.stroke(); c.restore();
-      occ.push({ x: gxx - 6, y: Math.min(gyy, Y(g.hi)) - 2, w: 12, h: Math.abs(Y(g.lo) - Y(g.hi)) + 4, k: 2 });
-      var nearDot = geom.dots.some(function (d) { return Math.hypot(d.x - gxx, d.y - gyy) < 16; });
-      if (!nearDot) { c.font = 'italic ' + (laptop ? 15 : 14) + 'px ' + FONT.hand; var pw = c.measureText(W.pencil.plan).width; var pb = place(gxx, gyy, pw, 14, [[8, -20], [-pw - 8, -20], [8, 8], [-pw - 8, 8]], true); if (pb) { c.textBaseline = 'top'; halo(W.pencil.plan, pb.x, pb.y); c.fillStyle = g.ok ? COL.ink : COL.graphite; c.fillText(W.pencil.plan, pb.x, pb.y); c.textBaseline = 'alphabetic'; } }
-    }
-
-    // ---- the dimension line: your biggest dot to the ring, in ink, with how many times short
-    var from = farRun, txt = null, dim = false;
-    if (farRun) { var sh = CFG.gpt3.C / far; txt = sh < 1.05 ? 'passed it' : E.shortFmt(sh) + ' short'; }
-    else if (ghost && g.ok) { from = { x: ghost.x, y: ghost.y }; txt = E.shortFmt(CFG.gpt3.C / g.C) + ' short if it lands'; dim = true; }
-    if (from && txt && Math.abs(from.x - gx3) > 18) {
-      c.save(); c.strokeStyle = dim ? rgba(COL.ink, 0.5) : COL.ink; c.lineWidth = 1; c.setLineDash(dim ? [2, 3] : []);
-      var dx = gx3 - from.x, dy = gy3 - from.y, len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len;
-      var sx = from.x + ux * 8, sy = from.y + uy * 8, ex = gx3 - ux * 9, ey = gy3 - uy * 9;
-      c.beginPath(); c.moveTo(sx, sy); c.lineTo(ex, ey); c.stroke(); c.setLineDash([]);
-      var nx2 = -uy * 4, ny2 = ux * 4; c.beginPath(); c.moveTo(sx + nx2, sy + ny2); c.lineTo(sx - nx2, sy - ny2); c.moveTo(ex + nx2, ey + ny2); c.lineTo(ex - nx2, ey - ny2); c.stroke();
-      c.font = mono(laptop ? 12 : 11, false, 500); var tw2 = c.measureText(txt).width, mx = (sx + ex) / 2, my = (sy + ey) / 2;
-      var db = place(mx, my, tw2, 13, [[-tw2 / 2, 5], [-tw2 / 2, -19], [-tw2 - 4, -6], [6, -6]], true) || { x: clamp(mx - tw2 / 2, plotX + 2, plotR - tw2 - 2), y: my + 5 };
-      c.textBaseline = 'top'; c.textAlign = 'left'; halo(txt, db.x, db.y, 0.95); c.fillStyle = dim ? rgba(COL.ink, 0.7) : COL.ink; c.fillText(txt, db.x, db.y); c.textBaseline = 'alphabetic';
-      c.restore();
-    }
+  var marginCache = { t: 0, v: 58 };
+  X.margin = function () {
+    var n = X.nowMs(); if (n - marginCache.t < 400) return marginCache.v;
+    marginCache.t = n;
+    try { var v = parseFloat(getComputedStyle(X.$('fx')).getPropertyValue('--margin')); if (v > 0) marginCache.v = v; } catch (e) {}
+    return marginCache.v;
   };
 
-  // tap a dot to open its model card
-  var cv0 = FX.$('chart');
-  if (cv0) cv0.addEventListener('click', function (e) {
-    if (!geom) return;
-    var r = cv0.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, best = null, bd = 22;
-    geom.dots.forEach(function (d) { var dd = Math.hypot(d.x - x, d.y - y); if (dd < bd) { bd = dd; best = d; } });
-    if (best && FX.openCard) FX.openCard(best.id);
-  });
-})();
+  // a hand's wobble, the same every frame: a second faint pass of the pen beside the first
+  function wob(i, k) { var x = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return (x - Math.floor(x)) * 2 - 1; }
+  X.drawChart = function (cv, opts) {
+    opts = opts || {};
+    var G = X.G, S = X.S, F = X.F, CFG = X.CFG, T = X.tokens, ui = X.ui;
+    var sz = sizeCanvas(cv); if (sz.w < 20 || sz.h < 20) return;
+    var ctx = cv.getContext('2d'); ctx.setTransform(sz.dpr, 0, 0, sz.dpr, 0, 0);
+    var W = sz.w, H = sz.h, phone = W < 560, lap = W >= 560;
+    var padL = opts.end ? 34 : X.margin(), padR = 8, padT = 6, padB = 40;
+    var xMin = CFG.chart.xMin, xMax = CFG.chart.xMax, yMin = CFG.chart.yMin, yMax = CFG.chart.yMax;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+    function Xc(C) { return padL + (log10(C) - xMin) / (xMax - xMin) * plotW; }
+    function Yc(L) { return padT + (Math.log(yMax) - Math.log(L)) / (Math.log(yMax) - Math.log(yMin)) * plotH; }
+    ctx.clearRect(0, 0, W, H);
+    var mono = X.fMono(phone ? 9.5 : 10.5), hand = X.fHand(phone ? 14 : 15.5);
+    ctx.font = mono; ctx.textBaseline = 'middle';
+    var placed = [], labels = [], hits = [];
+    var plotR = W - padR, plotB = H - padB;
+    function block(x, y, r) { placed.push({ x: x - r, y: y - r, w: 2 * r, h: 2 * r }); }
+    function want(text, x, y, color, pri, cands, font, h) { labels.push({ t: text, x: x, y: y, c: color, p: pri, cands: cands, f: font || mono, h: h || 12 }); }
+    function overlaps(a) { for (var i = 0; i < placed.length; i++) { var b = placed[i]; if (a.x < b.x + b.w + 2 && a.x + a.w + 2 > b.x && a.y < b.y + b.h + 1 && a.y + a.h + 1 > b.y) return true; } return false; }
+    var CANDS = [[8, -9], [8, 9], [-8, -9], [-8, 9], [0, -15], [0, 15], [14, 0], [-14, 0]];
+    function halo(text, x, y, align) { ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.strokeStyle = rgba(T.paper, 0.88); ctx.textAlign = align || 'left'; ctx.strokeText(text, x, y); }
+    function placeAll() {
+      labels.sort(function (a, b) { return a.p - b.p; });
+      labels.forEach(function (l) {
+        ctx.font = l.f;
+        var w = ctx.measureText(l.t).width, h = l.h, cands = l.cands || CANDS;
+        for (var i = 0; i < cands.length; i++) {
+          var dx = cands[i][0], dy = cands[i][1];
+          var left = dx > 0 ? l.x + dx : dx < 0 ? l.x + dx - w : l.x - w / 2, top = l.y + dy - h / 2;
+          var r = { x: left, y: top, w: w, h: h };
+          if (left < padL + 1 || left + w > plotR - 1 || top < 2 || top + h > plotB - 1) continue;
+          if (overlaps(r)) continue;
+          placed.push(r); halo(l.t, left, top + h / 2); ctx.fillStyle = l.c; ctx.textAlign = 'left'; ctx.fillText(l.t, left, top + h / 2); return;
+        }
+      });
+    }
+
+    // the decade grid: vertical decades of compute, horizontal lines of error score
+    ctx.lineWidth = 1; ctx.strokeStyle = T.grid; ctx.beginPath();
+    for (var e = xMin; e <= xMax; e++) { var gx = Math.round(Xc(Math.pow(10, e))) + 0.5; if (gx >= padL - 1) { ctx.moveTo(gx, padT); ctx.lineTo(gx, plotB + 5); } }
+    var NATS = [10, 6, 4, 3, 2];
+    // the words written on the paper (the voice) are obstacles for every label
+    try { var vo = X.$('voice'), vq = vo && vo.firstElementChild; if (vq && !opts.end) { var vr = vq.getBoundingClientRect(), cr = cv.getBoundingClientRect(); placed.push({ x: vr.left - cr.left - 2, y: vr.top - cr.top - 2, w: vr.width + 4, h: vr.height + 4 }); } } catch (e) {}
+    NATS.forEach(function (L) { var y = Math.round(Yc(L)) + 0.5; ctx.moveTo(padL, y); ctx.lineTo(plotR, y); });
+    ctx.moveTo(padL, plotB + 0.5); ctx.lineTo(plotR, plotB + 0.5);
+    ctx.stroke();
+    // pencil axes: compute decades along the foot, error score on its lines
+    ctx.fillStyle = T.graphite; ctx.textBaseline = 'top'; ctx.textAlign = 'center';
+    for (e = xMin; e <= xMax; e++) {
+      var lx = Xc(Math.pow(10, e)), lab = '1e' + e, lw = ctx.measureText(lab).width, tx = clamp(lx, padL + lw / 2, W - 1 - lw / 2);
+      if (e === xMin && lx < padL + 2) continue;
+      ctx.fillText(lab, tx, plotB + 7);
+    }
+    // the calendar band: its own rule, month initials, today's cursor, and the runs as bars with the days they still have to go dotted
+    var ry = plotB + 25, MON0 = [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335], MI = 'JFMAMJJASOND';
+    function dayX(d) { return padL + clamp(d / 366, 0, 1) * plotW; }
+    ctx.strokeStyle = T.grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(padL, ry + 0.5); ctx.lineTo(plotR, ry + 0.5); ctx.stroke();
+    ctx.fillStyle = T.graphite; ctx.textBaseline = 'top'; ctx.textAlign = 'left'; ctx.font = X.fMono(8.5);
+    for (var mi = 0; mi < 12; mi++) { var mxp0 = Math.round(dayX(MON0[mi])); ctx.fillStyle = T.graphite; ctx.fillRect(mxp0, ry - 2, 1, 5); ctx.fillText(MI.charAt(mi), mxp0 + 3, ry + 4); }
+    ctx.font = mono;
+    S.runs.forEach(function (r) { if (r.aborted) return; var x0 = dayX(r.launchDay), x1 = Math.max(x0 + 1.5, dayX(r.landDay)); ctx.fillStyle = T.ink; if (r.clean === false) { ctx.strokeStyle = T.ink; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, ry - 0.5, Math.max(1, x1 - x0 - 1), 2); } else ctx.fillRect(x0, ry - 1, x1 - x0, 2); });
+    S.active.forEach(function (r) { var x0 = dayX(r.launchDay), x1 = dayX(S.day), x2 = dayX(Math.min(366, S.day + G.runDaysLeft(r))); ctx.fillStyle = T.ink; ctx.fillRect(x0, ry - 1, Math.max(1, x1 - x0), 2); if (isFinite(x2)) { ctx.strokeStyle = rgba(T.ink, 0.7); ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.moveTo(x1, ry + 0.5); ctx.lineTo(x2, ry + 0.5); ctx.stroke(); ctx.setLineDash([]); } });
+    ctx.fillStyle = T.ink; ctx.fillRect(Math.round(dayX(Math.min(S.day, 365))) - 1, ry - 4, 2, 9);
+    ctx.textBaseline = 'bottom'; ctx.textAlign = 'left';
+    NATS.forEach(function (L) { var y = Math.round(Yc(L)); var t = String(L); ctx.fillStyle = T.graphite; ctx.fillText(t, padL + 3, y - 1); placed.push({ x: padL + 1, y: y - 12, w: ctx.measureText(t).width + 5, h: 12 }); });
+    ctx.textBaseline = 'middle';
+    ctx.font = hand; ctx.fillStyle = T.graphite;
+    var yls = phone ? ['error score,', 'lower is better ↓'] : ['error score, lower is better ↓'];
+    ctx.textAlign = 'left';
+    yls.forEach(function (ln, i) { var lw = ctx.measureText(ln).width; ctx.fillText(ln, padL + 22, padT + 11 + i * 14); placed.push({ x: padL + 20, y: padT + 2 + i * 14, w: lw + 4, h: 16 }); });
+    var xl = 'compute: each tick is ten times more →', xlw = ctx.measureText(xl).width;
+    ctx.textAlign = 'left'; ctx.fillText(xl, padL + 8, plotB - 9); placed.push({ x: padL + 6, y: plotB - 19, w: xlw + 6, h: 16 });
+    ctx.font = mono;
+    var dv = G.derived(), ladder = G.ladder(), litId = ladder.lit >= 0 ? ladder.rungs[ladder.lit].id : '';
+
+    // the data wall estimate: a vermilion hatch from the near edge to the far edge of the uncertain band
+    var wlo = G.C_of_tokens(S.data.lo), whi = G.C_of_tokens(S.data.hi);
+    function hatch(x0, x1, alpha, step) {
+      if (x1 <= x0) return;
+      ctx.save(); ctx.beginPath(); ctx.rect(x0, padT, x1 - x0, plotH); ctx.clip();
+      ctx.strokeStyle = rgba(T.vermilion, alpha); ctx.lineWidth = 1; ctx.beginPath();
+      for (var k = x0 - plotH; k < x1; k += step) { ctx.moveTo(k, plotB); ctx.lineTo(k + plotH, padT); }
+      ctx.stroke(); ctx.restore();
+    }
+    if (log10(wlo) < xMax) {
+      var x0 = Math.max(Xc(Math.max(wlo, Math.pow(10, xMin))), padL), x1 = Math.min(Xc(whi), plotR);
+      hatch(x0, Math.max(x1, x0 + 3), 0.36, 7);
+      ctx.strokeStyle = rgba(T.vermilion, 0.75); ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(Math.round(x0) + 0.5, padT); ctx.lineTo(Math.round(x0) + 0.5, plotB); ctx.stroke(); ctx.setLineDash([]);
+      placed.push({ x: x0 - 1, y: padT, w: Math.max(4, x1 - x0) + 2, h: 14 });
+      ctx.font = hand; var dwt = ctx.measureText('the data wall').width;
+      want('the data wall', x1 + 2, padT + 30, T.graphite, 5, [[4, 0], [-4 - Math.max(0, x1 - x0), 0], [4, 16]], hand, 15); ctx.font = mono;
+    }
+    // the biggest model that fits one card (until systems people arrive)
+    if (dv.memLimit < CFG.memLimit[2]) {
+      var memC = Math.pow(6 * dv.memLimit * CFG.tokGPT3 / Math.pow(CFG.gpt3C, CFG.tokExp), 1 / (1 - CFG.tokExp));
+      var mx = Math.round(Xc(memC)) + 0.5;
+      if (mx < plotR && mx > padL) { ctx.strokeStyle = T.graphite; ctx.setLineDash([1, 3]); ctx.beginPath(); ctx.moveTo(mx, padT); ctx.lineTo(mx, plotB); ctx.stroke(); ctx.setLineDash([]); want('too big to fit', mx, padT + 12, T.graphite, 6, [[-4, 0], [4, 0], [-4, 14]], hand, 15); }
+    }
+    // the line: what the compute should buy. A dotted graphite hairline.
+    var lineKnown = S.day >= CFG.lineDay;
+    ctx.save(); ctx.beginPath(); ctx.rect(padL, padT, plotW, plotH + 1); ctx.clip();
+    ctx.strokeStyle = lineKnown ? T.graphite : rgba(T.graphite, 0.45); ctx.lineWidth = 1; ctx.setLineDash([1, 3]);
+    var lx0 = Xc(Math.pow(10, xMin)), ly0 = Yc(G.Lline(Math.pow(10, xMin))), lx1 = Xc(Math.pow(10, xMax)), ly1 = Yc(G.Lline(Math.pow(10, xMax)));
+    ctx.beginPath(); ctx.moveTo(lx0, ly0); ctx.lineTo(lx1, ly1); ctx.stroke(); ctx.setLineDash([]);
+    ctx.restore();
+    // its caption, written along the line in pencil
+    var ang = Math.atan2(ly1 - ly0, lx1 - lx0), cos = Math.cos(ang), sin = Math.sin(ang);
+    var capLines = phone ? ['the loss you should get', 'for the compute you spent'] : ['the loss you should get for the compute you spent'];
+    ctx.save(); ctx.font = X.fHand(phone ? 13 : 14.5); ctx.fillStyle = rgba(T.graphite, lineKnown ? 0.95 : 0.7); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    var cStart = phone ? 0.04 : 0.06;
+    capLines.forEach(function (ln, i) {
+      var w = ctx.measureText(ln).width, off = -7 - (capLines.length - 1 - i) * 13, ox = lx0 + (lx1 - lx0) * cStart, oy = ly0 + (ly1 - ly0) * cStart;
+      ctx.save(); ctx.translate(ox, oy); ctx.rotate(ang); ctx.fillText(ln, 6, off); ctx.restore();
+      var xs = [6, 6 + w], ys = [off - 11, off + 3], minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+      xs.forEach(function (u) { ys.forEach(function (v) { var px = ox + u * cos - v * sin, py = oy + u * sin + v * cos; minx = Math.min(minx, px); maxx = Math.max(maxx, px); miny = Math.min(miny, py); maxy = Math.max(maxy, py); }); });
+      placed.push({ x: minx, y: miny, w: maxx - minx, h: maxy - miny });
+    });
+    ctx.restore(); ctx.font = mono; ctx.textBaseline = 'middle';
+
+    // rivals: graphite dots, a faint dashed ladder, the latest labelled with name and size
+    S.rivals.forEach(function (rv, i) {
+      var pubs = rv.pubs.filter(function (p) { return p.day <= S.day; }); if (!pubs.length) return;
+      ctx.strokeStyle = rgba(T.graphite, 0.5); ctx.lineWidth = 1; ctx.setLineDash([3, 3]); ctx.beginPath(); pubs.forEach(function (p, j) { var px = Xc(p.C), py = Yc(p.L); if (j) ctx.lineTo(px, py); else ctx.moveTo(px, py); }); ctx.stroke(); ctx.setLineDash([]);
+      pubs.forEach(function (p, j) { var px = Xc(p.C), py = Yc(p.L); ctx.fillStyle = rgba(T.graphite, j === pubs.length - 1 ? 1 : 0.7); ctx.beginPath(); ctx.arc(px, py, j === pubs.length - 1 ? 2.2 : 1.5, 0, Math.PI * 2); ctx.fill(); });
+      var lp = pubs[pubs.length - 1]; block(Xc(lp.C), Yc(lp.L), 4);
+      want(rv.name + ' · ' + F.size(lp.N), Xc(lp.C), Yc(lp.L), T.graphite, 7 + i * 0.1, null, X.fMono(phone ? 9.5 : 10.5, true));
+    });
+    // GPT-3: a ring until 28 May, then a solid point
+    var gx = Xc(CFG.gpt3C), gy = Yc(CFG.gpt3L), out = S.day >= CFG.gpt3Day;
+    ctx.lineWidth = 1;
+    if (out) { ctx.fillStyle = T.ink; ctx.beginPath(); ctx.arc(gx, gy, lap ? 4.2 : 3.6, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = rgba(T.ink, 0.6); ctx.beginPath(); ctx.arc(gx, gy, (lap ? 4.2 : 3.6) + 3.5, 0, Math.PI * 2); ctx.stroke(); }
+    else { ctx.strokeStyle = T.graphite; ctx.setLineDash([1, 2]); ctx.beginPath(); ctx.arc(gx, gy, lap ? 5 : 4.5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+    block(gx, gy, 9);
+    want(out ? 'GPT-3' : 'GPT-3 · 28 May', gx, gy, out ? T.ink : T.graphite, 1, [[-10, 13], [-10, -13], [10, 13], [10, -13], [-12, 0]], X.fMono(phone ? 10 : 11, !out, out ? 500 : 400));
+    // Series A: a pencil mark on the line, dim until it is the lit rung
+    if (!S.raise.aDone) {
+      var aC = Math.max(CFG.seriesA.needC, S.raise.aNeed), ax = Xc(aC), ay = Yc(G.Lline(aC)), lit = litId === 'seriesA';
+      if (ax > padL && ax < plotR) {
+        ctx.strokeStyle = lit ? T.ink : rgba(T.graphite, 0.8); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Math.round(ax) + 0.5, ay - 14); ctx.lineTo(Math.round(ax) + 0.5, ay - 4); ctx.stroke();
+        want('Series A', ax, ay - 17, lit ? T.ink : T.graphite, 4, [[0, -5], [6, -5], [-6, -5], [0, 24]], hand, 15);
+      }
+    }
+    // your finished curves: thin ink at 35%, a family of training curves whose envelope is the law
+    ctx.save(); ctx.beginPath(); ctx.rect(padL, 0, plotW, plotB + 2); ctx.clip();
+    S.runs.slice(-14).forEach(function (r) {
+      if (!r.pts || r.pts.length < 2 || r.aborted) return;
+      ctx.lineWidth = 1; ctx.lineJoin = 'round';
+      for (var pass = 0; pass < 2; pass++) {
+        ctx.strokeStyle = rgba(T.ink, pass ? 0.18 : (r.clean ? 0.32 : 0.28)); ctx.beginPath();
+        var lxp = -1e9, lyp = -1e9;
+        r.pts.forEach(function (p, j) { var px = Xc(p.x) + (pass ? wob(j, 1) * 0.7 : 0), py = Yc(clamp(p.y, yMin, yMax)) + (pass ? wob(j, 2) * 0.7 : 0); if (j && j < r.pts.length - 1 && Math.abs(px - lxp) < 0.6 && Math.abs(py - lyp) < 0.6) return; if (j) ctx.lineTo(px, py); else ctx.moveTo(px, py); lxp = px; lyp = py; });
+        ctx.stroke();
+      }
+    });
+    // a scar: the vermilion hatch from the data wall to the run that went through it
+    S.runs.forEach(function (r) {
+      if (r.aborted || !r.L || r.clean || !r.wall) return;
+      var sx0 = Xc(Math.max(G.C_of_tokens(r.wall), Math.pow(10, xMin))), sx1 = Xc(r.C);
+      hatch(Math.max(padL, sx0), Math.min(plotR, Math.max(sx1, sx0 + 4)), 1, 6);
+    });
+    ctx.restore();
+    // your saved models: ink dots, a ring when published, a short bar when shipped, hollow when it went past the wall
+    S.runs.forEach(function (r) {
+      if (r.aborted || !r.L) return;
+      var px = Xc(r.C), py = Yc(r.L); hits.push({ x: px, y: py, r: 13, id: r.id });
+      if (!r.clean) { ctx.strokeStyle = T.ink; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(px, py, 3.6, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1; return; }
+      ctx.fillStyle = T.ink; ctx.beginPath(); ctx.arc(px, py, lap ? 3.2 : 2.8, 0, Math.PI * 2); ctx.fill();
+      if (r.published) { ctx.strokeStyle = T.ink; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(px, py, lap ? 5.5 : 4.8, 0, Math.PI * 2); ctx.stroke(); }
+      if (r.shipped) { ctx.fillStyle = T.ink; ctx.fillRect(px + 6, py - 0.5, 7, 1); }
+    });
+    var best = dv.best;
+    if (best) {
+      var bx = Xc(best.C), by = Yc(best.L);
+      block(bx, by, 8);
+      // the dimension line: from your biggest dot to the ring
+      if (best.C < CFG.gpt3C * 0.95) {
+        var sx = bx + 8, ex = gx - 9;
+        if (ex > sx + 14) {
+          var y1 = by, y2 = gy;
+          ctx.strokeStyle = rgba(T.ink, 0.6); ctx.lineWidth = 1; ctx.setLineDash([5, 3]); ctx.beginPath(); ctx.moveTo(sx, y1); ctx.lineTo(ex, y2); ctx.stroke(); ctx.setLineDash([]);
+          ctx.strokeStyle = rgba(T.ink, 0.8); ctx.beginPath(); ctx.moveTo(sx, y1 - 4); ctx.lineTo(sx, y1 + 4); ctx.moveTo(ex, y2 - 4); ctx.lineTo(ex, y2 + 4); ctx.stroke();
+          var txt = F.ratio(G.shortOf(best.C)) + ' short';
+          ctx.font = X.fMono(phone ? 10 : 11, false, 500);
+          var mxp = (sx + ex) / 2, myp = (y1 + y2) / 2, tw = ctx.measureText(txt).width + 8;
+          placed.push({ x: mxp - tw / 2, y: myp - 17, w: tw, h: 13 });
+          halo(txt, mxp, myp - 10, 'center'); ctx.fillStyle = T.ink; ctx.textAlign = 'center'; ctx.fillText(txt, mxp, myp - 10);
+          ctx.textAlign = 'left'; ctx.font = mono;
+        }
+      }
+      want('you', bx, by, T.ink, 3, null, X.fHand(phone ? 16 : 18, 600), 16);
+    }
+    // the live run: the pen
+    S.active.forEach(function (r) {
+      if (!r.pts.length || opts.end) return;
+      ctx.save(); ctx.beginPath(); ctx.rect(padL, 0, plotW, plotB + 2); ctx.clip();
+      ctx.strokeStyle = rgba(T.ink, r.hang ? 0.55 : 1); ctx.lineWidth = 1.5; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.beginPath();
+      var lxq = -1e9, lyq = -1e9;
+      r.pts.forEach(function (p, j) { var px = Xc(p.x), py = Yc(clamp(p.y, yMin, yMax)); if (j && j < r.pts.length - 1 && Math.abs(px - lxq) < 0.6 && Math.abs(py - lyq) < 0.6) return; if (j) ctx.lineTo(px, py); else ctx.moveTo(px, py); lxq = px; lyq = py; });
+      ctx.stroke();
+      ctx.strokeStyle = rgba(T.ink, r.hang ? 0.25 : 0.4); ctx.lineWidth = 1; ctx.beginPath(); lxq = -1e9; lyq = -1e9;
+      r.pts.forEach(function (p, j) { var px = Xc(p.x) + wob(j, 3) * 0.8, py = Yc(clamp(p.y, yMin, yMax)) + wob(j, 4) * 0.8; if (j && j < r.pts.length - 1 && Math.abs(px - lxq) < 0.6 && Math.abs(py - lyq) < 0.6) return; if (j) ctx.lineTo(px, py); else ctx.moveTo(px, py); lxq = px; lyq = py; });
+      ctx.stroke(); ctx.restore(); ctx.lineWidth = 1;
+      var hp = r.pts[r.pts.length - 1], hx = Xc(hp.x), hy = Yc(clamp(hp.y, yMin, yMax));
+      ctx.fillStyle = T.ink; ctx.beginPath(); ctx.arc(hx, hy, 2.6, 0, Math.PI * 2); ctx.fill();
+      if (r.hang) { ctx.strokeStyle = T.vermilion; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(hx, hy, 6.5, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 1; }
+      else if (!X.reduced()) { ctx.strokeStyle = rgba(T.ink, 0.12 + 0.18 * (0.5 + 0.5 * Math.sin(X.nowMs() / 260))); ctx.beginPath(); ctx.arc(hx, hy, 6.5, 0, Math.PI * 2); ctx.stroke(); }
+      block(hx, hy, 6);
+      if (r.hang) want(r.hang.nan ? r.hang.label : r.hang.label + (G.has('tom') ? ' my fault' : ' hung'), hx, hy, T.vermilion, 0, null, hand, 15);
+      if (log10(r.C) > xMin && log10(r.C) < xMax) {
+        var tx0 = Xc(r.C), ty0 = Yc(r.proj); ctx.strokeStyle = rgba(T.ink, 0.75); ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.arc(tx0, ty0, 6, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        if (r.sigUp > 0.003) { ctx.beginPath(); ctx.moveTo(tx0, ty0 - 6); ctx.lineTo(tx0, Yc(r.proj * (1 + 2 * r.sigUp))); ctx.stroke(); }
+        block(tx0, ty0, 7); want('lands ' + F.date(S.day + G.runDaysLeft(r)), tx0, ty0, T.graphite, r === S.run ? 2 : 2.5, [[10, 12], [10, -12], [-10, 12], [-10, -12], [0, 20]], hand, 15);
+      }
+    });
+    // where the next run would land (the designer's ring)
+    var tgt = ui && ui.design && !S.over && !opts.end && !ui.design.block ? { C: ui.design.C, L: ui.design.L, sig: ui.design.sigUp, label: 'next run', bad: ui.design.r > 1 } : null;
+    if (tgt && log10(tgt.C) > xMin && log10(tgt.C) < xMax) {
+      var tx = Xc(tgt.C), ty = Yc(tgt.L), col = tgt.bad ? T.vermilion : T.ink;
+      ctx.strokeStyle = rgba(col, 0.85); ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.arc(tx, ty, 6, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      if (tgt.sig > 0.003) { ctx.beginPath(); ctx.moveTo(tx, ty - 6); ctx.lineTo(tx, Yc(tgt.L * (1 + 2 * tgt.sig))); ctx.stroke(); }
+      block(tx, ty, 7);
+      want(tgt.label, tx, ty, tgt.bad ? T.vermilion : T.ink, 3.5, [[10, 12], [10, -12], [-10, 12], [-10, -12], [0, 20]], hand, 15);
+    }
+    placeAll();
+    if (ui) ui.hits = hits;
+  };
+})(window.FX);
