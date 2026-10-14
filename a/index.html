@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Frontier</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap">
+<link rel="stylesheet" href="game.css">
+<div id="fr" class="fr">
+  <canvas id="fr-cv" class="fr-cv" role="img" aria-label="A sheet of log-log paper with training loss curves and a strip of lights"></canvas>
+  <div id="fr-sheet" class="fr-sheet">
+    <div id="fr-date" class="fr-date" aria-live="off"><span class="fr-g">FRONTIER&nbsp;·&nbsp;</span><span id="fr-day"></span></div>
+    <div id="fr-news" class="fr-news" aria-live="polite"></div>
+    <div id="fr-reprint" class="fr-reprint"></div>
+    <div id="fr-band" class="fr-band"><p id="fr-sample" class="fr-sample" aria-live="polite"></p></div>
+  </div>
+  <div id="fr-readout" class="fr-readout" aria-hidden="true"></div>
+  <div id="fr-strip" class="fr-strip" tabindex="0" role="slider" aria-label="Ink the strip: arrow keys move the nib, Enter lifts" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+  <div id="fr-moment" class="fr-moment" aria-live="polite"><p id="fr-moment-p"></p></div>
+  <button id="fr-mute" class="fr-mute" type="button" aria-pressed="false">SOUND ON</button>
+  <div id="fr-probe" class="fr-probe"></div>
+</div>
+<script src="game.js"></script>
+
+</body>
+</html>
