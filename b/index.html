@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Frontier</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap">
+<link rel="stylesheet" href="game.css">
+<div id="fr-root" tabindex="0" role="application" aria-label="Frontier. Drag the nib along the strip, lift to launch.">
+  <div id="fr-probe"></div>
+  <div class="fr-stage" id="fr-stage">
+    <canvas id="fr-canvas" aria-hidden="true"></canvas>
+    <p class="fr-dateline" id="fr-dateline"><span class="lab">FRONTIER · </span><span id="fr-date">23 JAN 2020</span></p>
+    <div class="fr-hlclip" id="fr-hlclip"><p class="fr-headline" id="fr-headline"></p></div>
+    <div id="fr-reprints"></div>
+    <div class="fr-band" id="fr-band"><p class="fr-sample" id="fr-sample" aria-live="polite"></p></div>
+    <p class="fr-readout" id="fr-readout"></p>
+  </div>
+  <div id="fr-cap" aria-live="polite"><div id="fr-cap-words"></div></div>
+  <div id="fr-capdot"></div>
+  <button id="fr-mute" type="button" aria-label="Mute sound" aria-pressed="false"><i></i><i></i><i></i></button>
+</div>
+<script src="config.js"></script>
+<script src="corpus.js"></script>
+<script src="audio.js"></script>
+<script src="game.js"></script>
+
+</body>
+</html>
