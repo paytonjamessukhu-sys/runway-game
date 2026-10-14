@@ -117,6 +117,10 @@
 
     /* ---------- motion (seconds) ---------- */
     noteCharSec: 0.03, nameCharSec: 0.04, noteFadeSec: 8, headlineDriftSec: 7, stopNoteSec: 2, remapSec: 0.4,
+    letterInSec: 0.4, letterTakeSec: 0.25, letterPassSec: 0.3, sweepSec: 0.3, regroupSec: 0.6,
+    cellDrawSec: 0.012, cellDrawMaxSec: 0.9,       // new cells draw into the band one after another
+    rollMaxSec: 0.6,                                // the months figure rolls on letters that move money; payroll is one frame
+    pressMaxMs: 300,                                // a press is a tap of 300 ms or less
 
     /* ---------- layout (px) ---------- */
     laptopMinWidth: 960,
@@ -128,11 +132,12 @@
     audio: {
       motorDb: -30, motorNoiseDb: -36, motorDbPerDoubling: 1, motorMaxDb: -18, motorHarmonicDb: -46, idleHumDb: -36,
       scratchDb: -30, scratchHz: 3200, scratchQ: 0.8,
+      nibDb: -34, nibHz: 1500,
       tokenDb: -36, tokenHz: 2400, tokenMs: 6,
       printDb: -38, printHz: 1800, printMs: 5,
       liftDb: -18, liftDecay: 1.4, liftOvertoneDb: -32,
       feedDb: -32, feedHz: 90, feedLpHz: 600,
-      jagDb: -42, payrollDb: -20, letterDb: -34, takeDb: -22, passDb: -36, fuseDb: -46, hangThudDb: -24, cashDb: -28, writeDb: -42
+      jagDb: -42, payrollDb: -20, letterDb: -34, takeDb: -22, passDb: -36, fuseDb: -46, hangThudDb: -24, rollDb: -34, writeDb: -42, strikeDb: -32
     }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = CFG; else root.FRONTIER_CONFIG = CFG;

@@ -9,27 +9,27 @@
 <title>Frontier</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap">
 <link rel="stylesheet" href="game.css">
-<div id="fr" class="asleep">
+<div id="fr" class="asleep" role="application" aria-label="Frontier. A lab sim on one sheet of paper. Touch anywhere to begin.">
   <header id="fr-head">
     <div id="fr-dateline" aria-live="off"><span id="fr-lab" class="g">FRONTIER</span><span id="fr-bought" class="hand"></span><span class="g"> &middot; </span><span id="fr-today"></span><span id="fr-hour"></span></div>
-    <button id="fr-mute" type="button" aria-pressed="false" aria-label="Sound on. Press to mute.">sound</button>
+    <button id="fr-mute" type="button" aria-pressed="false" aria-label="Sound is on. Press to mute (M).">SOUND ON</button>
     <div id="fr-months" aria-live="polite"><span id="fr-proj"></span><span id="fr-months-n"></span><span id="fr-months-l">MONTHS</span></div>
   </header>
   <div id="fr-paperwrap">
     <canvas id="fr-paper" aria-hidden="true"></canvas>
+    <canvas id="fr-pen" aria-hidden="true"></canvas>
     <div id="fr-heads" aria-hidden="true"></div>
-    <ol id="fr-team" aria-label="Your people. Press a name."></ol>
+    <ol id="fr-team" aria-label="Your people. Press a name, or keys 1 to 9."></ol>
   </div>
   <div id="fr-band" aria-live="polite"><p id="fr-sample"></p><div id="fr-box" aria-hidden="true"></div></div>
-  <div id="fr-clusterwrap"><canvas id="fr-cluster" aria-hidden="true"></canvas><span id="fr-cards" aria-label="cards"></span></div>
+  <div id="fr-clusterwrap"><canvas id="fr-cluster" aria-hidden="true"></canvas><span id="fr-cards"></span></div>
   <div id="fr-stripwrap">
     <canvas id="fr-strip" tabindex="0" role="slider" aria-label="The bet. Drag the nib and let go to launch a run. Arrow keys move it, Enter launches, S samples." aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></canvas>
     <div id="fr-readout" aria-hidden="true"></div>
   </div>
-  <div id="fr-letterzone"></div>
+  <div id="fr-letterzone" aria-live="polite"></div>
   <div id="fr-notes" aria-hidden="true"></div>
   <div id="fr-moment" aria-hidden="true"><p id="fr-moment-text"></p></div>
-  <div id="fr-feed" aria-hidden="true"></div>
 </div>
 <script src="config.js"></script>
 <script src="corpus.js"></script>
