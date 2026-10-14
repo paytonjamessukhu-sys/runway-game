@@ -65,17 +65,48 @@
      LAYOUT (art direction: phone and laptop stacks)
      ================================================================ */
   var L = {}, dpr = 1;
+  function viewport() {
+    var vv = window.visualViewport, w = window.innerWidth || document.documentElement.clientWidth, h = window.innerHeight || document.documentElement.clientHeight;
+    if (vv && vv.width > 0 && vv.height > 0 && vv.scale <= 1.01) { w = Math.min(w, Math.round(vv.width)); h = Math.min(h, Math.round(vv.height)); }
+    return { w: Math.max(300, w), h: Math.max(320, h) };
+  }
   function layout() {
-    var vw = Math.max(300, window.innerWidth || document.documentElement.clientWidth), vh = Math.max(480, window.innerHeight || document.documentElement.clientHeight);
+    var vp = viewport(), vw = vp.w, vh = vp.h;
     var sp = getComputedStyle(elSafe);
     var safe = { t: parseFloat(sp.paddingTop) || 0, r: parseFloat(sp.paddingRight) || 0, b: parseFloat(sp.paddingBottom) || 0, l: parseFloat(sp.paddingLeft) || 0 };
-    var lap = vw >= CFG.laptopMinWidth;
-    L = { vw: vw, vh: vh, lap: lap, safe: safe };
-    if (!lap) {
+    // a rotated phone (or any short, wide window) gets the same sheet folded into two columns: paper left, the rest right
+    var land = vw > vh && vh < 560 && vw >= 560;
+    var lap = !land && vw >= CFG.laptopMinWidth;
+    L = { vw: vw, vh: vh, lap: lap, land: land, safe: safe };
+    if (land) {
+      var g2 = 16, xl2 = g2 + safe.l, xr2 = vw - g2 - safe.r, tt = safe.t, bb = vh - safe.b;
+      var colW = clamp(Math.round((xr2 - xl2) * 0.46), 300, 420), mid = xr2 - colW;
+      L.x0 = xl2; L.x1 = xr2; L.top = tt;
+      L.dateY = tt + 12; L.monthsY = tt + 6;
+      var hdr = 46, nw = 52, nl = 26;
+      L.names = { x: xl2 - 2, y: tt + hdr + 10, w: nw, line: nl };
+      L.headY = tt + hdr + 1;
+      L.paper = { y: tt + hdr, bottom: bb - 4 };
+      L.ruler = { y: L.paper.bottom - 24, h: 24 };
+      L.plot = { x: xl2 + nw, y: tt + hdr + 18, w: mid - 20 - xl2 - nw, h: 0 };
+      L.plot.h = L.ruler.y - 6 - L.plot.y;
+      var lh = 128, ly = bb - lh - 6, sh2 = 48, sy = ly - 10 - sh2, ch2 = clamp(Math.round((sy - tt - hdr) * 0.18), 30, 52), cy = sy - 8 - ch2;
+      L.band = { x: mid, y: tt + hdr, w: colW, h: Math.max(48, cy - 18 - (tt + hdr)) };
+      L.cluster = { x: mid, y: cy, w: colW, h: ch2 };
+      L.strip = { x: mid, y: sy, w: colW, h: sh2, home: 52 };
+      L.letter = { x: mid, w: colW, y: ly, h: lh, max: bb - 4 };
+      L.readAbove = CFG.phone.readoutAbove; L.bandFont = [16, 22]; L.momentFont = 20;
+      L.mute = { x: xl2 - 6, y: tt + 24 };
+      L.moment = { y: tt + hdr, h: bb - tt - hdr };
+      L.nameLine = nl; L.nameFont = 17;
+    } else if (!lap) {
       var P = CFG.phone, t0 = safe.t, H = vh - safe.t - safe.b, g = P.gutter, xl = g + safe.l, xr = vw - g - safe.r;
-      // everything below the paper keeps its reference size; the paper band takes what the screen gives
-      var below = P.ref - P.paperBottom, paperBottom = t0 + Math.max(P.headerH + 150, H - below);
-      var sh = paperBottom - (t0 + P.paperBottom);
+      // the stack is anchored to the bottom (the thumb's end): letter zone, strip, cluster, sample band; the paper takes
+      // what is left. Short phones first give the band and the cluster a little, so the paper keeps some height.
+      var squeeze = clamp((760 - H) / 120, 0, 1);   // 0 on a tall phone, 1 at 640 px and shorter
+      var bandH = P.bandBottom - P.paperBottom - 8 - Math.round(26 * squeeze), clH = P.clusterH - Math.round(12 * squeeze);
+      var letY = t0 + H - (P.ref - P.letterTop), stY = letY - (P.letterTop - P.stripTop), clY = stY - 6 - clH, bandY = clY - 10 - bandH;
+      var paperBottom = Math.max(t0 + P.headerH + 150, bandY - 4);
       L.x0 = xl; L.x1 = xr; L.top = t0;
       L.dateY = t0 + 15; L.monthsY = t0 + 10;
       L.names = { x: xl - 2, y: t0 + 92 - 14, w: P.namesW, line: P.nameLine };
@@ -84,34 +115,45 @@
       L.ruler = { y: paperBottom - P.rulerH, h: P.rulerH };
       L.plot = { x: xl + P.namesW, y: t0 + 84, w: xr - xl - P.namesW, h: 0 };
       L.plot.h = L.ruler.y - 6 - L.plot.y;
-      L.band = { x: xl, y: P.paperBottom + t0 + sh + 4, w: xr - xl, h: P.bandBottom - P.paperBottom - 8 };
-      L.cluster = { x: xl, y: t0 + P.clusterTop + sh, w: xr - xl, h: P.clusterH };
-      L.strip = { x: xl, y: t0 + P.stripTop + sh, w: xr - xl, h: P.stripH, home: P.homeW };
-      L.letter = { x: xl, w: xr - xl, y: t0 + P.letterTop + sh, h: P.letterH, max: vh - safe.b - 6 };
-      L.readAbove = P.readoutAbove; L.bandFont = [17, 24]; L.momentFont = 21;
+      L.band = { x: xl, y: paperBottom + 4, w: xr - xl, h: bandH };
+      L.cluster = { x: xl, y: clY, w: xr - xl, h: clH };
+      L.strip = { x: xl, y: stY, w: xr - xl, h: P.stripH, home: P.homeW };
+      L.letter = { x: xl, w: xr - xl, y: letY, h: P.letterH, max: vh - safe.b - 6 };
+      L.readAbove = P.readoutAbove; L.bandFont = squeeze > 0.5 ? [16, 22] : [17, 24]; L.momentFont = 21;
       L.mute = { x: xl - 6, y: t0 + 26 };
+      L.moment = { y: L.plot.y, h: L.band.y + L.band.h - L.plot.y };
+      L.nameLine = P.nameLine; L.nameFont = 18;
     } else {
+      // the art direction's shares of the viewport, anchored from the bottom so a short laptop never stacks the letter on the strip
       var Q = CFG.laptop, cw = Math.min(vw - 48, Q.colMax), x0 = (vw - cw) / 2;
       L.x0 = x0; L.x1 = x0 + cw; L.top = 0;
-      L.dateY = vh * Q.header * 0.35; L.monthsY = vh * Q.header * 0.2;
-      L.names = { x: x0, y: vh * Q.header + 40, w: Q.namesW, line: Q.nameLine };
-      L.headY = vh * Q.header + 10;
-      L.paper = { y: vh * Q.header, bottom: vh * Q.paperBottom };
+      var hdrH = Math.max(52, vh * Q.header);
+      L.dateY = hdrH * 0.36; L.monthsY = hdrH * 0.18;
+      var lzH = Q.letterH + 22, letY = vh - lzH + 8;
+      var stY = Math.min(vh * Q.stripTop, letY - 14 - Q.stripH);
+      var clH = clamp(vh * (Q.clusterBottom - Q.clusterTop), 40, 60), clY = Math.min(vh * Q.clusterTop, stY - 10 - clH);
+      var bandH = clamp(vh * (Q.bandBottom - Q.bandTop) - 8, 3 * 27 + 6, 150), bandY = clY - 10 - bandH;
+      var papB = bandY - 4;
+      L.names = { x: x0, y: hdrH + 40, w: Q.namesW, line: Q.nameLine };
+      L.headY = hdrH + 10;
+      L.paper = { y: hdrH, bottom: papB };
       L.ruler = { y: L.paper.bottom - Q.rulerH, h: Q.rulerH };
-      L.plot = { x: x0 + Q.namesW, y: vh * Q.header + 34, w: cw - Q.namesW, h: 0 };
+      L.plot = { x: x0 + Q.namesW, y: hdrH + 34, w: cw - Q.namesW, h: 0 };
       L.plot.h = L.ruler.y - 6 - L.plot.y;
       var bw = Math.min(Q.bandMax, cw);
-      L.band = { x: x0 + (cw - bw) / 2, y: vh * Q.bandTop + 4, w: bw, h: vh * (Q.bandBottom - Q.bandTop) - 8 };
-      L.cluster = { x: x0, y: vh * Q.clusterTop, w: cw, h: vh * (Q.clusterBottom - Q.clusterTop) };
-      L.strip = { x: x0, y: vh * Q.stripTop, w: cw, h: Q.stripH, home: Q.homeW };
+      L.band = { x: x0 + (cw - bw) / 2, y: bandY, w: bw, h: bandH };
+      L.cluster = { x: x0, y: clY, w: cw, h: clH };
+      L.strip = { x: x0, y: stY, w: cw, h: Q.stripH, home: Q.homeW };
       var lw = Math.min(Q.letterW, vw - 32);
-      L.letter = { x: x0 + (cw - lw) / 2, w: lw, y: vh * Q.letterTop, h: Q.letterH, max: vh - 6 };
+      L.letter = { x: x0 + (cw - lw) / 2, w: lw, y: letY, h: Q.letterH, max: vh - 6 };
       L.readAbove = Q.readoutAbove; L.bandFont = [19, 27]; L.momentFont = 28;
       L.mute = { x: x0 - 6, y: L.dateY + 14 };
+      L.moment = { y: L.plot.y, h: L.band.y + L.band.h - L.plot.y };
+      L.nameLine = Q.nameLine; L.nameFont = 22;
     }
     L.travel = { x: L.strip.x + L.strip.home, w: L.strip.w - L.strip.home };
     dpr = Math.min(2, window.devicePixelRatio || 1);
-    [cv, hi].forEach(function (c) { c.width = Math.round(vw * dpr); c.height = Math.round(vh * dpr); });
+    [cv, hi, $('fr-cs')].forEach(function (c) { c.width = Math.round(vw * dpr); c.height = Math.round(vh * dpr); });
     $('fr-date').style.left = L.x0 + 'px'; $('fr-date').style.top = L.dateY + 'px';
     $('fr-months').style.right = (vw - L.x1) + 'px'; $('fr-months').style.top = L.monthsY + 'px';
     elNames.style.left = L.names.x + 'px'; elNames.style.top = L.names.y + 'px';
@@ -119,11 +161,25 @@
     elCount.style.right = (vw - (L.cluster.x + L.cluster.w)) + 'px'; elCount.style.top = (L.cluster.y - 14) + 'px';
     elFocus.style.left = (L.strip.x - 3) + 'px'; elFocus.style.top = (L.strip.y - 3) + 'px'; elFocus.style.width = (L.strip.w + 6) + 'px'; elFocus.style.height = (L.strip.h + 6) + 'px';
     elMute.style.left = L.mute.x + 'px'; elMute.style.top = L.mute.y + 'px';
-    elMoment.style.top = L.plot.y + 'px'; elMoment.style.height = (L.band.y + L.band.h - L.plot.y) + 'px';
-    elMomentText.style.maxWidth = Math.min(lap ? 760 : 9999, vw - 2 * (lap ? 48 : 22)) + 'px';
+    L.headW = land ? Math.round(L.plot.x + L.plot.w + 12) : vw;
+    elHeads.style.width = L.headW + 'px'; elHeads.style.height = Math.round(L.headY + 20) + 'px'; elHeads.style.overflow = land ? 'hidden' : 'visible';
+    elMoment.style.top = L.moment.y + 'px'; elMoment.style.height = L.moment.h + 'px';
+    elMomentText.style.maxWidth = Math.min(lap || land ? 760 : 9999, vw - 2 * (lap ? 48 : 22)) + 'px';
     elLetter.style.left = L.letter.x + 'px'; elLetter.style.width = L.letter.w + 'px'; elLetter.style.minHeight = L.letter.h + 'px';
-    staticDirty = true;
-    if (G) { placeNotes(); fitBand(); placeLetter(); }
+    root.classList.toggle('land', land); root.classList.toggle('lap', lap);
+    elNames.style.setProperty('--nf', L.nameFont + 'px'); elNames.style.setProperty('--nl', L.nameLine + 'px');
+    staticDirty = true; nameRects = null; letterH = 0;
+    if (G) { renderNames(); placeNotes(); fitBand(); placeLetter(); }
+  }
+  // name positions are read from the DOM once per layout (and when the margin changes), never every frame
+  var nameRects = null;
+  function nameRect(id) {
+    if (!nameRects) {
+      nameRects = {};
+      var bs = elNames.children;
+      for (var i = 0; i < bs.length; i++) { var r = bs[i].getBoundingClientRect(); nameRects[bs[i].getAttribute('data-id')] = { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height }; }
+    }
+    return nameRects[id] || null;
   }
 
   /* ---------------- plot mapping: log compute across, log loss down; the view pans ---------------- */
@@ -216,6 +272,17 @@
         else if (mode === 'idle') { target(A.motor.gain, 1, sec); target(A.g2.gain, 0, sec); target(A.bg.gain, 0, sec); target(A.g1.gain, db(CFG.sound.idleDb), sec); }
         else target(A.motor.gain, 0, sec);
       },
+      // bankruptcy: the motor winds down from 55 to 30 Hz over sec, then stops
+      windDown: function (sec) {
+        if (!A.ctx) return; try {
+          var t0 = t(), g = A.motor.gain;
+          g.cancelScheduledValues(t0); g.setValueAtTime(Math.max(0.5, g.value), t0); g.linearRampToValueAtTime(0, t0 + sec);
+          [A.g1.gain, A.g2.gain].forEach(function (p) { p.cancelScheduledValues(t0); p.setValueAtTime(db(CFG.sound.motorDb), t0); });
+          A.o1.frequency.cancelScheduledValues(t0); A.o1.frequency.setValueAtTime(A.o1.frequency.value, t0); A.o1.frequency.linearRampToValueAtTime(30, t0 + sec);
+          A.o2.frequency.cancelScheduledValues(t0); A.o2.frequency.setValueAtTime(A.o2.frequency.value, t0); A.o2.frequency.linearRampToValueAtTime(60.3, t0 + sec);
+          A.scr.gain.cancelScheduledValues(t0); A.scr.gain.setValueAtTime(0, t0);
+        } catch (e) { }
+      },
       cut: function () { if (A.ctx) try { A.motor.gain.cancelScheduledValues(t()); A.motor.gain.setValueAtTime(0, t()); A.scr.gain.cancelScheduledValues(t()); A.scr.gain.setValueAtTime(0, t()); } catch (e) { } },
       motorFreq: function (f, sec) { if (A.ctx) { target(A.o1.frequency, f, sec); target(A.o2.frequency, f * 2.011, sec); } },
       scratch: function (u) { if (A.ctx) try { A.scr.gain.setTargetAtTime(db(CFG.sound.scratchMaxDb) * clamp(u, 0, 1), t(), 0.03); } catch (e) { } },
@@ -290,8 +357,8 @@
     view.l = CFG.plotLeftMinLog; view.r = CFG.plotRightMinLog; view.to = null;
     stopShown = { T: 0 };
     clearDom();
-    root.classList.remove('on', 'dry');
-    cv.style.transition = ''; cv.style.opacity = 1;
+    root.classList.remove('on', 'dry', 'sold', 'faded');
+    clusterUnit = 1; clusterMorph = null;
     staticDirty = true;
     return G;
   }
@@ -357,21 +424,24 @@
   function servingN() { return G.api ? clamp(Math.round(trainingCount() * CFG.servingShare), CFG.servingMin, CFG.servingMax) : 0; }
   function trainingEq() { return Math.max(0, trainingRaw() - servingN()); }
   function flopsPerDay() { return trainingEq() * CFG.v100PerDay; }
-  function cardsShown() { return G.owned + G.ownedA100 + rentedN() + (G.mer && G.day >= G.mer.live ? G.mer.cards : 0); }
+  function rentPendingN() { var n = 0; G.rentals.forEach(function (r) { if (G.day < r.start) n += r.n; }); return n; }
+  // the count beside the band, in physical cards: what is drawn as live or hollow (rentals live tomorrow count), not pencil
+  function cardsShown() { return G.owned + G.ownedA100 + rentedN() + rentPendingN() + (G.mer && G.day >= G.mer.live ? G.mer.cards : 0); }
 
   /* ---------------- dots and proofs ---------------- */
   function farthestClean() { var c = 0; G.dots.forEach(function (d) { if (d.C > c) c = d.C; }); return c; }
   function farthestPub() { var c = 0; G.dots.forEach(function (d) { if ((d.pub || d.ship) && d.C > c) c = d.C; }); return c; }
   function onLine(d) { return d.L <= R.Lline(d.C) * (1 + CFG.onLineTol); }
+  // the Series A: a clean dot of 1e22 or more, on the line, landed after the line printed (23 Jan), plus any clean dot
+  // on the line a decade or more below it (the clerk's sim, which set every gate number, counts January's dots too)
   function proofA() {
-    var ds = G.dots.filter(function (d) { return d.day >= CFG.seriesA.after && onLine(d); });
-    var best = 0;
-    ds.forEach(function (a) { if (a.C < Math.max(CFG.seriesA.minC, G.A.need)) return; if (ds.some(function (b) { return b.C <= a.C / CFG.seriesA.apart; }) && a.C > best) best = a.C; });
+    var on = G.dots.filter(onLine), best = 0;
+    on.forEach(function (a) { if (a.day < CFG.seriesA.after || a.C < Math.max(CFG.seriesA.minC, G.A.need)) return; if (on.some(function (b) { return b.C <= a.C / CFG.seriesA.apart; }) && a.C > best) best = a.C; });
     return best;
   }
   function proofB() { var best = 0; G.dots.forEach(function (d) { if (d.day >= CFG.seriesB.from && d.C >= Math.max(CFG.seriesB.minC, G.B.need) && d.C > best) best = d.C; }); return best; }
   function hasLine() { var ds = G.dots; return ds.some(function (a) { return ds.some(function (b) { return b.C <= a.C / 10; }); }); }
-  function frontier() { var f = 0; G.rivals.forEach(function (r) { r.pubs.forEach(function (p) { if (p.day >= 0 && p.C > f) f = p.C; }); }); if (G.day >= K.gpt3Day) f = Math.max(f, CFG.gpt3C); return f; }
+  function frontier() { var f = 0; G.rivals.forEach(function (r) { r.pubs.forEach(function (p) { if (p.C > f) f = p.C; }); }); if (G.day >= K.gpt3Day) f = Math.max(f, CFG.gpt3C); return f; }
   function worldView() { return Math.max(farthestPub(), CFG.openWorldMult * G.openedC, farthestClean() * CFG.vaultWorldShare); }
 
   /* ================================================================
@@ -466,7 +536,7 @@
       text = splice(bandCut(full), amt);
       if (capId) mtext = splice(full, amt);
     } else { text = pickLow(tier); amt = 0; }
-    return { text: text, momentText: mtext, tier: tier, fray: amt, crawl: amt === R.CRAWL, cap: cap, q: q, kind: kind, loss: Lv, day: G.day, C: run.C, runN: run.n };
+    return { text: text, momentText: mtext, tier: tier, fray: amt, crawl: amt === R.CRAWL, cap: cap, q: q, kind: kind, loss: Lv, day: G.day, C: run.C, runN: run.n, landL: kind === 'land' ? run.L : null };
   }
 
   /* ---------------- the band: one sample at a time ---------------- */
@@ -575,16 +645,17 @@
   function clearNotes() { G.notes.forEach(function (n) { if (!n.keep) killNote(n); }); }
   function noteXY(at) {
     if (!at) return { x: L.plot.x + L.plot.w * 0.4, y: L.plot.y + 30 };
-    if (at.name) { var b = nameEl(at.name); if (b) { var r = b.getBoundingClientRect(); return { x: r.right + 6, y: r.top + 6, fixed: true }; } }
-    if (at.C) return { x: X(log10(at.C)), y: at.lnL != null ? Y(at.lnL) : lineY(at.C) };
-    if (at.x != null) return { x: at.x, y: at.y, fixed: at.fixed };
+    if (at.name) { var r = nameRect(at.name); if (r) return { x: r.right + 6, y: r.top + 6, fixed: true }; }
+    if (at.mark && at.mark.rect) { var mr = at.mark.rect; return { x: mr.x + mr.w + 4, y: mr.y + 1, fixed: true }; }
+    if (at.C) return { x: X(log10(at.C)) + (at.dx || 0), y: (at.lnL != null ? Y(at.lnL) : lineY(at.C)) + (at.dy || 0) };
+    if (at.x != null) return { x: at.x, y: at.y, fixed: at.fixed, free: at.free };
     return { x: L.plot.x + 20, y: L.plot.y + 20 };
   }
   function placeNote(n) {
     var p = noteXY(n.at), el = n.el, w = el.offsetWidth || 120, h = el.offsetHeight || 16, x, y;
     if (p.fixed) { x = p.x; y = p.y; }
     else { x = p.x + 10; if (x + w > L.x1) x = p.x - w - 10; y = p.y - h - 10; if (y < L.plot.y) y = p.y + 12; }
-    x = clamp(x, 4, L.vw - w - 4); y = clamp(y, L.paper.y + 22, L.ruler.y - h - 2);
+    x = clamp(x, 4, L.vw - w - 4); y = p.fixed && p.free ? clamp(y, 4, L.vh - h - 4) : clamp(y, L.paper.y + 22, L.ruler.y - h - 2);
     if (!p.fixed) for (var tries = 0; tries < 8; tries++) {
       var hit = null;
       G.notes.forEach(function (o) { if (o === n || o.dead || !o.rect) return; var r = o.rect; if (x < r.x + r.w && x + w > r.x && y < r.y + r.h + 2 && y + h + 2 > r.y) hit = r; });
@@ -610,25 +681,29 @@
 
   /* ---------------- pencil boxes: live status written on the sheet ---------------- */
   var boxEls = {};
-  function box(key, text, x, y) {
+  function box(key, text, x, y, cls) {
     var el = boxEls[key];
-    if (!el) { el = boxEls[key] = document.createElement('div'); el.className = 'fr-box'; elBoxes.appendChild(el); }
-    if (el.textContent !== text) el.textContent = text;
-    var w = el.offsetWidth || 80;
+    if (!el) { el = boxEls[key] = document.createElement('div'); elBoxes.appendChild(el); }
+    var cn = 'fr-box' + (cls ? ' ' + cls : ''); if (el.className !== cn) { el.className = cn; el._w = 0; }
+    if (el.textContent !== text) { el.textContent = text; el._w = 0; }
+    var w = el._w || (el._w = el.offsetWidth || 80);
     el.style.transform = 'translate(' + Math.round(clamp(x, 2, L.vw - w - 2)) + 'px,' + Math.round(y) + 'px)';
     el._seen = true;
+    return w;
   }
   function stepBoxes() {
     Object.keys(boxEls).forEach(function (k) { boxEls[k]._seen = false; });
     if (G.powered && !G.over) {
-      var who = G.filter && nameEl(G.filter.who);
-      if (G.filter && who) { var r = who.getBoundingClientRect(); box('filter', 'filter: ' + Math.max(1, Math.ceil(G.filter.end - G.day)) + ' days', r.right + 4, r.top + 6); }
-      var le = G.held && nameEl('lena');
-      if (G.held && le) { var r2 = le.getBoundingClientRect(); box('red', 'red-team: ' + Math.max(1, Math.ceil(G.held.end - G.day)) + ' days', r2.right + 4, r2.top + 6); }
+      var r = G.filter && nameRect(G.filter.who);
+      if (G.filter && r) { box('filter', 'filter: ' + Math.max(1, Math.ceil(G.filter.end - G.day)) + ' days', r.right + 4, r.top + 6); }
+      var r2 = G.held && nameRect('lena');
+      if (G.held && r2) { box('red', 'red-team: ' + Math.max(1, Math.ceil(G.held.end - G.day)) + ' days', r2.right + 4, r2.top + 6); }
       G.dots.forEach(function (d, i) { if (d.pending) box('mer' + i, 'with Meridian', X(log10(d.C)) + 8, Y(Math.log(d.L)) + 8); });
-      if (G.evals && G.run && G.evals.run === G.run) { var lp = G.run.pts[G.run.pts.length - 1]; if (lp) box('evals', K.notes.evals, X(lp.x) + 8, clamp(Y(lp.y) - 26, L.plot.y, L.ruler.y - 20)); }
-      if (G.queueCut > 0 && G.mer && G.day >= G.mer.live) box('queue', 'queue', L.cluster.x + 4, L.cluster.y - 18);
-      if (G.orders.length) { var o = G.orders[0]; box('order', 'inked by ' + R.fmtDay(o.arrive), L.cluster.x + L.cluster.w * 0.42, L.cluster.y - 18); }
+      if (G.evals && G.run && G.evals.run === G.run) { var lp = G.run.pts[G.run.pts.length - 1]; if (lp) box('evals', K.notes.evals, X(lp.x) + 10, clamp(Y(lp.y) - 30, L.plot.y, L.ruler.y - 20), 'bare'); }
+      // the cluster's pencil boxes sit in free room inside the band (an empty row, or the end of the last one)
+      var fr = clusterFree, tight = fr && fr.h < 18 ? 'tight' : '', bh = tight ? 13 : 18, bx = fr ? fr.x : L.cluster.x + 2, by = fr ? fr.y + (fr.h - bh) / 2 : L.cluster.y - 19;
+      if (G.queueCut > 0 && G.mer && G.day >= G.mer.live) { bx += box('queue', 'queue', bx, by, tight) + 8; }
+      if (G.orders.length) { var o = G.orders[0]; box('order', 'inked by ' + R.fmtDay(o.arrive), bx, by, tight); }
     }
     Object.keys(boxEls).forEach(function (k) { if (!boxEls[k]._seen) { boxEls[k].remove(); delete boxEls[k]; } });
   }
@@ -636,6 +711,9 @@
   /* ---------------- the margin ---------------- */
   function nameEl(id) { return elNames.querySelector('[data-id="' + id + '"]'); }
   function renderNames() {
+    nameRects = null;
+    var room = L.paper.bottom - 10 - L.names.y, n = Math.max(1, G.people.length), nl = clamp(Math.floor(room / n), 18, L.nameLine);
+    elNames.style.setProperty('--nl', nl + 'px'); elNames.style.setProperty('--nf', Math.min(L.nameFont, Math.round(nl * 0.66)) + 'px');
     G.people.forEach(function (p) {
       var b = nameEl(p.id);
       if (!b) {
@@ -670,20 +748,20 @@
     if (G.over) return;
     var p = person(id); if (!p) return;
     G.log.push({ day: Math.floor(G.day), press: id });
-    // a hang in progress: wake them
+    // a hang in progress: wake them (their name thins; no words, the restart is the answer)
     if (G.run && G.run.hang && G.day < G.run.hang.restart) {
       var r = G.day + CFG.wakeRestartHours / 24;
       if (r < G.run.hang.restart) G.run.hang.restart = r;
+      G.run.hang.woken = id;
       mood(id, id === 'tom' ? CFG.wakeMoodTom : CFG.wakeMood);
-      note('up.', id, { name: id }, { life: 4 });
+      snd.tick();
       return;
     }
     // standing offers: the filter job (Priya, or Ines alone), Lena's red-team
     if (p.role === 'data' && !G.filter) {
-      var canRun = id === 'priya' || (id === 'ines' && !person('priya'));
-      if (canRun && G.priyaOffer) { startFilter(id); return; }
-      if (id === 'priya' && G.sample && G.sample.fray === 3) { G.priyaOffer = 3; note(K.notes.fray3, 'priya', { name: 'priya' }); return; }
-      if (id === 'priya' && G.sample && (G.sample.fray === 1 || G.sample.fray === 2)) { note(K.notes.fray12, 'priya', { name: 'priya' }); return; }
+      if (offerStands()) { startFilter(id); return; }
+      if (id === 'priya' && G.sample && !G.sample.crawl && G.sample.fray === 3) { G.priyaOffer = { amt: 3, month: G.month }; note(K.notes.fray3, 'priya', { name: 'priya' }); return; }
+      if (id === 'priya' && G.sample && !G.sample.crawl && (G.sample.fray === 1 || G.sample.fray === 2)) { note(K.notes.fray12, 'priya', { name: 'priya' }); return; }
     }
     if (id === 'lena' && G.cp && !G.held) { startRedTeam(); return; }
     // otherwise, status beside their work
@@ -709,16 +787,47 @@
   function jolt() { elMN.classList.remove('jolt'); void elMN.offsetWidth; elMN.classList.add('jolt'); }
 
   /* ---------------- history ---------------- */
+  // headlines drift right to left across the top of the paper, each over 7 s. They follow one another like a ticker:
+  // the next enters once the last has cleared the right edge and can no longer be caught. Reduced motion: they fade.
   function stepHeads() {
-    if (!G.head && G.headQ.length) {
-      var el = document.createElement('div'); el.className = 'fr-hl'; el.textContent = G.headQ.shift(); elHeads.appendChild(el);
-      G.head = { el: el, t0: now, w: el.offsetWidth };
+    var hs = G.heads || (G.heads = []), red = reduced();
+    while (G.headQ.length) {
+      var last = hs[hs.length - 1], ok = !last;
+      if (last && !red) {
+        var xl = headX(last), tail = xl + last.w;
+        if (tail <= L.headW - 28) {
+          var vf = (L.headW + 20 + measureHead(G.headQ[0].text)) / CFG.headlineSec, te = (tail + 10) / last.v;
+          ok = L.headW + 10 - vf * te >= 28;
+        }
+      }
+      if (!ok) break;
+      var hq = G.headQ.shift(); if (G.day - hq.day > 12) continue;   // stale news is already pencilled on the ruler
+      var el = document.createElement('div'); el.className = 'fr-hl'; el.textContent = hq.text; elHeads.appendChild(el);
+      var w = el.offsetWidth || 400;
+      hs.push({ el: el, t0: now, w: w, v: (L.headW + 20 + w) / CFG.headlineSec });
+      if (red) break;
     }
-    var H = G.head; if (!H) return;
-    var u = (now - H.t0) / CFG.headlineSec, x0 = L.vw + 10, x1 = -H.w - 10, x = x0 + (x1 - x0) * u;
-    H.el.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(L.headY) + 'px)';
-    if (u >= 1) { H.el.remove(); G.head = null; }
+    for (var i = hs.length - 1; i >= 0; i--) {
+      var H = hs[i], done;
+      if (red) {
+        var tt = now - H.t0, op = tt < 0.3 ? tt / 0.3 : tt > 5.7 ? Math.max(0, (6 - tt) / 0.3) : 1;
+        H.el.style.transform = 'translate(' + Math.round(L.plot.x) + 'px,' + Math.round(L.headY) + 'px)'; H.el.style.opacity = op.toFixed(2);
+        done = tt >= 6;
+      } else {
+        var x = headX(H);
+        H.el.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(L.headY) + 'px)';
+        done = x + H.w < -10;
+      }
+      if (done) { H.el.remove(); hs.splice(i, 1); }
+    }
   }
+  function headX(H) { return L.headW + 10 - H.v * (now - H.t0); }
+  var headMeasure = null;
+  function measureHead(txt) {
+    if (!headMeasure) { headMeasure = document.createElement('canvas').getContext('2d'); }
+    headMeasure.font = 'italic 400 11px ' + MONO; return headMeasure.measureText(txt).width + 2;
+  }
+
 
   /* ================================================================
      LETTERS: three slots a month, one on screen, a fuse along the edge
@@ -731,140 +840,194 @@
   function brokerSize() { var n = 64; CFG.brokerSize.forEach(function (x) { if (G.day >= x[0]) n = x[1]; }); return n; }
   function orderLead(base) { var d = base; if (G.day >= CFG.covidOrderFrom && G.day <= CFG.covidOrderTo) d += CFG.covidOrderAddDays; if (G.day >= CFG.lateBuyFrom) d += CFG.lateBuyAddDays; return d; }
   function orderPrice(p) { return G.day >= CFG.lateBuyFrom ? p * CFG.lateBuyPriceMult : p; }
-  function goneBy() { return 'gone by the ' + ordinal(dom(G.day + 7)); }
+  var WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
+  function weeksWord(days) { var w = Math.round(days / 7); return (WORDS[w] || String(w)) + ' week' + (w === 1 ? '' : 's'); }
+  // the day a letter's fuse runs out: fixed for the letter's life, because the fuse burns exactly as the date moves
+  function fuseEnd(l) { return Math.floor(G.day + (l && l.fuseLeft != null ? l.fuseLeft : (l && l.fuse) || 7) + 1e-6); }
+  function goneBy(l) { return 'gone by the ' + ordinal(dom(fuseEnd(l))); }
   function bumpRival(id, dec) { G.rivals.forEach(function (r) { if (r.id === id) r.logc += dec; }); }
   function laterBump(id, dec, days) { G.pendings.push({ day: G.day + days, fn: function () { bumpRival(id, dec); } }); }
+  function he(p) { return p && p.he ? 'he' : 'she'; }
 
+  /* Every letter renders from view(), so its figures are live (spec: 'Effect figures are computed live from the current
+     bank and burn'). take() and pass() also read the world at the moment of the flick. */
   var MAKE = {
     broker: function () {
-      var n = brokerSize(), p = rentPriceNow(), grey = !!G.mer;
-      var add = n * p * 24 * CFG.daysPerMonth;
-      return { id: 'brokerRent', kind: 'broker', from: 'BROKER', offer: n + ' V100s on demand, live tomorrow. $' + p.toFixed(2) + ' an hour for 90 days.',
-        up: grey ? null : eff([mArrow(G.bank, burn() + add), cArrow(n)]), down: goneBy(), grey: grey, forbid: grey ? 'Meridian: exclusive' : null, gpus: n,
-        take: function () { G.rentals.push({ n: n, price: p, start: Math.floor(G.day) + 1, end: Math.floor(G.day) + 1 + CFG.rentTermDays }); },
+      var n = brokerSize(), p = rentPriceNow();
+      return { id: 'brokerRent', kind: 'broker', from: 'BROKER', gpus: n,
+        view: function (l) {
+          var grey = !!G.mer, add = n * p * 24 * CFG.daysPerMonth;
+          return { offer: n + ' V100s on demand, live tomorrow. $' + p.toFixed(2) + ' an hour for 90 days.',
+            up: grey ? null : eff([mArrow(G.bank, burn() + add), cArrow(n)]), down: goneBy(l), grey: grey, forbid: grey ? 'Meridian: exclusive' : null };
+        },
+        take: function () { if (G.mer) return; G.rentals.push({ n: n, price: p, start: Math.floor(G.day) + 1, end: Math.floor(G.day) + 1 + CFG.rentTermDays }); },
         pass: function () { } };
     },
+    // from 11 June the rent knock comes back once more, refused (spec: 'Broker rent letters stop (capacity unavailable)')
+    capacity: function () {
+      return { id: 'capacityRent', kind: 'broker', from: 'BROKER',
+        view: function () { return { offer: 'Capacity unavailable. Every V100 we had is spoken for until next year.', up: null, down: 'no more rentals', grey: true, forbid: 'The broker: no.' }; },
+        take: function () { }, pass: function () { } };
+    },
     buy: function () {
-      var a100 = G.day >= CFG.buyA100.from && G.buyA100Next, spec = a100 ? CFG.buyA100 : CFG.buyV100, price = orderPrice(spec.price), lead = orderLead(spec.lead), arrive = G.day + lead;
-      return { id: a100 ? 'buyA100' : 'buyV100', kind: 'broker', from: 'BROKER',
-        offer: a100 ? 'Eight DGX A100s: 64 A100s. ' + money(price) + '. Delivery in ' + Math.round(lead / 7) + ' weeks.' : '64 V100s to own: eight servers with InfiniBand. ' + money(price) + '. Delivery in ' + Math.round(lead / 7) + ' weeks.',
-        up: eff([mArrow(G.bank - price, burn() + spec.n * CFG.upkeepPerCard), 'CARDS +64 in pencil, inked by ' + R.fmtDay(arrive)]), down: goneBy(), gpus: spec.n, cost: price,
-        take: function () { G.bank -= price; G.orders.push({ n: spec.n, kind: a100 ? 'a100' : 'v100', at: G.day, arrive: arrive }); },
+      var a100 = G.day >= CFG.buyA100.from && G.buyA100Next, spec = a100 ? CFG.buyA100 : CFG.buyV100;
+      var price = orderPrice(spec.price), lead = orderLead(spec.lead);
+      return { id: a100 ? 'buyA100' : 'buyV100', kind: 'broker', from: 'BROKER', gpus: spec.n, cost: price,
+        view: function (l) {
+          var arrive = Math.floor(G.day) + lead;
+          return { offer: (a100 ? 'Eight DGX A100s: 64 A100s. ' : '64 V100s to own: eight servers with InfiniBand. ') + money(price) + '. Delivery in ' + Math.round(lead / 7) + ' weeks.',
+            up: eff([mArrow(G.bank - price, burn() + spec.n * CFG.upkeepPerCard), 'CARDS +' + spec.n + ' in pencil, inked by ' + R.fmtDay(arrive)]), down: goneBy(l) };
+        },
+        take: function () { G.bank -= price; G.orders.push({ n: spec.n, kind: a100 ? 'a100' : 'v100', at: G.day, arrive: Math.floor(G.day) + lead }); },
         pass: function () { } };
     },
     hire: function (id, salary) {
       var p = proto(id), sal = salary || p.salary, rival = id === 'sunhee' ? 'Halcyon' : 'Kestrel';
-      return { id: 'hire_' + id, kind: 'hire', hireId: id, from: p.full, hand: true, offer: p.knock + ' ' + money(sal) + ' a month.', offerHand: true,
-        up: eff([mArrow(G.bank, burn() + sal)]), down: (p.he ? 'he goes' : 'she goes') + ' to ' + rival,
+      return { id: 'hire_' + id, kind: 'hire', hireId: id, from: p.full, hand: true, offerHand: true,
+        view: function () { return { offer: p.knock + ' ' + money(sal) + ' a month.', up: eff([mArrow(G.bank, burn() + sal)]), down: he(p) + ' goes to ' + rival }; },
         take: function () { addPerson(id, sal); },
         pass: function () { G.seen['passed_' + id] = G.day; if (id === 'sunhee') bumpRival('halcyon', CFG.passToKestrel); else bumpRival('kestrel', CFG.passToKestrel); } };
     },
     termA: function () {
-      var early = G.day < CFG.marketClosedFrom, t = early ? CFG.seriesA.early : CFG.seriesA.late, ns = G.stake * (1 - t.amount / t.post), proof = proofA();
-      return { id: 'termA', kind: 'term', from: K.investorA, offer: 'Series A: ' + money(t.amount) + ' at a ' + money(t.post) + ' post. Two dots, one line. Sign by the 25th.',
-        up: eff([mArrow(G.bank + t.amount, burn()), sArrow(ns)]), down: 'gone; next time they want a dot three times further out',
-        take: function () { G.bank += t.amount; G.stake = ns; G.A.taken = true; },
+      var proof = proofA();
+      function terms() { return G.day < CFG.marketClosedFrom ? CFG.seriesA.early : CFG.seriesA.late; }
+      return { id: 'termA', kind: 'term', from: K.investorA,
+        view: function (l) {
+          var t = terms(), early = t === CFG.seriesA.early, ns = G.stake * (1 - t.amount / t.post);
+          return { offer: 'Series A: ' + money(t.amount) + ' at a ' + money(t.post) + ' post. ' + (early ? 'Two dots, one line.' : 'The same people, calling back.') + ' Sign by the ' + ordinal(dom(fuseEnd(l))) + '.',
+            up: eff([mArrow(G.bank + t.amount, burn()), sArrow(ns)]), down: 'gone; next time they want a dot three times further out' };
+        },
+        take: function () { var t = terms(); G.bank += t.amount; G.stake = G.stake * (1 - t.amount / t.post); G.A.taken = true; },
         pass: function () { G.A.need = proof * CFG.seriesA.passMult; } };
     },
     termB: function () {
-      var post = G.api ? CFG.seriesB.postApi : CFG.seriesB.post, amt = CFG.seriesB.amount, ns = G.stake * (1 - amt / post), proof = proofB();
-      return { id: 'termB', kind: 'term', from: K.investorA, offer: 'Series B: ' + money(amt) + ' at a ' + money(post) + ' post.' + (G.api ? ' They have seen your waitlist.' : ' They have seen your line.'),
-        up: eff([mArrow(G.bank + amt, burn()), sArrow(ns)]), down: 'gone; next time they want a dot three times further out',
-        take: function () { G.bank += amt; G.stake = ns; G.B.taken = true; },
+      var proof = proofB();
+      function post() { return G.api ? CFG.seriesB.postApi : CFG.seriesB.post; }
+      return { id: 'termB', kind: 'term', from: K.investorA,
+        view: function (l) {
+          var amt = CFG.seriesB.amount, ns = G.stake * (1 - amt / post());
+          return { offer: 'Series B: ' + money(amt) + ' at a ' + money(post()) + ' post. ' + (G.api ? 'They have seen your waitlist.' : 'They have seen your line.') + ' Sign by the ' + ordinal(dom(fuseEnd(l))) + '.',
+            up: eff([mArrow(G.bank + amt, burn()), sArrow(ns)]), down: 'gone; next time they want a dot three times further out' };
+        },
+        take: function () { var amt = CFG.seriesB.amount; G.bank += amt; G.stake = G.stake * (1 - amt / post()); G.B.taken = true; },
         pass: function () { G.B.need = proof * CFG.seriesA.passMult; } };
     },
     meridian: function () {
       var M = CFG.meridian;
-      return { id: 'meridian', kind: 'meridian', from: K.cloud, offer: '$50M in compute credits: ' + fmtInt(M.cards) + ' V100s reserved for you, ready in six weeks. Our cloud only. We see every checkpoint first.',
-        up: eff(['CARDS +' + fmtInt(M.cards) + ' in pencil', 'no other cloud', 'no open weights']), down: 'we’ll talk again in June',
-        take: function () { G.mer = { cards: M.cards, live: G.day + M.lead, credits: M.credits, half: false }; },
+      return { id: 'meridian', kind: 'meridian', from: K.cloud,
+        view: function () {
+          return { offer: '$50M in compute credits: ' + fmtInt(M.cards) + ' V100s reserved for you, ready in ' + weeksWord(M.lead) + '. Our cloud only. We see every checkpoint first.',
+            up: eff(['CARDS +' + fmtInt(M.cards) + ' in pencil', 'no other cloud', 'no open weights']), down: 'we’ll talk again in June' };
+        },
+        take: function () { G.mer = { cards: M.cards, live: Math.floor(G.day) + M.lead, credits: M.credits, half: false, signed: G.day }; },
         pass: function () { G.merPassed = true; } };
     },
     meridian2: function () {
-      var M = CFG.meridian.second, ns = G.stake * M.stakeMult;
-      return { id: 'meridian2', kind: 'meridian', from: K.cloud, offer: fmtInt(M.cards) + ' V100s, ready in six weeks, for 10% of FRONTIER.',
-        up: eff(['CARDS +' + fmtInt(M.cards), sArrow(ns)]), down: 'gone',
-        take: function () { G.stake = ns; G.mer = { cards: M.cards, live: G.day + CFG.meridian.lead, credits: CFG.meridian.credits / 2, half: true }; },
+      var M = CFG.meridian.second;
+      return { id: 'meridian2', kind: 'meridian', from: K.cloud,
+        view: function () { return { offer: fmtInt(M.cards) + ' V100s, ready in ' + weeksWord(CFG.meridian.lead) + ', for 10% of FRONTIER.', up: eff(['CARDS +' + fmtInt(M.cards) + ' in pencil', sArrow(G.stake * M.stakeMult)]), down: 'gone' }; },
+        take: function () { G.stake = G.stake * M.stakeMult; G.mer = { cards: M.cards, live: Math.floor(G.day) + CFG.meridian.lead, credits: CFG.meridian.credits / 2, half: true, signed: G.day }; },
         pass: function () { } };
     },
     renewal: function (r) {
       var late = G.day >= K.apiDay, refused = late && rng() < CFG.renewRefuseShare, price = late ? CFG.renewPriceLate : rentPriceNow();
-      if (refused) return { id: 'capacity', kind: 'renewal', from: 'BROKER', offer: 'Capacity unavailable. Your ' + r.n + ' V100s go back on ' + R.fmtDay(r.end) + '.', up: null, down: 'they go back on ' + R.fmtDay(r.end), grey: true, forbid: 'The broker: no.', take: function () { }, pass: function () { } };
-      return { id: 'renewal', kind: 'renewal', from: 'BROKER', offer: 'Your ' + r.n + ' V100s go back on ' + R.fmtDay(r.end) + '. Renew for 90 days at $' + price.toFixed(2) + '?',
-        up: eff(['keep them', late ? mArrow(G.bank, burn() + r.n * (price - r.price) * 24 * CFG.daysPerMonth) : null]), down: 'they go back on ' + R.fmtDay(r.end),
-        take: function () { r.end += CFG.rentTermDays; r.price = price; }, pass: function () { } };
+      if (refused) return { id: 'capacity', kind: 'renewal', from: 'BROKER',
+        view: function () { return { offer: 'Capacity unavailable. Your ' + r.n + ' V100s go back on ' + R.fmtDay(r.end) + '.', up: null, down: 'they go back on ' + R.fmtDay(r.end), grey: true, forbid: 'The broker: no.' }; },
+        take: function () { }, pass: function () { } };
+      return { id: 'renewal', kind: 'renewal', from: 'BROKER',
+        view: function () {
+          var dB = r.n * (price - r.price) * 24 * CFG.daysPerMonth;
+          return { offer: 'Your ' + r.n + ' V100s go back on ' + R.fmtDay(r.end) + '. Renew for 90 days at $' + price.toFixed(2) + '?',
+            up: eff(['keep them', Math.abs(dB) > 1 ? mArrow(G.bank, burn() + dB) : null]), down: 'they go back on ' + R.fmtDay(r.end) };
+        },
+        take: function () { if (G.mer) return; r.end += CFG.rentTermDays; r.price = price; }, pass: function () { } };
     },
     acqui: function () {
-      var n = staff().length, tot = n * CFG.acquiPerHead, forced = board();
-      return { id: 'acqui', kind: 'acqui', from: 'HALCYON', offer: 'We’ll buy the team: ' + money(CFG.acquiPerHead) + ' a head, ' + money(tot) + ' in all. Your people get rich. FRONTIER disappears.',
-        up: 'it’s over, and everyone is rich', down: forced ? null : 'keep going', forced: forced, forbid: forced ? 'The board has accepted.' : null,
+      return { id: 'acqui', kind: 'acqui', from: 'HALCYON',
+        view: function () {
+          var n = staff().length, forced = board();
+          return { offer: 'We’ll buy the team: ' + money(CFG.acquiPerHead) + ' a head, ' + money(n * CFG.acquiPerHead) + ' in all. Your people get rich. FRONTIER disappears.',
+            up: 'it’s over, and everyone is rich', down: forced ? null : 'keep going', forced: forced, forbid: forced ? 'The board has accepted.' : null };
+        },
         take: function () { endYear('bought'); }, pass: function () { } };
     },
     poach: function () {
-      var mon = R.monthOf(G.day) + 1, rv = mon % 2 === 0 ? 'Halcyon' : 'Kestrel', s = staff().slice().sort(function (a, b) { return a.mood - b.mood; }), t = s[0];
-      var ns = G.stake - CFG.counterStake;
-      return { id: 'poach', kind: 'poach', from: rv.toUpperCase(), offer: rv + ' offers ' + t.name + ' double. Counter with equity?',
-        up: eff([sArrow(ns), (t.he ? 'he' : 'she') + ' stays']), down: (t.he ? 'he' : 'she') + ' walks to ' + rv,
-        take: function () { G.stake = ns; mood(t.id, CFG.moodCounter); },
-        pass: function () { walk(t.id, 'poached'); bumpRival(rv.toLowerCase(), CFG.passToKestrel); } };
+      var mon = R.monthOf(G.day) + 1, rv = mon % 2 === 0 ? 'Halcyon' : 'Kestrel', t = null;
+      function tgt() { if (!t || t.gone) t = staff().slice().sort(function (a, b) { return a.mood - b.mood; })[0] || null; return t; }
+      return { id: 'poach', kind: 'poach', from: rv.toUpperCase(),
+        view: function () {
+          var p = tgt(); if (!p) return null;
+          return { offer: rv + ' offers ' + p.name + ' double. Counter with equity?', up: eff([sArrow(G.stake - CFG.counterStake), he(p) + ' stays']), down: he(p) + ' walks to ' + rv };
+        },
+        take: function () { var p = tgt(); if (!p) return; G.stake -= CFG.counterStake; mood(p.id, CFG.moodCounter); },
+        pass: function () { var p = tgt(); if (!p) return; walk(p.id, 'poached'); bumpRival(rv.toLowerCase(), CFG.passToKestrel); } };
     },
     rentout: function () {
-      var n = Math.floor(G.owned * CFG.rentOut.share), pay = n * CFG.rentOut.price * 24 * CFG.rentOut.days;
-      return { id: 'rentout', kind: 'rentout', from: 'BROKER', offer: 'We’ll pay $' + CFG.rentOut.price.toFixed(2) + ' an hour for half your owned cards. 30 days. Cash now.',
-        up: eff([mArrow(G.bank + pay, burn()), 'CARDS lent for 30 days']), down: 'no cash',
-        take: function () { G.bank += pay; G.lent = { n: n, until: G.day + CFG.rentOut.days }; }, pass: function () { } };
+      function n() { return Math.floor(G.owned * CFG.rentOut.share); }
+      function pay() { return n() * CFG.rentOut.price * 24 * CFG.rentOut.days; }
+      return { id: 'rentout', kind: 'rentout', from: 'BROKER',
+        view: function () { return { offer: 'We’ll pay $' + CFG.rentOut.price.toFixed(2) + ' an hour for half your owned cards. 30 days. Cash now.', up: eff([mArrow(G.bank + pay(), burn()), 'CARDS lent for 30 days']), down: 'no cash' }; },
+        take: function () { G.bank += pay(); G.lent = { n: n(), until: G.day + CFG.rentOut.days }; }, pass: function () { } };
     },
     open: function () {
-      var grey = !!G.mer || board(), forbid = G.mer ? 'Meridian: no.' : board() ? 'The board: no.' : null, C = farthestPub();
-      return { id: 'open', kind: 'open', from: 'THE FIELD', offer: 'Grad students want the weights of your published model.',
-        up: grey ? null : eff(['recruits come running', 'rivals fine-tune it within a week']), down: 'they build on Northwind’s instead', grey: grey, forbid: forbid,
-        take: function () { G.openedC = C; G.openedDay = G.day; laterBump('kestrel', CFG.openKestrel, CFG.openFineTuneDays); laterBump('northwind', CFG.openNorthwind, CFG.openFineTuneDays); },
+      return { id: 'open', kind: 'open', from: 'THE FIELD',
+        view: function () {
+          var grey = !!G.mer || board();
+          return { offer: 'Grad students want the weights of your published model.', up: grey ? null : eff(['recruits come running', 'rivals fine-tune it within a week']),
+            down: 'they build on Northwind’s instead', grey: grey, forbid: G.mer ? 'Meridian: no.' : board() ? 'The board: no.' : null };
+        },
+        take: function () { if (G.mer || board()) return; G.openedC = farthestPub(); G.openedDay = G.day; laterBump('kestrel', CFG.openKestrel, CFG.openFineTuneDays); laterBump('northwind', CFG.openNorthwind, CFG.openFineTuneDays); },
         pass: function () { bumpRival('northwind', CFG.passNorthwind); } };
     },
     december: function () {
-      var pr = person('priya'), others = staff().filter(function (p) { return p.id !== 'priya'; }).sort(function (a, b) { return a.mood - b.mood; });
-      var sender, names;
-      if (pr) { sender = pr; names = others.slice(0, 2).map(function (p) { return p.name; }); }
-      else { var byEgo = staff().slice().sort(function (a, b) { return b.ego - a.ego; }); sender = byEgo[0]; names = others.filter(function (p) { return p !== sender; }).slice(0, 2).map(function (p) { return p.name; }); }
-      if (!sender) return null;
-      var who = names.length === 2 ? names[0] + ', ' + names[1] + ' and I' : names.length === 1 ? names[0] + ' and I' : 'I';
-      var at = { x: L.plot.x + 8, y: L.plot.y + 4, fixed: true };
-      return { id: 'december', kind: 'december', from: sender.full, hand: true, offerHand: true, offer: who + ' want to start something safer. We’re telling you first.',
-        up: 'let them go, with your blessing', down: 'fight to keep them',
-        take: function () { G.december = 'go'; note('let them go', sender.id, at, { keep: true }); },
-        pass: function () { G.december = 'stay'; note('fought to keep them', sender.id, at, { keep: true }); } };
+      function cast() {
+        var pr = person('priya'), others = staff().filter(function (p) { return p.id !== 'priya'; }).sort(function (a, b) { return a.mood - b.mood; }), sender, names;
+        if (pr) { sender = pr; names = others.slice(0, 2); }
+        else { sender = staff().slice().sort(function (a, b) { return b.ego - a.ego || a.mood - b.mood; })[0]; names = others.filter(function (p) { return p !== sender; }).slice(0, 2); }
+        return { sender: sender || null, names: names.map(function (p) { return p.name; }) };
+      }
+      if (!cast().sender) return null;
+      var at = function () { return { x: L.plot.x + 8, y: L.plot.y + 4, fixed: true }; }, who0 = null;
+      return { id: 'december', kind: 'december', from: cast().sender.full, hand: true, offerHand: true,
+        view: function () {
+          var c = cast(); if (!c.sender) return null; who0 = c.sender.id;
+          var nm = c.names, who = nm.length === 2 ? nm[0] + ', ' + nm[1] + ' and I' : nm.length === 1 ? nm[0] + ' and I' : 'I';
+          return { from: c.sender.full, offer: who + ' want to start something safer. We’re telling you first.', up: 'let them go, with your blessing', down: 'fight to keep them' };
+        },
+        take: function () { G.december = 'go'; note('let them go, with your blessing', who0, at(), { keep: true }); },
+        pass: function () { G.december = 'stay'; note('fought to keep them', who0, at(), { keep: true }); } };
     }
   };
+  function demandLetter(id, from, offer, view, take, pass) {
+    return { id: 'demand_' + id, kind: 'demand', from: from, hand: true, offerHand: true, view: function () { var v = view(); v.offer = offer; return v; }, take: take, pass: pass };
+  }
   var DEMAND = {
     priya: { when: function () { return G.day >= 70; }, make: function () {
-      return { id: 'demand_priya', kind: 'demand', from: 'Priya Raman', hand: true, offerHand: true, offer: 'I want first author on our next paper, or I walk.',
-        up: 'your next clean landing is published: Raman et al.', down: 'she walks', take: function () { G.firstAuthor = 'priya'; }, pass: function () { walk('priya', 'demand'); } };
+      return demandLetter('priya', 'Priya Raman', 'I want first author on our next paper, or I walk.', function () { return { up: 'your next clean landing is published: Raman et al.', down: 'she walks' }; },
+        function () { G.firstAuthor = 'priya'; }, function () { walk('priya', 'demand'); });
     } },
     dev: { when: function (p) { return G.day >= p.joined + 90; }, make: function () {
-      var ns = G.stake - CFG.devDemandStake;
-      return { id: 'demand_dev', kind: 'demand', from: 'Dev Okafor', hand: true, offerHand: true, offer: 'One percent, or Halcyon gets my parallelism code.',
-        up: eff([sArrow(ns)]), down: 'he walks', take: function () { G.stake = ns; }, pass: function () { walk('dev', 'demand'); } };
+      return demandLetter('dev', 'Dev Okafor', 'One percent, or Halcyon gets my parallelism code.', function () { return { up: eff([sArrow(G.stake - CFG.devDemandStake)]), down: 'he walks' }; },
+        function () { G.stake -= CFG.devDemandStake; }, function () { walk('dev', 'demand'); });
     } },
     ayaan: { when: function (p) { return G.day >= p.joined + 60; }, make: function () {
-      return { id: 'demand_ayaan', kind: 'demand', from: 'Ayaan Mehta', hand: true, offerHand: true, offer: 'Whole cluster on one run, all the way to the stop.',
-        up: 'your next touch snaps the nib to the stop', down: 'his name thins', take: function () { G.snapNext = true; }, pass: function () { mood('ayaan', -40); } };
+      return demandLetter('ayaan', 'Ayaan Mehta', 'Whole cluster on one run, all the way to the stop.', function () { return { up: 'your next touch snaps the nib to the stop', down: 'his name thins' }; },
+        function () { G.snapNext = true; }, function () { mood('ayaan', -40); });
     } },
     tom: { when: function () { return G.hangsLastMonth >= 3; }, make: function () {
-      return { id: 'demand_tom', kind: 'demand', from: 'Tomasz Wójcik', hand: true, offerHand: true, offer: 'I need a week off. I’ve been up every night.',
-        up: 'seven days without him', down: 'his name thins', take: function () { G.tomOffUntil = G.day + 7; }, pass: function () { mood('tom', -30); } };
+      return demandLetter('tom', 'Tomasz Wójcik', 'I need a week off. I’ve been up every night.', function () { return { up: 'seven days without him', down: 'his name thins' }; },
+        function () { G.tomOffUntil = G.day + 7; }, function () { mood('tom', -30); });
     } },
     sunhee: { when: function (p) { return G.day >= p.joined + 45; }, make: function () {
-      return { id: 'demand_sunhee', kind: 'demand', from: 'Sun-hee Park', hand: true, offerHand: true, offer: 'I want to publish the schedule trick.',
-        up: 'she stays; every rival lands lower in 30 days', down: 'she walks to Halcyon',
-        take: function () { G.rivalTrickDay = G.day + 30; G.rivalTrickAll = true; },
-        pass: function () { walk('sunhee', 'demand'); G.rivalTrickDay = G.day + 30; G.rivalTrickAll = false; } };
+      return demandLetter('sunhee', 'Sun-hee Park', 'I want to publish the schedule trick.', function () { return { up: 'she stays; in 30 days every rival lands lower too', down: 'she walks to Halcyon' }; },
+        function () { G.rivalTrickDay = G.day + 30; G.rivalTrickAll = true; }, function () { walk('sunhee', 'demand'); G.rivalTrickDay = G.day + 30; G.rivalTrickAll = false; });
     } }
   };
   function queued(id) { return (G.letter && G.letter.id === id) || G.wait.some(function (w) { return w.id === id; }); }
   function slotLetter(d, isFirst) {
     if (d === CFG.decemberDay && !G.seen.december) { G.seen.december = 1; var dl = MAKE.december(); if (dl) return dl; }
     // acqui-hire: the 1st only, from 1 Feb, months < 3 after payroll
-    if (isFirst && d >= 31 && monthsLeft() < CFG.acquiUnderMonths) return MAKE.acqui();
+    if (isFirst && d >= 31 && monthsLeft() < CFG.acquiUnderMonths && !queued('acqui')) return MAKE.acqui();
     // term sheets
     var closed = d >= CFG.marketClosedFrom && d < CFG.marketClosedTo;
     if (!G.A.taken && !closed && d >= G.termBlockUntil && proofA() && !queued('termA')) return MAKE.termA();
@@ -892,6 +1055,7 @@
     // the broker, rent before buy, alternating, at least 14 days apart
     if (d - G.lastBroker >= CFG.brokerGapDays) {
       var canRent = d <= CFG.brokerRentUntil, canBuy = d >= 31, which = null;
+      if (!canRent && d >= CFG.shipFrom && !G.seen.capacityNote && !G.mer && G.brokerNext === 'rent') { G.seen.capacityNote = 1; G.lastBroker = d; G.brokerNext = 'buy'; return MAKE.capacity(); }
       if (canRent && (!canBuy || G.brokerNext === 'rent')) which = 'rent'; else if (canBuy) which = 'buy';
       if (which) {
         G.lastBroker = d; G.brokerNext = which === 'rent' ? 'buy' : 'rent';
@@ -913,26 +1077,39 @@
 
   /* ---------------- the letter on screen ---------------- */
   var letterAnim = null, flick = null;
-  function showLetter(l) {
-    G.letter = l;
+  // (re)draw the slip from its live view; returns false if the letter no longer makes sense (its person is gone)
+  function renderLetter(l) {
+    var v = l.view(l); if (!v) return false;
+    var key = [v.from || l.from, v.offer, v.up, v.down, v.grey, v.forbid, v.forced].join('|');
+    l.up = v.up || null; l.down = v.down || null; l.grey = !!v.grey; l.forced = !!v.forced; l.forbid = v.forbid || null; l.offer = v.offer; if (v.from) l.from = v.from;
+    if (l._key === key && G.letter === l) return true;
+    l._key = key;
     lFrom.textContent = l.from; lFrom.className = 'from' + (l.hand ? ' hand' : '');
     lOffer.textContent = l.offer; lOffer.className = 'offer' + (l.offerHand ? ' hand' : '');
-    lUp.textContent = l.up ? '↑ ' + l.up : '';
-    lDown.innerHTML = '';
+    lUp.textContent = l.up ? '↑ ' + l.up : ''; lUp.style.display = l.up ? '' : 'none';
+    lDown.textContent = '';
     if (l.forbid) { var f = document.createElement('span'); f.className = 'forbid'; f.textContent = l.forbid; lDown.appendChild(f); }
     if (l.down) { var dn = document.createElement('span'); dn.textContent = '↓ ' + l.down; lDown.appendChild(dn); }
-    lUp.style.display = l.up ? '' : 'none';
-    elLetter.classList.toggle('grey', !!l.grey);
+    elLetter.classList.toggle('grey', l.grey);
+    letterH = 0;
+    return true;
+  }
+  function showLetter(l) {
+    l.fuseLeft = l.fuse;
+    G.letter = l;
+    if (!renderLetter(l)) { G.letter = null; if (G.wait.length) showLetter(G.wait.shift()); return; }
+    l.shownDay = Math.floor(G.day);
     elLetter.hidden = false;
     letterAnim = { kind: 'in', t0: now };
-    l.fuseLeft = l.fuse;
     placeLetter();
     snd.letter();
-    elLive.textContent = l.from + '. ' + l.offer;
+    elLive.textContent = l.from + '. ' + l.offer + (l.up ? ' Up: ' + l.up + '.' : '') + (l.down ? ' Down: ' + l.down + '.' : '');
     G.log.push({ day: Math.floor(G.day), letter: l.id });
-    if (document.activeElement === elFocus || (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('fr-name'))) { try { elLetter.focus({ preventScroll: true }); } catch (e) { } }
+    var ae = document.activeElement;
+    if (ae === elFocus || (ae && ae.classList && ae.classList.contains('fr-name'))) { try { elLetter.focus({ preventScroll: true }); } catch (e) { } }
   }
-  function letterRest() { var h = elLetter.offsetHeight || L.letter.h; return clamp(L.letter.max - h, L.cluster.y, Math.max(L.letter.y, L.strip.y + L.strip.h + 6)); }
+  var letterH = 0;
+  function letterRest() { if (!letterH) letterH = elLetter.offsetHeight || L.letter.h; var h = letterH; return clamp(L.letter.max - h, L.cluster.y, Math.max(L.letter.y, L.strip.y + L.strip.h + 6)); }
   function placeLetter() {
     if (!G || elLetter.hidden) return;
     var rest = letterRest(), y = rest, op = 1, A = letterAnim;
@@ -952,6 +1129,8 @@
     var l = G.letter; if (!l) return;
     var u = clamp(l.fuseLeft / l.fuse, 0, 1);
     lFuse.style.transform = 'scaleX(' + u.toFixed(4) + ')'; lTip.style.left = (u * 100).toFixed(3) + '%';
+    lTip.style.visibility = clockRuns() && u > 0 ? '' : 'hidden';
+    if (Math.floor(G.day) !== l.shownDay) { l.shownDay = Math.floor(G.day); if (!renderLetter(l)) { G.letter = null; letterAnim = { kind: 'down', t0: now, y0: letterY() }; return; } }
     if (l.fuseLeft <= 0 && !letterAnim && !flick) { if (l.forced) resolveLetter('up', true); else resolveLetter('down', true); }
   }
   function letterY() { var m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(elLetter.style.transform || ''); return m ? +m[2] : letterRest(); }
@@ -964,7 +1143,7 @@
     G.log.push({ day: Math.floor(G.day), resolve: l.id, dir: dir, fuse: !!byFuse });
     if (dir === 'up') { snd.take(); l.take && l.take(); } else { snd.pass(); l.pass && l.pass(); }
     if (G.over) return true;
-    updateTop();
+    updateTop(); staticDirty = true;
     if (document.activeElement === elLetter) { try { elFocus.focus({ preventScroll: true }); } catch (e) { } }
     return true;
   }
@@ -972,6 +1151,7 @@
     G.wait = G.wait.filter(function (w) { return w.kind !== 'term'; });
     if (G.letter && G.letter.kind === 'term') { var l = G.letter; G.letter = null; elLetter.classList.add('grey'); letterAnim = { kind: 'down', t0: now, y0: letterY() }; G.log.push({ day: Math.floor(G.day), withdrawn: l.id }); }
   }
+
 
   /* ================================================================
      THE BET STRIP: time, from a six-hour probe to the stop
@@ -987,14 +1167,16 @@
   }
   function daysAt(t, st) { return CFG.minDays + clamp(t, 0, 1) * (st.T - CFG.minDays); }
   function nibX(t) { return L.travel.x + clamp(t, 0, 1) * L.travel.w; }
+  function nibClampX(x) { return clamp(x, L.strip.x + 6, L.travel.x + L.travel.w); }
   function tAtX(x) { return clamp((x - L.travel.x) / L.travel.w, 0, 1); }
-  function canBet() { return G.powered && !G.over && !G.run && !moment && (G.phase === 'idle' || G.phase === 'wait'); }
+  // a fast thumb may start the next bet while a landing is still being read (the drag freezes the clock anyway)
+  function canBet() { return G.powered && !G.over && !G.run && !moment && (G.phase === 'idle' || G.phase === 'wait' || G.phase === 'land'); }
   function beginDrag(x, y, viaKeys) {
     if (!canBet()) return false;
     var st = stopInfo(); if (!st.ok) return false;
-    drag = { st: st, t: 0, samples: [], kb: !!viaKeys, hitStop: false };
+    drag = { st: st, t: 0, samples: [], kb: !!viaKeys, hitStop: false, x: null };
     if (G.snapNext) { G.snapNext = false; drag.t = 1; drag.snapped = true; }
-    else if (!viaKeys) drag.t = tAtX(x);
+    else if (!viaKeys) { drag.t = tAtX(x); drag.x = nibClampX(x); }
     drag.samples.push({ t: drag.t, at: performance.now() });
     G.phase = 'drag';
     updateDragNotes();
@@ -1002,7 +1184,7 @@
   }
   function moveDrag(x, y) {
     if (!drag) return;
-    if (!drag.snapped) drag.t = tAtX(x);
+    if (!drag.snapped) { drag.t = tAtX(x); drag.x = nibClampX(x); }
     drag.samples.push({ t: drag.t, at: performance.now() }); if (drag.samples.length > 60) drag.samples.shift();
     updateDragNotes();
   }
@@ -1075,8 +1257,10 @@
     run.lastQ = lq;
   }
   function cpIndex(q) { var c = -1; for (var i = 0; i < CFG.checkpoints.length; i++) if (CFG.checkpoints[i] <= q + 1e-9) c = i; return c; }
+  function holdsBand() { return !!(G.cp && G.cp.redTeamed && G.run); }
   function tapSample() {
     var run = G.run; if (!run || G.phase !== 'pour') return false;
+    if (holdsBand()) return false;
     run.lastTap = now;
     var ci = cpIndex(qOf(run));
     if (ci > run.sampledUpTo) { run.sampledUpTo = ci; showBand(makeSample(run, CFG.checkpoints[ci], 'tap'), 'stream'); }
@@ -1084,6 +1268,7 @@
     return true;
   }
   function stepSamples(run) {
+    if (holdsBand()) return;
     var ci = cpIndex(qOf(run));
     if (run.pendingTap != null) {
       if (ci > run.sampledUpTo) { run.sampledUpTo = ci; run.pendingTap = null; showBand(makeSample(run, CFG.checkpoints[ci], 'tap'), 'stream'); }
@@ -1093,14 +1278,20 @@
     if (run.autoQ.length && q >= run.autoQ[0]) { run.autoQ.shift(); if (now - run.lastTap > CFG.autoQuietSec && ci >= 0) { run.sampledUpTo = Math.max(run.sampledUpTo, ci); run.lastAuto = now; showBand(makeSample(run, CFG.checkpoints[ci], 'auto'), 'stream'); } }
     if (run.T > CFG.longPourSec && now - run.lastAuto > CFG.autoEverySec && now - run.lastTap > CFG.autoQuietSec && ci >= 0) { run.lastAuto = now; run.sampledUpTo = Math.max(run.sampledUpTo, ci); showBand(makeSample(run, CFG.checkpoints[ci], 'auto'), 'stream'); }
   }
-  // Priya reads the words. Loud fray or crawl: she offers the filter herself.
+  // Priya reads the words. Loud fray or crawl: she offers the filter herself, and the offer stands until the next 1st
+  // (when her note is cleared from the paper) or until the job starts. A loud sample in the band always re-arms it.
+  function loud(smp) { return !!smp && (smp.crawl || smp.fray >= CFG.priyaAutoAmount); }
+  function dataRunner() { return person('priya') ? 'priya' : person('ines') ? 'ines' : null; }
+  function offerStands() { return !G.filter && !!dataRunner() && (!!G.priyaOffer || loud(G.sample)); }
   function onSampleShown(smp) {
     G.lastFrayAmt = smp.crawl ? 6 : smp.fray;
-    if ((smp.fray >= CFG.priyaAutoAmount || smp.crawl) && !G.filter) {
-      var who = person('priya') ? 'priya' : person('ines') ? 'ines' : null;
+    // the sentence you skimmed: the last frayed (not yet crawl) words this run showed you
+    if (G.run && smp.runN === G.run.n && smp.fray > 0 && !smp.crawl) G.run.skimmed = smp.text;
+    if (loud(smp) && !G.filter) {
+      var who = dataRunner();
       if (who && !G.priyaOffer) {
-        G.priyaOffer = smp.crawl ? 6 : smp.fray;
-        var at = G.run ? { C: Math.max(R.P0, qOf(G.run)) * G.run.C, lnL: Math.log(R.lossAt(G.run.C, qOf(G.run), G.run.k)) } : (smp.C ? { C: smp.C } : null);
+        G.priyaOffer = { amt: smp.crawl ? 6 : smp.fray, month: G.month };
+        var at = G.run ? { C: Math.max(R.P0, qOf(G.run)) * G.run.C, lnL: Math.log(R.lossAt(G.run.C, qOf(G.run), G.run.k)) } : (smp.C ? { C: smp.C, lnL: Math.log(smp.landL || R.Lline(smp.C)) } : null);
         noteBy(who, 'frayLoud', at, { life: 12 });
       }
     }
@@ -1130,6 +1321,7 @@
     var lp = run.pts[run.pts.length - 1] || curvePoint(run, q);
     var mark = { lc: lp.x, lnL: lp.y, time: String(Math.floor(h)).padStart(2, '0') + ':' + String(Math.floor((h % 1) * 60)).padStart(2, '0'), tom: !!person('tom') && G.day >= G.tomOffUntil, first: run.hangs.length === 1 };
     G.hangMarks.push(mark);
+    if (mark.tom) noteBy('tom', 'myFault', { mark: mark, C: Math.pow(10, lp.x), lnL: lp.y });
     snd.cut(); after(0.4, function () { snd.thud(); });
     staticDirty = true;
     G.log.push({ day: Math.floor(G.day), hang: mark.time, down: +down.toFixed(2) });
@@ -1165,7 +1357,7 @@
       run.L = R.Lline(run.C) * run.k;
       var qStar = G.Dwall / run.D;
       var smp = makeSample(run, 1, 'land');
-      G.scars.push({ lc0: log10(qStar * run.C), lc1: log10(run.C), t0: now, text: smp.text });
+      G.scars.push({ lc0: log10(qStar * run.C), lc1: log10(run.C), t0: now, text: run.skimmed || smp.text });
       G.rings.push({ C: run.C, L: run.L });
       showBand(smp, 'stream');
       snd.hatch(0.9);
@@ -1175,7 +1367,7 @@
       var dot = { C: run.C, L: Lf, day: G.day, runN: run.n, pub: false, ship: false, contaminated: false, surname: null, scandal: null };
       G.dots.push(dot);
       // passing a rival
-      G.rivals.forEach(function (rv) { var lp = rv.pubs[rv.pubs.length - 1]; if (!rv.passed && lp && lp.day >= 0 && run.C > lp.C && Lf < lp.L) { rv.passed = true; snd.tick(); } });
+      G.rivals.forEach(function (rv) { var lp = rv.pubs[rv.pubs.length - 1]; if (!rv.passed && lp && run.C > lp.C && Lf < lp.L) { rv.passed = true; snd.tick(); } });
       var fresh = fireCaps(Lf, run);
       fresh.forEach(function (c) { if (c.contaminated) { dot.contaminated = true; if (person('lena')) noteBy('lena', 'leak', { C: run.C, lnL: Math.log(Lf) }); } });
       var top = fresh.length ? fresh[fresh.length - 1] : null;
@@ -1201,7 +1393,8 @@
   function doMiracle() { if (G.miracle || G.over) return; G.miracle = true; startMoment('', 'miracle'); }
   function flickHints() {
     if (!G.cp || G.over) return;
-    var at = { x: L.band.x + 8, y: L.ruler.y - 22, fixed: true };
+    // the hint is written at the band's top right, beside the words it is about
+    var at = { x: L.band.x + L.band.w - 200, y: L.band.y + 2, fixed: true, free: true };
     if (G.day >= CFG.publishFrom && !G.hints.up) { G.hints.up = 1; noteBy(anyHand(['priya']), 'flickUp', at, { life: 6 }); }
     else if (canShip(G.cp) && !G.hints.right) { G.hints.right = 1; noteBy(anyHand(['priya']), 'flickRight', at, { life: 6 }); }
   }
@@ -1280,13 +1473,14 @@
     var m = R.monthOf(d);
     if (m !== G.month) monthStart(m);
     if (G.over) return;
-    K.news.forEach(function (n, i) { if (!G.newsDone[i] && d >= n[0]) { G.newsDone[i] = 1; G.headQ.push(n[2]); G.phrases.push({ day: n[0], text: n[1] }); staticDirty = true; if (n[0] === CFG.lineDay) G.lineT0 = now; } });
+    K.news.forEach(function (n, i) { if (!G.newsDone[i] && d >= n[0]) { G.newsDone[i] = 1; var hq = { text: n[2], day: n[0] }; if (n[0] === K.gpt3Day) G.headQ.unshift(hq); else G.headQ.push(hq); G.phrases.push({ day: n[0], text: n[1] }); staticDirty = true; if (n[0] === CFG.lineDay) G.lineT0 = now; } });
     if (d === CFG.marketClosedFrom) withdrawTerms();
     if (d === K.gpt3Day && !G.gpt3) gpt3Moment();
     for (var i = G.orders.length - 1; i >= 0; i--) { var o = G.orders[i]; if (d >= o.arrive) { if (o.kind === 'a100') G.ownedA100 += o.n; else G.owned += o.n; G.orders.splice(i, 1); for (var k = 0; k < 8; k++) after(k * 0.03, snd.card); } }
     G.rentals = G.rentals.filter(function (r) { return d < r.end; });
     if (G.lent && d >= G.lent.until) G.lent = null;
-    if (G.held && d >= G.held.end) { if (!G.run) { G.cp = G.held.cp; G.cp.redTeamed = true; showBand(G.cp.smp, 'instant'); } else { G.held.cp.redTeamed = true; G.heldDone = G.held.cp; } G.held = null; }
+    // the pass ends: the sample comes back to the band (as soon as no newer landing sample is up) to be flicked, risk-free
+    if (G.held && d >= G.held.end) { G.held.cp.redTeamed = true; G.heldDone = G.held.cp; G.held = null; G.log.push({ day: d, redteamDone: true }); }
     if (G.filter && d >= G.filter.end) { G.filter = null; G.filters++; G.W *= CFG.filterW; G.Dwall = CFG.passes * G.W; G.Cwall = R.C_of_tokens(G.Dwall); G.log.push({ day: d, filterDone: G.filters }); }
     if (G.evals && d >= G.evals.readDay) { var ev = G.evals; G.evals = null; evalsRead(ev); }
     G.rivals.forEach(function (rv) {
@@ -1295,6 +1489,7 @@
       if (d >= rv.next) {
         var c = Math.pow(10, rv.logc);
         rv.pubs.push({ C: c, L: R.Lline(c) * rv.offset * rv.trick, day: d });
+        if (rv.passed && c > farthestClean()) rv.passed = false;
         rv.next = d + rv.period * U(CFG.rivalPeriodJitter[0], CFG.rivalPeriodJitter[1]);
         staticDirty = true;
       }
@@ -1314,7 +1509,7 @@
     if (G.bank < 0) { endYear('bankrupt'); return; }
     if (!first) {
       staff().forEach(function (p) { if (p.ego >= 4 && G.day - G.lastPublishDay > CFG.noPubDays) mood(p.id, CFG.moodNoPub); });
-      clearNotes();
+      clearNotes(); G.priyaOffer = 0;
     }
     if (G.mer && G.day >= CFG.meridian.queueFrom) {
       var fr = frontier(), fc = farthestClean(), full = G.mer.cards;
@@ -1365,54 +1560,93 @@
   /* ---------------- how a year ends ---------------- */
   function endYear(reason) {
     if (G.over) return;
-    G.over = { reason: reason, day: G.day };
+    G.over = { reason: reason, day: G.day, t0: now };
     G.phase = 'end'; drag = null; elReadout.style.opacity = 0; elProj.textContent = '';
     if (G.letter) { G.letter = null; letterAnim = { kind: reason === 'bought' ? 'up' : 'down', t0: now, y0: letterY() }; }
     G.wait = [];
-    snd.motor('off', 0, 0.3);
     if (reason === 'bankrupt') {
-      G.dark = true; snd.motorFreq(30, 1.2);
+      // the figure prints 0, every cell goes dark, the motor winds down from 55 to 30 Hz, names struck 120 ms apart,
+      // the sheet fades to Dry over 1.2 s, then 800 ms of true silence
+      G.dark = true; snd.windDown(1.2);
       staff().forEach(function (p, i) { after(0.12 * i, function () { var b = nameEl(p.id); if (b) b.classList.add('gone'); snd.strike(); }); });
-      after(0.2, function () { root.classList.add('dry'); });
-      after(1.4, function () { snd.silence(0.05); });
+      root.classList.add('dry');
+      after(1.2, function () { snd.silence(0.02); });
     } else if (reason === 'bought') {
+      // FRONTIER struck through over 600 ms, HALCYON pencilled beside it; the names stay (they are rich); your ink drops to 35%
+      snd.motor('off', 0, 0.3);
       elBrand.classList.add('struck'); after(0.6, function () { elBought.textContent = 'HALCYON'; });
-      cv.style.transition = 'opacity .6s linear'; cv.style.opacity = 0.35;
+      G.fade = { kind: 'bought', t0: now, dur: 0.6 }; root.classList.add('sold');
     } else if (reason === 'forgotten') {
-      after(0.1, function () { root.classList.add('dry'); });
+      // payroll ticks, no letter comes, and over 2 s your ink fades to Dry while the rivals and GPT-3's point stay dark
+      snd.motor('off', 0, 0.3);
+      G.fade = { kind: 'forgotten', t0: now, dur: 2.0 }; root.classList.add('faded');
+    } else {
+      // survived: the motor stops over 300 ms; a run in flight stops mid-stroke and stays on the paper as a curve in the air
+      snd.motor('off', 0, 0.3); snd.scratch(0);
     }
+    staticDirty = true;
     updateTop();
     G.log.push({ day: Math.floor(G.day), end: reason });
     var myYear = yearN;
     after(CFG.nextYearSec, function () { if (yearN !== myYear) return; feedOut(); });
   }
+  // 6.5 s after any end frame the paper feeds out to the left over 900 ms and a fresh 1 January slides in from the right
+  var FEED = 'transform .9s cubic-bezier(.55,0,.35,1)';
   function feedOut() {
-    var myYear = yearN;
-    root.style.transition = 'opacity .45s linear'; root.style.opacity = 0;
-    after(0.5, function () { if (yearN !== myYear) return; snd.restore(); snd.motorFreq(55, 0.05); newYear(); layout(); root.style.opacity = 1; after(0.5, function () { root.style.transition = ''; }); });
+    var myYear = yearN, red = reduced();
+    snd.whirr(0.9);
+    if (red) { root.style.transition = 'opacity .45s linear'; root.style.opacity = 0; }
+    else { root.style.transition = FEED; root.style.transform = 'translate3d(-100%,0,0)'; }
+    after(red ? 0.5 : 0.95, function () {
+      if (yearN !== myYear) return;
+      snd.restore(); snd.motorFreq(55, 0.05);
+      root.style.transition = 'none';
+      newYear(); layout();
+      if (red) { root.style.transform = ''; void root.offsetWidth; root.style.transition = 'opacity .45s linear'; root.style.opacity = 1; }
+      else { root.style.opacity = 1; root.style.transform = 'translate3d(100%,0,0)'; void root.offsetWidth; root.style.transition = FEED; root.style.transform = 'translate3d(0,0,0)'; snd.whirr(0.9); }
+      after(1.0, function () { root.style.transition = ''; root.style.transform = ''; });
+    });
   }
 
-  /* ---------------- power on ---------------- */
+  /* ---------------- power on: the first touch powers the sheet and does nothing else ---------------- */
   function powerOn() {
     snd.start();
     if (G.powered) return;
     G.powered = true; G.phase = 'wait'; G.powerT0 = now;
     root.classList.add('on');
     snd.motor('idle', 0, 0.8);
-    addPerson('priya');
     staticDirty = true;
-    after(0.6, function () { if (!G.over && G.month === -1) { monthStart(0); updateTop(); } });
+    var myYear = yearN;
+    // cells ink in left to right 60 ms apart; the date sets; Priya writes herself in at 40 ms a letter; the rivals' 2019
+    // dots set; then the 1 January payroll ticks with the first letter in the same frame
+    after(0.3, function () { if (yearN === myYear) addPerson('priya'); });
+    after(0.6, function () { if (yearN === myYear) { G.rivalsShown = true; staticDirty = true; } });
+    after(1.05, function () { if (yearN === myYear && !G.over && G.month === -1) { monthStart(0); updateTop(); } });
   }
 
   /* ================================================================
      DRAWING
      ================================================================ */
-  var staticCv = document.createElement('canvas'), sctx = staticCv.getContext('2d'), staticDirty = true;
+  // two layers: the paper (redrawn only when something on it changes) and the live layer (pen, cluster, strip) above it
+  var staticCv = $('fr-cs'), sctx = staticCv.getContext('2d'), staticDirty = true;
   var MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace", HAND = "Caveat, 'Segoe Print', 'Bradley Hand', cursive", SERIF = "Newsreader, Georgia, serif";
   function setFont(c, px, fam, style) { c.font = (style || '') + ' ' + px + 'px ' + fam; }
+  // your ink: dark, or fading at the end (bought: to 35%; forgotten: to Dry). The world's graphite never fades.
+  function inkU() { var f = G.fade; if (!f) return 0; return reduced() ? 1 : clamp((now - f.t0) / f.dur, 0, 1); }
+  function ownCol(al) {
+    var f = G.fade; if (al == null) al = 1;
+    if (!f) return al >= 1 ? COL.ink : rgba('ink', al);
+    var u = inkU();
+    if (f.kind === 'bought') return rgba('ink', al * (1 - 0.65 * u));
+    var A = RGB.ink, B = RGB.dry;
+    return 'rgba(' + Math.round(A[0] + (B[0] - A[0]) * u) + ',' + Math.round(A[1] + (B[1] - A[1]) * u) + ',' + Math.round(A[2] + (B[2] - A[2]) * u) + ',' + al + ')';
+  }
+  // canvas text placement: every label on the paper claims a rectangle, later labels step around earlier ones
+  function halo(c, text, x, y, col) { c.lineJoin = 'round'; c.lineWidth = 3; c.strokeStyle = COL.paper; c.strokeText(text, x, y); c.fillStyle = col; c.fillText(text, x, y); }
+  function overlapArea(rects, r) { var a = 0; for (var i = 0; i < rects.length; i++) { var o = rects[i], w = Math.min(r.x + r.w, o.x + o.w) - Math.max(r.x, o.x), h = Math.min(r.y + r.h, o.y + o.h) - Math.max(r.y, o.y); if (w > 0 && h > 0) a += w * h; } return a; }
+  function hits(rects, r) { for (var i = 0; i < rects.length; i++) { var o = rects[i]; if (r.x < o.x + o.w && r.x + r.w > o.x && r.y < o.y + o.h && r.y + r.h > o.y) return true; } return false; }
   function drawStatic() {
-    var c = sctx;
-    if (staticCv.width !== cv.width || staticCv.height !== cv.height) { staticCv.width = cv.width; staticCv.height = cv.height; }
+    var c = sctx, INK = ownCol(1);
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.fillStyle = COL.paper; c.fillRect(0, 0, L.vw, L.vh);
     var P = L.plot, ry = L.ruler.y, rb = L.ruler.y + L.ruler.h;
@@ -1420,7 +1654,10 @@
     for (var lc = Math.ceil(view.l); lc <= view.r; lc++) { var x = Math.round(X(lc)) + 0.5; c.moveTo(x, P.y); c.lineTo(x, P.y + P.h); }
     [2, 3, 4, 6, 8].forEach(function (Lv) { var y = Math.round(Y(Math.log(Lv))) + 0.5; c.moveTo(P.x, y); c.lineTo(P.x + P.w, y); });
     c.stroke();
-    if (!G.powered) { staticDirty = false; return; }
+    staticDirty = false;
+    if (!G.powered) return;
+    if (G.fade && inkU() < 1) staticDirty = true;
+    var taken = [];
     // the calendar ruler
     c.strokeStyle = COL.grid; c.beginPath(); c.moveTo(P.x, Math.round(rb) - 0.5); c.lineTo(P.x + P.w, Math.round(rb) - 0.5); c.stroke();
     setFont(c, 9, MONO); c.fillStyle = COL.graphite; c.textAlign = 'center'; c.textBaseline = 'bottom';
@@ -1429,26 +1666,26 @@
       c.strokeStyle = COL.grid; c.beginPath(); c.moveTo(xm, rb - 6); c.lineTo(xm, rb); c.stroke();
       c.fillText(R.MON[m][0], DX(d0 + 15), rb - 1);
     }
-    G.runs.forEach(function (run) { runBar(c, run, run.landDay); });
-    // headlines: a pencil tick and a phrase rising into the paper
+    G.runs.forEach(function (run) { runBar(c, run, run.landDay, INK); });
+    // headlines: a pencil tick on the ruler and a short phrase rising into the paper; phrases that would touch step right
     setFont(c, 9, MONO, 'italic'); c.textAlign = 'left'; c.textBaseline = 'middle';
-    var lastX = -99, lane = 0;
+    var lastX = -99;
     G.phrases.slice().sort(function (a, b) { return a.day - b.day; }).forEach(function (n) {
-      var xn = Math.round(DX(n.day)) + 0.5; lane = xn - lastX < 11 ? lane + 1 : 0; lastX = xn;
+      var xn = Math.round(DX(n.day)) + 0.5, xt = Math.max(xn + 4, lastX + 10); lastX = xt;
       c.strokeStyle = COL.graphite; c.beginPath(); c.moveTo(xn, ry - 3); c.lineTo(xn, ry + 4); c.stroke();
-      c.save(); c.translate(xn + 4 + lane * 10, ry - 5); c.rotate(-Math.PI / 2); c.fillStyle = COL.graphite; c.fillText(n.text, 0, 0); c.restore();
+      c.save(); c.translate(xt, ry - 5); c.rotate(-Math.PI / 2); c.fillStyle = COL.graphite; c.fillText(n.text, 0, 0); c.restore();
+      var pw = c.measureText(n.text).width; taken.push({ x: xt - 6, y: ry - 6 - pw, w: 11, h: pw + 2 });
     });
-    // scar bands
-    G.scars.forEach(function (sc) { var x0 = X(sc.lc0), x1 = Math.max(X(sc.lc1), x0 + 8); drawHatch(c, x0, x1); });
-    setFont(c, 12, SERIF); c.fillStyle = COL.ink; c.textAlign = 'left'; c.textBaseline = 'top';
-    var reRects = [];
+    // scar bands: vermilion hatch from the wall's compute to the run's, the skimmed sentence along the top
+    G.scars.forEach(function (sc) { var x0 = X(sc.lc0), x1 = Math.max(X(sc.lc1), x0 + 8); drawHatch(c, x0, x1, sc); });
+    setFont(c, 12, SERIF); c.textAlign = 'left'; c.textBaseline = 'top';
     G.scars.forEach(function (sc) {
       if (!sc.text) return;
-      var sx = clamp(X(sc.lc0), P.x + 2, P.x + P.w - 120), w = Math.min(220, P.x + P.w - sx - 2), sy = P.y + 2;
-      for (var tries = 0; tries < 6; tries++) { var hit = reRects.some(function (r) { return sx < r.x + r.w && sx + w > r.x && sy < r.y + r.h && sy + 48 > r.y; }); if (!hit) break; sy += 50; }
-      reRects.push({ x: sx, y: sy, w: w, h: 48 });
-      c.fillStyle = rgba('paper', 0.75); c.fillRect(sx - 2, sy - 1, w + 4, 50);
-      c.fillStyle = COL.ink; wrapText(c, sc.text, sx, sy, w, 16, 3);
+      var w = Math.min(L.lap ? 250 : 176, P.w - 4), sx = clamp(X(sc.lc0) + 3, P.x + 2, P.x + P.w - w - 2), sy = P.y + 2, lines = wrapLines(c, sc.text, w, 2), h = lines.length * 16 + 2;
+      for (var tries = 0; tries < 6 && hits(taken, { x: sx, y: sy, w: w, h: h }); tries++) sy += h + 4;
+      if (sy + h > P.y + P.h * 0.55) return;
+      taken.push({ x: sx - 2, y: sy - 1, w: w + 4, h: h + 2 });
+      lines.forEach(function (ln, i) { halo(c, ln, sx, sy + i * 16, INK); });
     });
     // the paper's line, printed on 23 Jan, and GPT-3's ring on it
     if (G.lineT0 != null) {
@@ -1456,101 +1693,130 @@
       c.fillStyle = COL.graphite;
       for (var xx = P.x; xx <= P.x + P.w * prog; xx += 3) { var yy = lineY(Math.pow(10, view.l + (xx - P.x) / P.w * (view.r - view.l))); if (yy > P.y && yy < P.y + P.h) c.fillRect(xx, yy, 1, 1); }
       if (prog < 1) staticDirty = true;
-      if (!G.gpt3) { c.strokeStyle = COL.graphite; c.lineWidth = 1; c.beginPath(); c.arc(X(log10(CFG.gpt3C)), lineY(CFG.gpt3C), 2.5, 0, Math.PI * 2); c.stroke(); }
+      if (!G.gpt3 && prog >= 1) { c.strokeStyle = COL.graphite; c.lineWidth = 1; c.beginPath(); c.arc(X(log10(CFG.gpt3C)), lineY(CFG.gpt3C), 2.5, 0, Math.PI * 2); c.stroke(); }
     }
     if (G.gpt3 && !(moment && moment.kind === 'gpt3')) { c.fillStyle = COL.ink; c.beginPath(); c.arc(X(log10(CFG.gpt3C)), lineY(CFG.gpt3C), 2.5, 0, Math.PI * 2); c.fill(); }
-    // rivals: dashed ladders, dots only where they published
-    var labelRects = [];
-    G.rivals.forEach(function (rv) {
+    // your dots first claim their space, so labels step around them
+    G.dots.forEach(function (d) { var dx = X(log10(d.C)), dy = Y(Math.log(d.L)); taken.push({ x: dx - 5, y: dy - 5, w: 10, h: 10 }); });
+    // rivals: dashed ladders, dots only where they published, the latest labelled with name and size
+    if (G.rivalsShown) G.rivals.forEach(function (rv) {
       c.strokeStyle = rgba('graphite', 0.8); c.lineWidth = 1; c.setLineDash([3, 3]); c.beginPath();
       rv.pubs.forEach(function (p, i) { var px = X(log10(p.C)), py = Y(Math.log(p.L)); if (i) c.lineTo(px, py); else c.moveTo(px, py); }); c.stroke(); c.setLineDash([]);
       c.fillStyle = COL.graphite; rv.pubs.forEach(function (p) { c.beginPath(); c.arc(X(log10(p.C)), Y(Math.log(p.L)), 1.5, 0, Math.PI * 2); c.fill(); });
       var lp = rv.pubs[rv.pubs.length - 1];
-      setFont(c, 10, MONO, 'italic'); c.textAlign = 'left'; c.textBaseline = 'bottom'; c.fillStyle = rv.passed ? COL.grid : COL.graphite;
-      var lx = X(log10(lp.C)) + 4, ly = Y(Math.log(lp.L)) - 4, lbl = rv.name + ' · ' + R.sizeLabel(lp.C);
-      var lw = c.measureText(lbl).width;
-      if (lx + lw > P.x + P.w) { c.textAlign = 'right'; lx = X(log10(lp.C)) - 4; }
-      var rx0 = c.textAlign === 'right' ? lx - lw : lx;
-      for (var tries = 0; tries < 4; tries++) { var hit = labelRects.some(function (r) { return rx0 < r.x + r.w && rx0 + lw > r.x && ly - 11 < r.y && ly > r.y - 11; }); if (!hit) break; ly += 12; }
-      labelRects.push({ x: rx0, y: ly, w: lw });
-      c.fillText(lbl, lx, ly);
-      if (rv.passed) { c.strokeStyle = COL.ink; c.beginPath(); var tx0 = c.textAlign === 'right' ? lx + 3 : lx - 7; c.moveTo(tx0, ly - 5); c.lineTo(tx0 + 2, ly - 2); c.lineTo(tx0 + 6, ly - 9); c.stroke(); }
+      setFont(c, 10, MONO, 'italic'); c.textBaseline = 'alphabetic';
+      var lbl = rv.name + ' · ' + R.sizeLabel(lp.C), lw = c.measureText(lbl).width, px0 = X(log10(lp.C)), py0 = Y(Math.log(lp.L));
+      var cands = [];
+      [-5, 13, -17, 25, -29, 37, -41].forEach(function (dy) { cands.push([px0 + 5, py0 + dy]); cands.push([px0 - lw - 5, py0 + dy]); });
+      var best = null, bestA = Infinity;
+      for (var ci = 0; ci < cands.length; ci++) {
+        var cx = clamp(cands[ci][0], P.x + 2, P.x + P.w - lw - 2), cy = clamp(cands[ci][1], P.y + 10, ry - 6), rr = { x: cx - 3, y: cy - 10, w: lw + 6, h: 13 };
+        var ov = overlapArea(taken, rr); if (ov < bestA) { bestA = ov; best = rr; } if (!ov) break;
+      }
+      if (bestA > 0 && rv.passed) return;   // no room: a rival you have passed keeps its ladder and loses its label
+      taken.push(best);
+      c.textAlign = 'left'; halo(c, lbl, best.x + 3, best.y + 10, rv.passed ? COL.grid : COL.graphite);
+      if (rv.passed) { c.strokeStyle = INK; c.lineWidth = 1; c.beginPath(); var tx0 = best.x - 6; c.moveTo(tx0, best.y + 4); c.lineTo(tx0 + 2, best.y + 7); c.lineTo(tx0 + 6, best.y); c.stroke(); }
     });
     // finished curves at 35% ink
     c.save(); c.beginPath(); c.rect(P.x, P.y - 2, P.w, P.h + 4); c.clip();
-    c.strokeStyle = rgba('ink', 0.35); c.lineWidth = 1; c.lineJoin = 'round';
+    c.strokeStyle = ownCol(0.35); c.lineWidth = 1; c.lineJoin = 'round';
     G.runs.forEach(function (run) { curvePath(c, run); c.stroke(); });
     c.restore();
     // your line: solid between your dots, dotted on to the edge once two sit a decade apart
-    drawOwnLine(c);
+    drawOwnLine(c, INK);
     G.dots.forEach(function (d) {
       var dx = X(log10(d.C)), dy = Y(Math.log(d.L));
-      c.fillStyle = COL.ink; c.beginPath(); c.arc(dx, dy, 2.5, 0, Math.PI * 2); c.fill();
-      if (d.pub) { c.strokeStyle = COL.ink; c.lineWidth = 1; c.beginPath(); c.arc(dx, dy, 4.5, 0, Math.PI * 2); c.stroke(); }
-      if (d.ship) { c.strokeStyle = COL.ink; c.lineWidth = 1; c.beginPath(); c.moveTo(dx + 6, dy - 3); c.lineTo(dx + 6, dy + 3); c.stroke(); }
-      setFont(c, 14, HAND); c.textAlign = 'left'; c.textBaseline = 'top';
-      if (d.surname) { c.fillStyle = COL.ink; c.fillText(d.surname, Math.min(dx + 7, P.x + P.w - 80), dy + 5); }
-      if (d.scandal) { c.fillStyle = COL.graphite; c.fillText(d.scandal, Math.min(dx + 7, P.x + P.w - 190), dy + (d.surname ? 19 : 5)); }
+      c.fillStyle = INK; c.beginPath(); c.arc(dx, dy, 2.5, 0, Math.PI * 2); c.fill();
+      if (d.pub) { c.strokeStyle = INK; c.lineWidth = 1; c.beginPath(); c.arc(dx, dy, 4.5, 0, Math.PI * 2); c.stroke(); }
+      if (d.ship) { c.strokeStyle = INK; c.lineWidth = 1; c.beginPath(); c.moveTo(dx + 6, dy - 3); c.lineTo(dx + 6, dy + 3); c.stroke(); }
     });
-    G.rings.forEach(function (r) { c.strokeStyle = COL.ink; c.lineWidth = 1; c.beginPath(); c.arc(X(log10(r.C)), Y(Math.log(r.L)), 3, 0, Math.PI * 2); c.stroke(); });
-    // hangs: the hour in pencil, circled by Tom
-    G.hangMarks.forEach(function (h) {
+    // the words written on dots: first authors in ink, scandals in pencil (these stay all year)
+    setFont(c, 14, HAND, '500'); c.textAlign = 'left'; c.textBaseline = 'top';
+    G.dots.forEach(function (d) {
+      var dx = X(log10(d.C)), dy = Y(Math.log(d.L));
+      [[d.surname, INK], [d.scandal, COL.graphite]].forEach(function (pair) {
+        if (!pair[0]) return;
+        var w = c.measureText(pair[0]).width, cands = [[dx + 7, dy + 4], [dx + 7, dy - 20], [dx - w - 7, dy + 4], [dx - w - 7, dy - 20], [dx - w / 2, dy + 18], [dx - w / 2, dy - 34]], best = null;
+        var free = false;
+        for (var i = 0; i < cands.length; i++) { var r = { x: clamp(cands[i][0], P.x + 2, P.x + P.w - w - 2), y: clamp(cands[i][1], P.y + 4, ry - 18), w: w, h: 15 }; if (!hits(taken, r)) { best = r; free = true; break; } if (!best) best = r; }
+        if (!free && pair[1] !== INK) return;   // a cramped sheet keeps first authors; a scandal with no room stays on its first dot
+        taken.push(best); halo(c, pair[0], best.x, best.y, pair[1]);
+      });
+    });
+    G.rings.forEach(function (r) { c.strokeStyle = INK; c.lineWidth = 1; c.beginPath(); c.arc(X(log10(r.C)), Y(Math.log(r.L)), 3, 0, Math.PI * 2); c.stroke(); });
+    // hangs: the hour in pencil by the pen, circled when Tom is on staff. The latest stays Graphite; older hours fade to
+    // Grid, and an hour with no room left shrinks to a small pencil ring on the curve, so a year of 3 AMs stays legible.
+    setFont(c, 13, HAND, '500'); c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+    var nH = G.hangMarks.length;
+    G.hangMarks.forEach(function (h, i) {
       var hx = X(h.lc), hy = Y(h.lnL);
       if (hx < P.x || hx > P.x + P.w) return;
-      setFont(c, 14, HAND); c.textAlign = 'left'; c.textBaseline = 'bottom'; c.fillStyle = COL.graphite; c.fillText(h.time, hx + 4, hy - 6);
-      if (h.tom) { c.strokeStyle = COL.ink; c.lineWidth = 1; c.beginPath(); c.ellipse(hx + 18, hy - 14, 18, 8, -0.05, 0, Math.PI * 2); c.stroke(); if (h.first) { c.fillStyle = COL.ink; c.fillText(K.notes.myFault, hx + 38, hy - 5); } }
+      var tw = c.measureText(h.time).width, latest = i === nH - 1, col = latest ? COL.graphite : COL.grid;
+      var r = { x: hx + 2, y: hy - 22, w: tw + 10, h: 18 };
+      if (r.x + r.w > P.x + P.w) r.x = hx - r.w - 2;
+      h.rect = null;
+      if (latest || !hits(taken, r)) {
+        taken.push(r); h.rect = r;
+        halo(c, h.time, r.x + 5, r.y + 13, col);
+        if (h.tom) { c.strokeStyle = col; c.lineWidth = 1; c.beginPath(); c.ellipse(r.x + r.w / 2, r.y + 9, r.w / 2 + 1, 8.5, -0.06, 0, Math.PI * 2); c.stroke(); }
+      } else { c.strokeStyle = col; c.lineWidth = 1; c.beginPath(); c.arc(hx, hy - 5, 2, 0, Math.PI * 2); c.stroke(); }
     });
-    staticDirty = false;
+    if (G.notes.some(function (n) { return !n.dead && n.at && n.at.mark; })) placeNotes();
   }
-  function drawOwnLine(c) {
+  function wrapLines(c, text, maxW, maxLines) {
+    var words = text.split(' '), line = '', out = [];
+    for (var i = 0; i < words.length; i++) {
+      var t = line ? line + ' ' + words[i] : words[i];
+      if (c.measureText(t).width > maxW && line) { out.push(line); line = words[i]; if (out.length >= maxLines) return out; }
+      else line = t;
+    }
+    if (line && out.length < maxLines) out.push(line);
+    return out;
+  }
+  function drawOwnLine(c, INK) {
     var ds = G.dots.slice().sort(function (a, b) { return a.C - b.C; }), P = L.plot;
     if (ds.length < 2) return;
-    c.strokeStyle = COL.ink; c.lineWidth = 1; c.beginPath();
+    c.strokeStyle = INK; c.lineWidth = 1; c.beginPath();
     c.moveTo(X(log10(ds[0].C)), Y(Math.log(ds[0].L))); c.lineTo(X(log10(ds[ds.length - 1].C)), Y(Math.log(ds[ds.length - 1].L))); c.stroke();
     if (hasLine()) {
-      var f = ds[ds.length - 1], ratio = f.L / R.Lline(f.C); c.fillStyle = COL.ink;
+      var f = ds[ds.length - 1], ratio = f.L / R.Lline(f.C); c.fillStyle = INK;
       for (var ex = X(log10(f.C)) + 4; ex <= P.x + P.w; ex += 4) { var cc = Math.pow(10, view.l + (ex - P.x) / P.w * (view.r - view.l)), ey = Y(Math.log(R.Lline(cc) * ratio)); if (ey > P.y && ey < P.y + P.h) c.fillRect(ex, ey, 1, 1); }
     }
   }
-  function wrapText(c, text, x, y, maxW, lh, maxLines) {
-    var words = text.split(' '), line = '', n = 0;
-    for (var i = 0; i < words.length; i++) {
-      var t = line ? line + ' ' + words[i] : words[i];
-      if (c.measureText(t).width > maxW && line) { c.fillText(line, x, y + n * lh); n++; line = words[i]; if (n >= maxLines) return; }
-      else line = t;
-    }
-    if (line && n < maxLines) c.fillText(line, x, y + n * lh);
-  }
-  function runBar(c, run, endDay) {
+  function runBar(c, run, endDay, INK) {
     var y = L.ruler.y + L.ruler.h - 13, x0 = DX(run.launchDay), x1 = Math.max(DX(endDay), x0 + 1.5);
-    if (run.crossed) { c.strokeStyle = COL.ink; c.lineWidth = 1; c.strokeRect(x0 + 0.5, y - 1.5, Math.max(1, x1 - x0 - 1), 2); }
-    else { c.fillStyle = COL.ink; c.fillRect(x0, y - 1, x1 - x0, 2); }
+    if (run.crossed) { c.strokeStyle = INK; c.lineWidth = 1; c.strokeRect(x0 + 0.5, y - 1.5, Math.max(1, x1 - x0 - 1), 2); }
+    else { c.fillStyle = INK; c.fillRect(x0, y - 1, x1 - x0, 2); }
     c.fillStyle = COL.paper; run.hangs.forEach(function (h) { var hx = DX(h.start); if (hx < x1) c.fillRect(Math.round(hx), y - 2, 1, 4); });
   }
-  function drawHatch(c, x0, x1) {
-    var P = L.plot; c.save(); c.beginPath(); c.rect(Math.max(x0, P.x), P.y, Math.min(x1, P.x + P.w) - Math.max(x0, P.x), P.h); c.clip();
+  function drawHatch(c, x0, x1, sc) {
+    var P = L.plot, u = sc && sc.t0 != null && !reduced() ? clamp((now - sc.t0) / 0.9, 0, 1) : 1;
+    if (u < 1) staticDirty = true;
+    c.save(); c.beginPath(); c.rect(Math.max(x0, P.x), P.y, Math.min(x1, P.x + P.w) - Math.max(x0, P.x), P.h); c.clip();
     c.strokeStyle = COL.verm; c.lineWidth = 1; c.beginPath();
-    for (var k = -P.h; k < x1 - x0 + P.h; k += 6) { c.moveTo(x0 + k, P.y + P.h); c.lineTo(x0 + k + P.h, P.y); }
+    // the hatch is drawn left to right as the landing reads past the wall (900 ms), then stays
+    var reach = x0 - P.h + (x1 - x0 + 2 * P.h) * u;
+    for (var k = -P.h; k < x1 - x0 + P.h; k += 6) { if (x0 + k > reach) break; c.moveTo(x0 + k, P.y + P.h); c.lineTo(x0 + k + P.h, P.y); }
     c.stroke(); c.restore();
   }
   function curvePath(c, run) { c.beginPath(); for (var i = 0; i < run.pts.length; i++) { var p = run.pts[i], x = X(p.x), y = Y(p.y); if (i) c.lineTo(x, y); else c.moveTo(x, y); } }
   function draw() {
     if (staticDirty) drawStatic();
-    var c = ctx;
+    var c = ctx, INK = ownCol(1);
     c.setTransform(1, 0, 0, 1, 0, 0);
-    c.drawImage(staticCv, 0, 0);
+    c.clearRect(0, 0, cv.width, cv.height);
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (G.powered) {
       var P = L.plot, rb = L.ruler.y + L.ruler.h, run = G.run;
       if (run) {
-        runBar(c, run, G.day);
+        runBar(c, run, G.day, INK);
         c.save(); c.beginPath(); c.rect(P.x, P.y - 2, P.w, P.h + 4); c.clip();
-        c.strokeStyle = COL.ink; c.lineWidth = 1.5; c.lineJoin = 'round'; c.lineCap = 'round';
+        c.strokeStyle = INK; c.lineWidth = 1.5; c.lineJoin = 'round'; c.lineCap = 'round';
         curvePath(c, run); c.stroke();
         var lp = run.pts[run.pts.length - 1];
-        if (lp) { c.fillStyle = COL.ink; c.beginPath(); c.arc(X(lp.x), Y(lp.y), 2.5, 0, Math.PI * 2); c.fill(); }
+        if (lp) { c.fillStyle = INK; c.beginPath(); c.arc(X(lp.x), Y(lp.y), 2.5, 0, Math.PI * 2); c.fill(); }
         c.restore();
-        if (run.hang && lp) { setFont(c, 15, HAND); c.fillStyle = COL.graphite; c.textAlign = 'left'; c.textBaseline = 'bottom'; }
       }
       var tx = Math.round(DX(Math.min(G.day, CFG.endDay))) + 0.5;
       c.strokeStyle = COL.ink; c.lineWidth = 1; c.beginPath(); c.moveTo(tx, L.ruler.y + 2); c.lineTo(tx, rb - 2); c.stroke();
@@ -1564,12 +1830,12 @@
         c.strokeStyle = COL.ink; c.setLineDash([2, 2]); c.lineWidth = 2; var by = rb - 13; c.beginPath(); c.moveTo(DX(G.day), by); c.lineTo(DX(G.day + daysAt(drag.t, drag.st)), by); c.stroke(); c.setLineDash([]);
       }
     }
-    drawCluster(c);
-    drawStrip(c);
+    drawCluster(c, INK);
+    drawStrip(c, INK);
   }
   function drawHi(M) {
     var c = hctx; c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, L.vw, L.vh);
-    drawOwnLine(c);
+    drawOwnLine(c, COL.ink);
     G.dots.forEach(function (d) { c.fillStyle = COL.ink; c.beginPath(); c.arc(X(log10(d.C)), Y(Math.log(d.L)), 2.5, 0, Math.PI * 2); c.fill(); });
     var u = clamp((now - M.t0 - 0.4) / 0.3, 0, 1), gx = X(log10(CFG.gpt3C)), gy = lineY(CFG.gpt3C);
     c.fillStyle = COL.ink; c.globalAlpha = u; c.beginPath(); c.arc(gx, gy, 2.5 + 5 * (1 - u), 0, Math.PI * 2); c.fill(); c.globalAlpha = 1;
@@ -1585,53 +1851,74 @@
     G.orders.forEach(function (o) { push('order', o.n, clamp((G.day - o.at) / (o.arrive - o.at), 0, 1)); });
     push('rent', rentedN());
     var pend = 0; G.rentals.forEach(function (r) { if (G.day < r.start) pend += r.n; }); push('rentPending', pend);
-    if (G.mer) { if (G.day < G.mer.live) push('merPending', G.mer.cards); else { push('mer', G.mer.cards - q); push('queue', q); } }
+    if (G.mer) { if (G.day < G.mer.live) push('merPending', G.mer.cards, clamp((G.day - (G.mer.signed || G.day)) / Math.max(1, G.mer.live - (G.mer.signed || G.day)), 0, 1)); else { push('mer', G.mer.cards - q); push('queue', q); } }
     var sv = servingN();
     for (i = list.length - 1; i >= 0 && sv > 0; i--) { var k = list[i]; if (k === 'own' || k === 'rent' || k === 'mer' || k === 'a100') { list[i] = 'serve'; sv--; } }
-    return { list: list, training: !!(G.run && !G.run.hang && G.phase !== 'moment'), hung: !!(G.run && G.run.hang) };
+    return { list: list, training: !!(G.run && !G.run.hang && G.phase !== 'moment' && !G.over), hung: !!(G.run && G.run.hang) };
   }
-  function drawCluster(c) {
+  var clusterUnit = 1, clusterFree = null, clusterMorph = null;
+  function drawCluster(c, INK) {
     var B = L.cluster;
     var CL = cardList(), cards = CL.list, n = cards.length;
     if (!G.powered) {
-      for (var a = 0; a < CFG.ownedStart; a++) { var br = a === 3 ? 0.5 + 0.5 * Math.sin(now * 2 * Math.PI / 1.2) : 0.5 + 0.5 * Math.sin(now * 2 * Math.PI / 4); cellAt(c, a, 'pale', 2, B, CL, br); }
-      elCount.textContent = ''; return;
+      // asleep: eight pale cells; one breathes on 1.2 s, the rest on 4 s
+      var still = reduced();
+      for (var a = 0; a < CFG.ownedStart; a++) { var br = still ? (a === 3 ? 1 : 0.5) : a === 3 ? 0.5 + 0.5 * Math.sin(now * 2 * Math.PI / 1.2) : 0.5 + 0.5 * Math.sin(now * 2 * Math.PI / 4); cellAt(c, a, 'pale', 2, B, CL, br, INK); }
+      if (elCount.textContent) elCount.textContent = ''; return;
     }
     var unit = n <= 128 ? 1 : n <= 2048 ? 8 : 64, rows = unit === 1 ? 2 : 4;
+    // when the unit changes, eight cells close into one over 600 ms (the old grouping fades as the new one inks in)
+    if (unit !== clusterUnit) { if (G.firstLift && !reduced()) { snd.whirr(0.6); clusterMorph = { from: clusterUnit, t0: now }; } clusterUnit = unit; }
+    var mu = clusterMorph ? clamp((now - clusterMorph.t0) / 0.6, 0, 1) : 1;
+    if (clusterMorph && mu < 1) {
+      var fu = clusterMorph.from, frows = fu === 1 ? 2 : 4;
+      c.globalAlpha = 1 - mu;
+      for (var fi = 0, fg = 0; fi < n; fi += fu, fg++) { if (fg >= frows * clusterCols(B)) break; cellAt(c, fg, cards[fi], frows, B, CL, 0, INK); }
+      c.globalAlpha = 1;
+    } else clusterMorph = null;
     var inkT = now - (G.powerT0 || 0);
+    if (mu < 1) c.globalAlpha = mu;
     for (var i = 0, g = 0; i < n; i += unit, g++) {
       if (g >= rows * clusterCols(B)) break;
-      if (unit === 1 && i < 8 && inkT < 0.06 * (i + 1)) { cellAt(c, g, 'pale', rows, B, CL, 0.5); continue; }
-      cellAt(c, g, cards[i], rows, B, CL, 0);
+      if (unit === 1 && i < 8 && inkT < 0.06 * (i + 1)) { cellAt(c, g, 'pale', rows, B, CL, 0.5, INK); continue; }
+      cellAt(c, g, cards[i], rows, B, CL, 0, INK);
     }
-    elCount.textContent = fmtInt(cardsShown());
+    c.globalAlpha = 1;
+    var cols = clusterCols(B), pitch = B.w / cols, gapY = rows === 2 ? Math.max(2, B.h - 2 * Math.min(22, (B.h - 4) / 2)) : 2.6, ch = (B.h - (rows - 1) * gapY) / rows;
+    var lastRow = Math.floor(Math.max(0, g - 1) / cols), inLast = g - lastRow * cols;
+    if (lastRow < rows - 1 && ch >= 7) clusterFree = { x: B.x, y: B.y + (lastRow + 1) * (ch + gapY), w: B.w, h: ch };
+    else if ((cols - inLast) * pitch >= 130 && ch >= 7) clusterFree = { x: B.x + inLast * pitch + 8, y: B.y + lastRow * (ch + gapY), w: (cols - inLast) * pitch - 8, h: ch };
+    else clusterFree = null;
+    var cnt = fmtInt(cardsShown()); if (elCount.textContent !== cnt) elCount.textContent = cnt;
   }
   function clusterCols(B) { return Math.max(64, Math.floor(B.w / Math.min(B.w / 64, 9))); }
-  function cellAt(c, i, kind, rows, B, CL, breath) {
+  function cellAt(c, i, kind, rows, B, CL, breath, INK) {
     var cols = clusterCols(B), pitch = B.w / cols, gapY = rows === 2 ? Math.max(2, B.h - 2 * Math.min(22, (B.h - 4) / 2)) : 2.6, ch = (B.h - (rows - 1) * gapY) / rows, cw = Math.max(1.5, pitch * 0.87);
     var col = i % cols, row = Math.floor(i / cols), x = B.x + col * pitch, y = B.y + row * (ch + gapY);
-    var k = typeof kind === 'string' ? kind : kind.k, u = typeof kind === 'string' ? 0 : kind.u;
-    if (G.dark) { c.fillStyle = COL.ink; c.fillRect(x, y, cw, ch); return; }
-    if (k === 'pale') { c.strokeStyle = COL.grid; c.globalAlpha = 0.55 + 0.45 * breath; c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, cw - 1, ch - 1); c.globalAlpha = 1; return; }
-    var glow = CL.training && (k === 'own' || k === 'a100' || k === 'rent' || k === 'mer');
-    if (k === 'own' || k === 'a100') { c.fillStyle = COL.ink; c.fillRect(x, y, cw, ch); if (k === 'a100' && cw > 2) { c.strokeStyle = COL.paper; c.lineWidth = 1; c.strokeRect(x + 1.5, y + 1.5, Math.max(0.5, cw - 3), ch - 3); } }
-    else if (k === 'rent' || k === 'mer' || k === 'rentPending') { c.strokeStyle = COL.ink; c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, Math.max(0.5, cw - 1), ch - 1); if (k === 'mer') { c.fillStyle = COL.ink; c.fillRect(x + cw / 2 - 0.5, y + ch / 2 - 0.5, 1, 1); } }
-    else if (k === 'merPending') { c.strokeStyle = COL.graphite; c.setLineDash([1.5, 1.5]); c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, Math.max(0.5, cw - 1), ch - 1); c.setLineDash([]); c.fillStyle = COL.graphite; c.fillRect(x + cw / 2 - 0.5, y + ch / 2 - 0.5, 1, 1); }
+    var k = typeof kind === 'string' ? kind : kind.k, u = typeof kind === 'string' ? 0 : kind.u, A0 = c.globalAlpha;
+    if (k === 'pale') { c.strokeStyle = COL.grid; c.globalAlpha = A0 * (0.55 + 0.45 * breath); c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, cw - 1, ch - 1); c.globalAlpha = A0; return; }
+    var glow = CL.training && !G.dark && (k === 'own' || k === 'a100' || k === 'rent' || k === 'mer');
+    if (k === 'own' || k === 'a100') { c.fillStyle = INK; c.fillRect(x, y, cw, ch); if (k === 'a100' && cw > 2) { c.strokeStyle = COL.paper; c.lineWidth = 1; c.strokeRect(x + 1.5, y + 1.5, Math.max(0.5, cw - 3), ch - 3); } }
+    else if (k === 'rent' || k === 'mer' || k === 'rentPending') { c.strokeStyle = INK; c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, Math.max(0.5, cw - 1), ch - 1); if (k === 'mer') { c.fillStyle = INK; c.fillRect(x + cw / 2 - 0.5, y + ch / 2 - 0.5, 1, 1); } }
+    else if (k === 'merPending') { c.strokeStyle = COL.graphite; c.globalAlpha = A0 * (0.35 + 0.65 * u); c.setLineDash([1.5, 1.5]); c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, Math.max(0.5, cw - 1), ch - 1); c.setLineDash([]); c.fillStyle = COL.graphite; c.fillRect(x + cw / 2 - 0.5, y + ch / 2 - 0.5, 1, 1); c.globalAlpha = A0; }
     else if (k === 'queue') { c.strokeStyle = COL.graphite; c.setLineDash([1.5, 1.5]); c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, Math.max(0.5, cw - 1), ch - 1); c.setLineDash([]); }
-    else if (k === 'order') { c.strokeStyle = COL.graphite; c.globalAlpha = 0.2 + 0.8 * u; c.setLineDash([1.5, 1.5]); c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, Math.max(0.5, cw - 1), ch - 1); c.setLineDash([]); c.globalAlpha = 1; }
+    else if (k === 'order') { c.strokeStyle = COL.graphite; c.globalAlpha = A0 * (0.2 + 0.8 * u); c.setLineDash([1.5, 1.5]); c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, Math.max(0.5, cw - 1), ch - 1); c.setLineDash([]); c.globalAlpha = A0; }
     else if (k === 'serve') { c.fillStyle = COL.grid; c.fillRect(x, y, cw, ch); }
     else if (k === 'lent') { c.strokeStyle = COL.grid; c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, Math.max(0.5, cw - 1), ch - 1); c.beginPath(); c.moveTo(x + 0.5, y + ch - 0.5); c.lineTo(x + cw - 0.5, y + 0.5); c.stroke(); }
     if (glow && !CL.hung) {
-      var t0 = G.run ? (G.run.relightT0 || G.run.liftT0) : now, sweep = reduced() ? 1 : clamp(((now - t0) / 0.3) * cols - col, 0, 1);
+      // at the lift the glow sweeps in left to right over 300 ms, flares, then settles and breathes +-6% at 0.5 Hz
+      var t0 = G.run ? (G.run.relightT0 || G.run.liftT0) : now, red = reduced(), sweep = red ? 1 : clamp(((now - t0) / 0.3) * cols - col, 0, 1);
       if (sweep > 0) {
-        c.fillStyle = COL.fil; c.globalAlpha = (0.8 + 0.05 * Math.sin(now * Math.PI)) * sweep;
+        var since = now - t0 - 0.3 * col / cols, flare = red ? 0 : clamp(1 - since / 0.5, 0, 1);
+        c.fillStyle = COL.fil; c.globalAlpha = A0 * Math.min(1, (0.8 + (red ? 0 : 0.05 * Math.sin(now * Math.PI)) + 0.2 * flare)) * sweep;
         var gw = (k === 'own' || k === 'a100') ? clamp(cw - 2, 1, 3) : clamp(cw - 3, 1, 2); c.fillRect(x + (cw - gw) / 2, y + 3, gw, ch - 6);
-        c.globalAlpha = 1;
+        c.globalAlpha = A0;
       }
     }
   }
-  /* ---------------- the bet strip ---------------- */
-  function drawStrip(c) {
+  /* ---------------- the bet strip: a home end where the nib rests, then travel that is time ---------------- */
+  function nibRestX() { return L.strip.x + L.strip.home * 0.5; }
+  function drawStrip(c, INK) {
     var S = L.strip, T = L.travel;
     c.strokeStyle = COL.grid; c.lineWidth = 1; c.beginPath(); c.moveTo(S.x, Math.round(S.y) + 0.5); c.lineTo(S.x + S.w, Math.round(S.y) + 0.5); c.moveTo(S.x, Math.round(S.y + S.h) - 0.5); c.lineTo(S.x + S.w, Math.round(S.y + S.h) - 0.5); c.stroke();
     c.fillStyle = COL.reserve; c.fillRect(T.x, S.y + 6, T.w, S.h - 12);
@@ -1640,7 +1927,11 @@
       if (!drag) {
         var tgt = st.T;
         if (!stopShown.T) stopShown.T = tgt;
-        else if (Math.abs(stopShown.T - tgt) > 1e-6 && (!stopShown.anim || stopShown.anim.to !== tgt)) { stopShown.anim = { from: stopShown.T, to: tgt, t0: now }; if (G.firstLift && !G.run) snd.whirr(0.4); }
+        else if (Math.abs(stopShown.T - tgt) > 1e-6 && (!stopShown.anim || stopShown.anim.to !== tgt)) {
+          // the travel re-maps over 400 ms with the paper-feed whirr when the stop moves (not for the calendar's own creep)
+          var big = Math.abs(stopShown.T - tgt) / Math.max(stopShown.T, tgt) > 0.02;
+          if (big) { stopShown.anim = { from: stopShown.T, to: tgt, t0: now }; if (G.firstLift && !G.run) snd.whirr(0.4); } else stopShown.T = tgt;
+        }
         var A = stopShown.anim; if (A) { var uu = reduced() ? 1 : clamp((now - A.t0) / 0.4, 0, 1); stopShown.T = A.from + (A.to - A.from) * ease(uu); if (uu >= 1) stopShown.anim = null; }
       }
       var Tshow = drag ? st.T : stopShown.T, span = Math.max(1e-6, Tshow - CFG.minDays), pxPerDay = T.w / span;
@@ -1654,9 +1945,11 @@
         c.fillText(R.MON[m][0], px + 3, S.y + 7);
       }
     }
-    var t = drag ? drag.t : 0, nx = nibX(t);
-    if (t > 0) { c.fillStyle = COL.ink; c.fillRect(T.x, S.y + 6, nx - T.x, S.h - 12); }
-    c.fillStyle = G.powered ? COL.ink : COL.graphite; c.fillRect(Math.round(nx - 6), S.y, 12, S.h);
+    var t = drag ? drag.t : 0, nx = clamp(drag ? (drag.x != null ? drag.x : nibX(t)) : nibRestX(), S.x + 6, T.x + T.w - 6);
+    if (drag && nx > T.x) { c.fillStyle = INK; c.fillRect(T.x, S.y + 6, nx - T.x, S.h - 12); }
+    var nibCol = G.powered ? INK : COL.graphite;
+    if (!G.powered && !reduced()) { c.globalAlpha = 0.72 + 0.28 * (0.5 + 0.5 * Math.sin(now * 2 * Math.PI / 4)); }
+    c.fillStyle = nibCol; c.fillRect(Math.round(nx - 6), S.y, 12, S.h); c.globalAlpha = 1;
   }
 
   /* ================================================================
@@ -1769,8 +2062,21 @@
     if ((k === 'Enter' || k === ' ') && !drag && canBet() && tgt === elFocus) { if (beginDrag(0, 0, true)) endDrag(); e.preventDefault(); return; }
     if (k === 's' || k === 'S') { tapSample(); e.preventDefault(); }
   });
-  document.addEventListener('visibilitychange', function () { if (document.hidden) snd.sleep(); else { snd.wake(); lastTs = 0; } });
-  window.addEventListener('resize', function () { layout(); });
+  // a thumb that leaves (the tab hides, the window blurs) lifts: every lift launches. A held letter or checkpoint goes back.
+  function letGo() {
+    if (!ptr) return;
+    var p = ptr; ptr = null;
+    if (p.mode === 'drag') endDrag();
+    else if (p.mode === 'letter') { flick = null; if (G.letter) letterAnim = { kind: 'back', t0: now, y0: letterY() }; }
+    else if (p.mode === 'cp') elSample.style.transform = '';
+  }
+  document.addEventListener('visibilitychange', function () { if (document.hidden) { letGo(); snd.sleep(); } else { snd.wake(); lastTs = 0; } });
+  window.addEventListener('blur', letGo);
+  var relayT = 0;
+  function relayout() { cancelAnimationFrame(relayT); relayT = requestAnimationFrame(function () { layout(); }); }
+  window.addEventListener('resize', relayout);
+  window.addEventListener('orientationchange', function () { setTimeout(relayout, 120); });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', relayout);
 
   /* ================================================================
      THE LOOP
@@ -1786,18 +2092,24 @@
     if (clockRuns()) stepDays(dayRate() * dt);
     if (G.letter) stepFuse();
     if (!G.letter && G.wait.length && !letterAnim && !G.over) showLetter(G.wait.shift());
-    if (G.heldDone && !G.run && G.phase === 'idle') { G.cp = G.heldDone; G.heldDone = null; showBand(G.cp.smp, 'instant'); }
+    if (G.heldDone && !G.cp && !moment && G.phase !== 'land' && G.phase !== 'drag' && !G.over) { G.cp = G.heldDone; G.heldDone = null; showBand(G.cp.smp, 'instant'); }
     stepBand(); stepMoment(); stepHeads(); stepNotes(); stepNames();
     if (G.run && !G.run.hang && G.phase === 'pour') snd.scratch(0.25); else snd.scratch(0);
   }
+  var perfLog = [];
   function frame(ts) {
     var dtReal = lastTs ? Math.min(0.1, (ts - lastTs) / 1000) : 0.016; lastTs = ts;
     var total = dtReal * speedMul;
+    var p0 = performance.now();
     while (total > 1e-9) { var d = Math.min(total, 0.05); update(d); total -= d; }
+    var p1 = performance.now();
     placeLetter();
     updateTop();
     stepBoxes();
+    var p2 = performance.now(), wasDirty = staticDirty;
     draw();
+    var p3 = performance.now();
+    perfLog.push([p1 - p0, p2 - p1, p3 - p2, wasDirty ? 1 : 0]); if (perfLog.length > 240) perfLog.shift();
     requestAnimationFrame(frame);
   }
 
@@ -1814,28 +2126,29 @@
       runs: G.runs.length, running: G.run ? { C: G.run.C, T: G.run.T, s: +G.run.s.toFixed(4), q: +qOf(G.run).toFixed(4), hung: !!G.run.hang, r: +(G.run.D / G.Dwall).toFixed(3) } : null,
       lastRun: lr ? { C: lr.C, T: lr.T, crossed: lr.crossed, L: lr.L, landDay: lr.landDay, r: +(lr.D / G.Dwall).toFixed(3), blind: lr.blind, b: lr.b } : null,
       lastSample: G.sample ? { text: G.sample.text, fray: G.sample.fray, crawl: G.sample.crawl, tier: G.sample.tier, kind: G.sample.kind, cap: G.sample.cap } : null,
-      wall: { Cwall: G.Cwall, W: G.W, filters: G.filters, filtering: G.filter ? +(G.filter.end - G.day).toFixed(1) : null, priyaOffer: G.priyaOffer },
-      dots: G.dots.map(function (d) { return { C: d.C, L: +d.L.toFixed(4), pub: d.pub, ship: d.ship, pending: !!d.pending, scandal: d.scandal, surname: d.surname }; }),
-      farthestClean: farthestClean(), checkpoint: G.cp ? { C: G.cp.dot.C, canPublish: G.day >= CFG.publishFrom, canShip: canShip(G.cp) } : null, redTeam: G.held ? +(G.held.end - G.day).toFixed(1) : null,
+      wall: { Cwall: G.Cwall, W: G.W, filters: G.filters, filtering: G.filter ? +(G.filter.end - G.day).toFixed(1) : null, priyaOffer: offerStands() ? (G.priyaOffer ? G.priyaOffer.amt : (G.sample && G.sample.crawl ? 6 : G.sample ? G.sample.fray : 0)) : 0 },
+      dots: G.dots.map(function (d) { return { C: d.C, L: +d.L.toFixed(4), day: Math.floor(d.day), onLine: onLine(d), pub: d.pub, ship: d.ship, pending: !!d.pending, scandal: d.scandal, surname: d.surname }; }),
+      farthestClean: farthestClean(), checkpoint: G.cp ? { C: G.cp.dot.C, canPublish: G.day >= CFG.publishFrom, canShip: canShip(G.cp), redTeamed: !!G.cp.redTeamed } : null, redTeam: G.held ? +(G.held.end - G.day).toFixed(1) : null,
       scars: G.scars.length, hangs: G.hangMarks.length,
       bet: st ? { Tstop: st.T, bind: st.bind, ok: st.ok, Cstop: st.T * st.F, flopsPerDay: st.F } : null,
       letter: G.letter ? { id: G.letter.id, kind: G.letter.kind, from: G.letter.from, offer: G.letter.offer, up: G.letter.up, down: G.letter.down, grey: !!G.letter.grey, forced: !!G.letter.forced, fuseLeft: +G.letter.fuseLeft.toFixed(2) } : null,
       waiting: G.wait.map(function (w) { return w.id; }), silent: G.silent,
-      raised: { A: G.A.taken, B: G.B.taken, needA: G.A.need }, meridian: G.mer ? { live: G.mer.live, credits: Math.round(G.mer.credits) } : null, api: G.api ? { revenue: G.api.revenue } : null,
+      raised: { A: G.A.taken, B: G.B.taken, needA: G.A.need, proofA: proofA(), proofB: proofB() }, meridian: G.mer ? { live: G.mer.live, credits: Math.round(G.mer.credits) } : null, api: G.api ? { revenue: G.api.revenue } : null,
       rivals: G.rivals.map(function (r) { var lp = r.pubs[r.pubs.length - 1]; return { name: r.name, pubs: r.pubs.length, last: lp.C, passed: r.passed }; }), frontier: frontier(), worldView: worldView(),
       caps: G.caps.filter(function (c) { return c.fired; }).map(function (c) { return c.id + (c.contaminated ? '*' : ''); }), gpt3: G.gpt3, miracle: G.miracle, december: G.december,
       over: G.over, geom: { plot: L.plot, strip: L.strip, travel: L.travel, band: L.band, cluster: L.cluster, ruler: L.ruler, vw: L.vw, vh: L.vh,
         letterRect: (!elLetter.hidden ? (function (r) { return { x: r.left, y: r.top, w: r.width, h: r.height }; })(elLetter.getBoundingClientRect()) : null),
-        names: G.people.map(function (p) { var b = nameEl(p.id); if (!b) return null; var r = b.getBoundingClientRect(); return { id: p.id, x: r.left + r.width / 2, y: r.top + r.height / 2 }; }).filter(Boolean) },
+        names: G.people.map(function (p) { var r = nameRect(p.id); if (!r) return null; return { id: p.id, x: r.left + r.width / 2, y: r.top + r.height / 2, gone: p.gone }; }).filter(Boolean) },
       log: G.log.slice(-30)
     };
   }
   function act(name, a) {
     a = a || {};
     switch (name) {
-      case 'start': case 'power': powerOn(); return true;
+      case 'start': case 'power': { var was = G.powered; powerOn(); if (!was && a.instant !== false) { now += 1.1; runTimers(); } return true; }
       case 'take': case 'raise': case 'pass': {
         if (!G.letter) return false;
+        if (name === 'raise' && G.letter.kind !== 'term') return false;
         var okr = resolveLetter(name === 'pass' ? 'down' : 'up');
         if (a.fast) { letterAnim = null; elLetter.hidden = true; if (!G.letter && G.wait.length && !G.over) { showLetter(G.wait.shift()); letterAnim = null; } }
         return okr;
@@ -1879,11 +2192,13 @@
         }
         return G.over ? 'over' : 'ok';
       }
+      case 'log': return G.log.slice();
       case 'newGame': case 'newYear': newYear(a.seed); layout(); return true;
       default: return false;
     }
   }
-  window.__frontier = { state: stateObj, act: act, speed: function (n) { speedMul = clamp(+n || 1, 0.1, 200); return speedMul; }, config: CFG };
+  function perfStats() { var n = perfLog.length || 1, a = [0, 0, 0, 0]; perfLog.forEach(function (r) { for (var i = 0; i < 4; i++) a[i] += r[i]; }); return { frames: perfLog.length, updateMs: +(a[0] / n).toFixed(2), domMs: +(a[1] / n).toFixed(2), drawMs: +(a[2] / n).toFixed(2), staticRedraws: a[3] }; }
+  window.__frontier = { perf: perfStats, state: stateObj, act: act, speed: function (n) { speedMul = clamp(+n || 1, 0.1, 200); return speedMul; }, config: CFG };
 
   /* ---------------- go ---------------- */
   newYear();

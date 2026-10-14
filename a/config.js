@@ -4,7 +4,7 @@
    Money in dollars, time in game days (day 0 = Wed 1 Jan 2020, day 365 = Thu 31 Dec 2020). */
 (function (root) {
   var CFG = {
-    version: 'sim-a-1.0',
+    version: 'sim-a-1.1',
 
     /* ---------------- clock (spec: The clock) ---------------- */
     startDateUTC: [2020, 0, 1],
@@ -35,15 +35,22 @@
     brokerRentUntil: 161,            // until 10 Jun
     brokerGapDays: 14,
     buyV100: { n: 64, price: 800000, lead: 56 },
-    buyA100: { n: 64, price: 1592000, lead: 84, from: 134 },
-    covidOrderFrom: 60, covidOrderTo: 181, covidOrderAddDays: 28,
+    buyA100: { n: 64, price: 1592000, lead: 112, from: 134 },   // Friday gate step 3: DGX A100 12 -> 16 weeks
+    covidOrderFrom: 60, covidOrderTo: 181, covidOrderAddDays: 42, // Friday gate step 3: COVID add-on 4 -> 6 weeks
     lateBuyFrom: 162, lateBuyPriceMult: 1.2, lateBuyAddDays: 56,
     rentOut: { price: 1.90, days: 30, share: 0.5, underMonths: 6, minOwned: 16 },
     servingShare: 1 / 8, servingMin: 8, servingMax: 64,
 
     /* ---------------- Meridian (fictional cloud) ---------------- */
-    meridian: { credits: 50000000, cards: 1024, lead: 42, minC: 1e21, from: 91, firstLook: 7, queueFrom: 162,
-      fullWithin: 2, halfWithin: 10, second: { from: 166, cards: 512, stakeMult: 0.9 } },
+    /* THE FRIDAY GATE (spec: Tuning gate). On the spec's base constants the clerk's sim (lab1.py, 600 years per plan)
+       has the commit-early plan reaching GPT-3 in 63.5% of years. The tuning order was applied, in order, nothing else:
+         1. Meridian lead 42 -> 56 days          (commit early 63.5% -> 27.8%; sloppy commit early 39.2%)
+         2. queue full allocation 2x -> 1.5x      (best plan 32.5% -> 26.3%; sloppy commit early still 39.2%)
+         3. COVID add-on 4 -> 6 wk, DGX A100 12 -> 16 wk (no plan above 32%; none dominates)
+         4. Meridian allocation 1,024 -> 768      (every plan 0%: GPT-3 unreachable)  <- NOT applied, it overshoots.
+       Steps 1-3 are shipped. Remaining misses: best plans 32% (gate 15-30%), careful reader 4.8% (gate >= 8%). */
+    meridian: { credits: 50000000, cards: 1024, lead: 56, minC: 1e21, from: 91, firstLook: 7, queueFrom: 162,
+      fullWithin: 1.5, halfWithin: 10, second: { from: 166, cards: 512, stakeMult: 0.9 } },
 
     /* ---------------- raising money ---------------- */
     seriesA: { minC: 1e22, apart: 10, tol: 0.015, after: 22,

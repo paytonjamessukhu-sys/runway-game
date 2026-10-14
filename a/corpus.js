@@ -26,7 +26,10 @@
       'the game players said of also new during', 'company the which years on percent the',
       'film was the in and county early his', 'said the data , online the free first',
       'recipe the minutes oven of said and add', 'weather Tuesday the said rain of high new',
-      'hotel room the best of free the parking', 'river the bridge city said of closed water'
+      'hotel room the best of free the parking', 'river the bridge city said of closed water',
+      'mayor cheese the announced of goat parking', 'hospital the trains said free of bread council',
+      'stadium recipe police the minutes of weather', 'wedding the tax of said dog season first',
+      'museum the open of Sunday said free children', 'bank holiday the of fish said market river'
     ],
     // T2 grammar (4.3 to 3.3): the shape of a sentence with nothing inside it
     t2: [
@@ -43,7 +46,14 @@
       'Police said the man was a car in the second half.',
       'The new phone has a battery of the camera and a price of the phone.',
       'Scientists say the moon is one of the most of the moon.',
-      'The museum is a building of the museum, and it is open.'
+      'The museum is a building of the museum, and it is open.',
+      'The President of the soup said that the weather will be a new school.',
+      'Police are asking anyone with information about the bridge to call the bridge.',
+      'The best time to visit the museum is a museum.',
+      'Scientists have found that the water is a member of the water.',
+      'The new album is available in stores and in the album.',
+      'Fans of the team were the season, said the coach of the fans.',
+      'The dog was taken to the hospital, where it was a dog.'
     ],
     t2Covid: 'The virus is a the stock market of Tuesday.', // eligible only after 11 Mar
     // T3 sentences (3.3 down to the paragraph threshold): [sense, text]. Every one is a real sentence until it is not.
@@ -87,7 +97,11 @@
       [3, 'Residents should put their bins out by seven on Tuesday morning and bring them back in once they have been collected by the residents.'],
       [3, 'The new bakery on the corner opens at six, and by seven the queue is longer than the street it is standing in.'],
       [3, 'Mix two parts sand with one part cement, add the water slowly, and stop when the mixture is the same colour as the wall.'],
-      [3, 'The plane landed safely after a short delay, which the captain blamed on the weather and the weather blamed on the plane.']
+      [3, 'The plane landed safely after a short delay, which the captain blamed on the weather and the weather blamed on the plane.'],
+      [3, 'Visitors are asked to keep to the marked paths, to take their litter home, and to leave the wildflowers where they found the visitors.'],
+      [3, 'The shop will be closed for stocktaking on the first Monday of every month, and on the second Monday for the stock.'],
+      [3, 'Our survey of five hundred commuters found that most of them would rather walk, if walking were faster than the train.'],
+      [3, 'The recipe serves four, or two if they are hungry, or six if one of them made the recipe.']
     ],
     // T4 paragraphs (below the paragraph threshold, only after the paragraph moment). [M, text]: M marks moment-grade.
     t4: [
@@ -99,6 +113,9 @@
       [1, 'The flood came up the valley in the night. By morning the water stood level with the second step of the church, and the whole village climbed the hill to watch it, quietly, the way you watch something you were told about for years and never quite believed.'],
       [1, 'He measured everything twice before he cut it, even when he was sure. Especially when he was sure, he said. Being sure was when you stopped looking, and the wood never forgave you for that.'],
       [1, 'At the observatory they still keep the old glass plates, thousands of them, each one a photograph of the night sky taken a century ago. Every so often somebody finds a star on a plate that is not there anymore.'],
+      [1, 'For the first year she only repeated what she heard: the radio, the kettle, her brother calling the dog. Then one morning she said something nobody had ever said to her, a whole sentence of her own, and the kitchen went quiet, because all of us understood at once that she had been listening the entire time.'],
+      [1, 'The night operator at the old telephone exchange said you could tell a call was real before anyone spoke. There was a different kind of silence on the line, she said. A silence with someone in it.'],
+      [1, 'My father taught me to read the tide tables before I could read anything else: numbers in columns, each one a promise the sea had already made. I live inland now, and I still check them, just to know what the water is doing without me.'],
       [0, 'Sourdough starter is just flour and water left long enough for wild yeast to move in. Feed it every day and it becomes predictable: it rises, peaks, and falls on a schedule you can learn. Most failed loaves are not bad recipes. They are bakers who did not wait for the peak.'],
       [0, 'The committee met for six hours and agreed on nothing except the date of the next meeting. Outside, the river kept rising. By the time the vote was taken, three members had to be reached by phone from the second floor of the library, where the water had not yet arrived.'],
       [0, 'The ferry stopped running in October, so the island’s mail came by kayak. Every Tuesday the postmaster paddled out with a dry bag of letters and came back with a list of what everyone needed from the mainland.'],
