@@ -7,35 +7,152 @@
 </head>
 <body>
 <title>Frontier</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap">
 <link rel="stylesheet" href="game.css">
-<div id="fr" class="asleep" role="application" aria-label="Frontier. A lab sim on one sheet of paper. Touch anywhere to begin.">
-  <header id="fr-head">
-    <div id="fr-dateline" aria-live="off"><span id="fr-lab" class="g">FRONTIER</span><span id="fr-bought" class="hand"></span><span class="g"> &middot; </span><span id="fr-today"></span><span id="fr-hour"></span></div>
-    <button id="fr-mute" type="button" aria-pressed="false" aria-label="Sound is on. Press to mute (M).">SOUND ON</button>
-    <div id="fr-months" aria-live="polite"><span id="fr-proj"></span><span id="fr-months-n"></span><span id="fr-months-l">MONTHS</span></div>
+<div id="fx" class="fx" role="application" aria-label="Frontier. A lab on one sheet of paper.">
+  <header id="top" aria-label="Your lab">
+    <div class="hd-id"><span class="g">FRONTIER</span><span class="g"> &middot; </span><span id="t-date" class="dt">01 JAN 2020</span></div>
+    <div class="hd-ctl t-speed" role="group" aria-label="Game speed and sound">
+      <button type="button" data-act="speed" data-x="0" id="sp0" aria-pressed="true" aria-label="Pause (space)"><span class="tx">II</span></button>
+      <button type="button" data-act="speed" data-x="1" id="sp1" aria-pressed="false" aria-label="Normal speed (1)"><span class="tx">1&times;</span></button>
+      <button type="button" data-act="speed" data-x="2" id="sp2" aria-pressed="false" aria-label="Double speed (2)"><span class="tx">2&times;</span></button>
+      <button type="button" class="t-mute" data-act="mute" id="mute" aria-pressed="false" aria-label="Sound is on. Press to mute (M)"><span class="tx" id="mute-tx">SOUND ON</span></button>
+    </div>
+    <button type="button" class="hd-mo" id="t-month" data-act="ledger" aria-expanded="false" aria-controls="ledger" aria-label="Month. Open the monthly slips"><span id="t-mo">month 1 of 12</span><i class="dotnew" id="t-new" hidden></i><i class="chev" aria-hidden="true"></i></button>
+    <button type="button" class="fig short" id="f-short" data-act="goto" data-to="curve"><span class="k">SHORT OF GPT-3</span><span class="v" id="t-short">&mdash;</span><span class="tg" id="g-short">no model yet</span></button>
+    <div class="money" id="money" role="group" aria-label="Your money">
+      <button type="button" class="fig cash" id="f-cash" data-act="goto" data-to="money"><span class="v" id="t-cash">$5.85M</span><span class="tg" id="g-cash"></span></button>
+      <button type="button" class="fig runway" id="f-runway" data-act="goto" data-to="money"><span class="v" id="t-runway">92</span><span class="k">MONTHS UNTIL BROKE</span><span class="tg" id="g-runway"></span></button>
+      <button type="button" class="fig lab" id="f-lab" data-act="goto" data-to="money"><span class="k">YOUR LAB OWNS</span><span class="v" id="t-lab">$149k</span><span class="tg" id="g-lab"></span></button>
+    </div>
+    <div class="ladder" id="ladder" aria-label="Your goals">
+      <div class="ld-rungs" id="ld-rungs"></div>
+      <div class="ld-bar" id="ld-bar" aria-hidden="true"><i id="ld-fill"></i></div>
+      <div class="ld-sub" id="ld-sub"></div>
+      <div class="ld-why" id="ld-why" hidden></div>
+    </div>
+    <div class="ledger" id="ledger" hidden><div class="lg-h"><b>MONTHLY SLIPS</b><span>every 1st, after payroll. The clock never stops.</span></div><div class="lg-b" id="ledger-b"></div></div>
   </header>
-  <div id="fr-paperwrap">
-    <canvas id="fr-paper" aria-hidden="true"></canvas>
-    <canvas id="fr-pen" aria-hidden="true"></canvas>
-    <div id="fr-heads" aria-hidden="true"></div>
-    <ol id="fr-team" aria-label="Your people. Press a name, or keys 1 to 9."></ol>
+
+  <main id="mid">
+    <div class="col cl">
+      <section class="row" id="row-team" data-row="team">
+        <button type="button" class="rh" data-act="fold" data-row="team" aria-expanded="false"><span class="rt">Team</span><span class="rs" id="s-team"></span><i class="chev" aria-hidden="true"></i></button>
+        <div class="rb"><div class="rbi" id="b-team"></div></div>
+      </section>
+      <section class="row" id="row-money" data-row="money">
+        <button type="button" class="rh" data-act="fold" data-row="money" aria-expanded="false"><span class="rt">Money</span><span class="rs" id="s-money"></span><i class="chev" aria-hidden="true"></i></button>
+        <div class="rb"><div class="rbi" id="b-money"></div></div>
+      </section>
+      <section class="row" id="row-data" data-row="data">
+        <button type="button" class="rh" data-act="fold" data-row="data" aria-expanded="false"><span class="rt">Data</span><span class="rs" id="s-data"></span><i class="chev" aria-hidden="true"></i></button>
+        <div class="rb"><div class="rbi" id="b-data"></div></div>
+      </section>
+    </div>
+
+    <section id="curve" class="paper" aria-label="Your training runs">
+      <div class="chartwrap" id="chartwrap">
+        <canvas id="chart" role="img" aria-label="Error score against compute, both on a log scale. Your models are dots, GPT-3 is the ring."></canvas>
+        <ol id="margin" class="margin" aria-label="Your people. Press a name for their note."></ol>
+        <div class="slip" id="slip" hidden aria-live="polite"></div>
+      </div>
+      <div class="train-cols">
+        <div class="col-live">
+          <div id="runs" class="runs"></div>
+          <div id="sample" class="sample" aria-live="polite"></div>
+        </div>
+        <div class="col-design" id="designer">
+          <div class="dz-head"><span class="rt">Plan a training run</span><span class="rs" id="d-fig"></span></div>
+          <div class="dz-pools" id="d-pools" role="group" aria-label="Which cards"></div>
+          <div class="dz-quick" role="group" aria-label="Quick sizes">
+            <button type="button" data-act="preset" data-p="mem">Biggest that fits</button>
+            <button type="button" data-act="preset" data-p="7">1 week</button>
+            <button type="button" data-act="preset" data-p="21">3 weeks</button>
+            <button type="button" data-act="preset" data-p="60">2 months</button>
+          </div>
+          <div class="dz-row"><label for="d-gpus">Cards</label><input type="range" id="d-gpus" min="0" max="8" step="1" value="8"><output id="o-gpus">8</output></div>
+          <div class="dz-row"><label for="d-n">Model size</label><input type="range" id="d-n" min="0" max="1000" step="1"><output id="o-n">1B</output></div>
+          <div class="dz-row"><label for="d-d">Text to read</label><input type="range" id="d-d" min="0" max="1000" step="1"><output id="o-d">20B</output></div>
+          <div class="dz-out" id="d-out"></div>
+          <ul class="dz-warn" id="d-warn"></ul>
+          <div class="dz-go"><button type="button" class="lnk" data-act="details" id="d-more" aria-expanded="false">Show the numbers</button></div>
+          <div class="dz-adv" id="d-adv" hidden><label class="chk"><input type="checkbox" id="d-recipe" checked> Keep model size and text in balance</label><div class="dz-det" id="d-det"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="col cr">
+      <section class="row" id="row-cluster" data-row="cluster">
+        <button type="button" class="rh" data-act="fold" data-row="cluster" aria-expanded="false"><span class="rt">Cluster</span><span class="rs" id="s-cluster"></span><i class="chev" aria-hidden="true"></i></button>
+        <div class="rb"><div class="rbi" id="b-cluster"></div></div>
+      </section>
+      <section class="row" id="row-news" data-row="news" hidden>
+        <button type="button" class="rh" data-act="fold" data-row="news" aria-expanded="false"><span class="rt">Rivals and news</span><span class="rs" id="s-news"></span><i class="chev" aria-hidden="true"></i></button>
+        <div class="rb"><div class="rbi" id="b-news"></div></div>
+      </section>
+    </div>
+  </main>
+
+  <footer id="foot">
+    <button type="button" class="cells" id="cells" data-act="goto" data-to="cluster" aria-label="Your cluster, one cell for every card. Open the cluster.">
+      <canvas id="cells-cv" aria-hidden="true"></canvas>
+      <span class="cells-cap" id="cells-cap"></span>
+    </button>
+    <div id="band">
+      <section class="opts" id="options" aria-label="Options: what you can do now">
+        <div class="band-h"><span class="rt">Options</span><span class="hint" id="opt-hint"></span></div>
+        <div class="opt-list" id="opt-list"></div>
+      </section>
+      <section class="shelf" id="shelf" aria-label="The models we build">
+        <div class="band-h"><span class="rt">The models we build</span><span class="hint" id="shelf-hint"></span></div>
+        <div class="shelf-row" id="shelf-row"></div>
+      </section>
+    </div>
+  </footer>
+
+  <div id="floats" class="floats" aria-hidden="true"></div>
+
+  <div id="card" class="modal card-modal" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="c-title">
+      <div class="fuse rest" aria-hidden="true"><i></i></div>
+      <button type="button" class="x-close" data-act="closecard" aria-label="Close">close</button>
+      <div id="c-body"></div>
+    </div>
   </div>
-  <div id="fr-band" aria-live="polite"><p id="fr-sample"></p><div id="fr-box" aria-hidden="true"></div></div>
-  <div id="fr-clusterwrap"><canvas id="fr-cluster" aria-hidden="true"></canvas><span id="fr-cards"></span></div>
-  <div id="fr-stripwrap">
-    <canvas id="fr-strip" tabindex="0" role="slider" aria-label="The bet. Drag the nib and let go to launch a run. Arrow keys move it, Enter launches, S samples. During a run, drag the nib home, or press Escape, to stop it." aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></canvas>
-    <div id="fr-readout" aria-hidden="true"></div>
+  <div id="modal" class="modal" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="m-title">
+      <div class="fuse rest" aria-hidden="true"><i></i></div>
+      <div class="m-paused">paused: nothing expires while you read</div>
+      <div class="m-plaque" id="m-plaque"></div>
+      <div class="m-from" id="m-from"></div>
+      <h2 id="m-title"></h2>
+      <p class="m-body" id="m-body"></p>
+      <div class="m-sample" id="m-sample"></div>
+      <p class="m-note" id="m-note"></p>
+      <div class="m-opts" id="m-opts"></div>
+    </div>
   </div>
-  <div id="fr-letterzone" aria-live="polite"><div id="fr-end" role="status" aria-live="polite"></div></div>
-  <div id="fr-notes" aria-hidden="true"></div>
-  <div id="fr-moment" aria-hidden="true"><p id="fr-moment-text"></p></div>
+  <div id="end" class="modal end" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="e-title">
+      <div class="m-from" id="e-date"></div>
+      <h2 id="e-title"></h2>
+      <p class="m-body" id="e-reason"></p>
+      <p class="m-body" id="e-gap"></p>
+      <div class="e-score" id="e-score"></div>
+      <div class="m-opts"><button type="button" class="opt-btn primary" data-act="newyear"><b>Play another 2020</b><span>New hidden data wall, rivals and luck. Same rules.</span></button><button type="button" class="opt-btn" data-act="review"><b>Look at the board</b><span>Close this and inspect your year.</span></button></div>
+    </div>
+  </div>
 </div>
 <script src="config.js"></script>
-<script src="corpus.js"></script>
 <script src="world.js"></script>
+<script src="corpus.js"></script>
+<script src="engine.js"></script>
 <script src="audio.js"></script>
-<script src="game.js"></script>
+<script src="ui.js"></script>
+<script src="chart.js"></script>
+<script src="rows.js"></script>
+<script src="band.js"></script>
+<script src="boot.js"></script>
 
 </body>
 </html>

@@ -51,6 +51,19 @@
     kofi: { name: 'Kofi Mensah', first: 'Kofi', role: 'infra', skill: 4, salary: 26000, ego: 2, from: '2020-08-01',
       pitch: 'At a thousand cards something breaks every night. I write the thing that restarts it.' }
   };
+
+  // the calendar ruler on the paper: short phrases for the real dates above (factual, shortened), and the pencil that teaches
+  W.newsShort = { '2020-01-23': 'the line', '2020-01-28': 'Meena', '2020-02-10': 'Turing-NLG', '2020-03-11': 'pandemic', '2020-03-16': 'offices close', '2020-05-14': 'A100', '2020-05-19': '10,000 GPUs', '2020-05-28': 'GPT-3', '2020-06-11': 'API', '2020-06-30': 'GShard', '2020-07-07': 'A2', '2020-09-22': 'licence', '2020-11-02': 'P4d', '2020-11-30': 'AlphaFold 2' };
+  W.pencil = {
+    yAxis: 'error score, lower is better \u2193',
+    xAxis: 'compute, each tick ten times more \u2192',
+    line: 'the loss you should get for the compute you spent',
+    wall: 'the data wall: somewhere in here',
+    seriesA: 'Series A: a saved model here',
+    ring: 'GPT-3 size',
+    plan: 'your plan'
+  };
+
   W.roles = { data: 'Data', systems: 'Systems', scaling: 'Scaling', infra: 'Infra', evals: 'Evals and safety', optim: 'Optimization' };
 
   // what each role changes, written on the card (filled live with the person's numbers)

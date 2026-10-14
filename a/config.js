@@ -164,7 +164,9 @@
     chart: { xMin: 17, xMax: 24.3, yMin: 1.6, yMax: 11.5 },
 
     /* ---------- designer ---------- */
-    designer: { nMin: 1e7, nMax: 1e12, dMin: 1e8, dMax: 2e12 }
+    designer: { nMin: 1e7, nMax: 1e12, dMin: 1e8, dMax: 2e12 },
+    /* ---------- the paper (drawing only, no rules): the cell strip groups cards into nodes and pods as the cluster grows ---------- */
+    paper: { cells: { cols: 64, nodeAbove: 128, podAbove: 2048 }, optionsMax: 9, shelfMaxPlaques: 60, slipSeconds: 10 }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = CFG; else root.FRONTIER_CONFIG = CFG;
 })(this);

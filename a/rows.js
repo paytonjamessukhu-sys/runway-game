@@ -59,9 +59,7 @@
     if (p.ok && !s.raise.aDone && p.C >= s.raise.aNeed) wl += '<li>Far enough for a Series A, if it lands on the line and you have a clean result a tenfold back.</li>';
     if (p.ok && !p.relevance) wl += '<li>Too small to keep the world remembering you (about ' + (e.forgotten().days ? Math.round(e.forgotten().days) + ' days of your cluster' : 'more') + ' is the least that counts).</li>';
     setHTML($('d-warn'), wl);
-    var lb = $('d-launch');
-    if (s.phase === 'over') { lb.disabled = false; lb.dataset.act = 'newyear'; setText(lb, 'Play another 2020'); }
-    else { lb.dataset.act = 'launch'; lb.disabled = !p.ok || e.blocked(); setText(lb, p.ok ? 'Start the run · lands ' + p.landTxt : 'Can’t start: ' + (p.blockers[0] || '').split(':')[0].toLowerCase()); }
+    setText($('d-fig'), s.phase === 'over' ? '' : isFinite(p.daysAll) ? 'lands ' + p.landTxt : '');
     // the numbers, one tap down
     $('d-adv').hidden = !ui.details;
     if (ui.details) {
@@ -184,7 +182,7 @@
     var price = e.rentPrice(), cap = e.rentCap(), have = e.rentedCount(), room = Math.max(0, cap - have);
     ui.rentN = clamp(ui.rentN, 8, Math.max(8, room));
     var monthly = ui.rentN * price * 24 * CFG.daysPerMonth;
-    h += '<div class="blk" id="rent-block"><h4>Rent cards <span>V100, $' + price.toFixed(2) + ' an hour each</span></h4><div class="mk">';
+    h += '<div class="blk" id="rent-block"><h4>Rent cards <span class="pn">V100, $' + price.toFixed(2) + ' an hour each</span></h4><div class="mk">';
     if (s.mer) h += '<div class="mkrow"><span class="txt">Renting is closed: you signed with Meridian, so no other cloud.</span></div>';
     else h += '<div class="mkrow"><span class="txt">Live tomorrow, billed by the hour, 30-day terms. The broker has <b>' + room + '</b> of ' + cap + ' left. ' + ui.rentN + ' cost <b>' + money(monthly) + ' a month</b>.</span>' +
       '<span class="stepper"><button type="button" data-act="step" data-s="rent" data-d="-8" data-k="rent-m" aria-label="Fewer cards">−</button><span class="val">' + ui.rentN + '</span><button type="button" data-act="step" data-s="rent" data-d="8" data-k="rent-p" aria-label="More cards">+</button></span>' +
@@ -196,7 +194,7 @@
     });
     h += '</div></div>';
     // buy cards
-    h += '<div class="blk"><h4>Buy cards <span>yours for good, but they arrive late</span></h4><div class="mk">';
+    h += '<div class="blk"><h4>Buy cards <span class="pn">yours for good, but they arrive late</span></h4><div class="mk">';
     ['dgx1', 'dgxa100'].forEach(function (item) {
       var spec = CFG.buy[item], from = e.D(spec.from), u = ui.buy[item], unit = e.buyPrice(item, s.day), lead = e.leadFor(item, s.day);
       if (s.day < from) { h += '<div class="mkrow"><span class="txt"><b>' + spec.label + '</b> comes to market on ' + e.fmtDay(from) + '.</span></div>'; return; }
@@ -212,7 +210,7 @@
     }
     h += '</div></div>';
     // Meridian
-    h += '<div class="blk"><h4>Meridian cloud <span>fictional</span></h4><div class="c2 mut">';
+    h += '<div class="blk"><h4>Meridian cloud <span class="pn">fictional</span></h4><div class="c2 mut">';
     if (s.mer) {
       var qa = s.day >= e.DAY.merQueue ? e.queueAlloc() : null;
       h += 'Signed ' + e.fmtDay(s.mer.signed) + ': ' + s.mer.cards + ' V100s' + (s.day < s.mer.live ? ', live ' + e.fmtDay(s.mer.live) : '') + '. Credits left ' + money(s.mer.credits) + '. Exclusive; they see every model ' + CFG.meridian.firstLookDays + ' days first.';
@@ -262,21 +260,6 @@
     if (p.role === 'optim') return 'Tuning learning-rate schedules';
     return '';
   }
-  function tilesHTML(small) {
-    var e = E(), s = S(), st = e.staff(), h = '';
-    st.forEach(function (p) {
-      var low = p.mood < CFG.moodLow;
-      h += '<button type="button" class="tile' + (low ? ' low' : '') + (ui.sel === 'p:' + p.key ? ' sel' : '') + '" data-act="tile" data-sel="p:' + p.key + '" data-k="tile-' + p.key + '" aria-label="' + esc(p.name) + ', ' + W.roles[p.role] + ', morale ' + Math.round(p.mood) + '"><span class="ini">' + initials(p) + '</span><span class="mot"><i style="width:' + Math.round(p.mood) + '%"></i></span></button>';
-    });
-    var cands = s.cands.slice().sort(function (a, b) { return a.courtBy - b.courtBy; });
-    if (small) { h += '<span class="tile plus" aria-hidden="true">+</span>'; return h; }
-    var c = cands[0];
-    if (c) {
-      var d = W.people[c.key], req = e.candReq(c);
-      h += '<button type="button" class="tile plus wide' + (req ? ' gated' : '') + (ui.sel === 'c:' + c.key ? ' sel' : '') + '" data-act="tile" data-sel="c:' + c.key + '" data-k="plus-' + c.key + '"><span class="pl">+</span><span class="pn">' + esc(d.name) + '</span><span class="pa">' + (req ? esc(gateText(c)) : 'asks ' + money(e.candAsk(c)) + ' a month') + '</span></button>';
-    } else h += '<span class="tile plus wide empty" data-k="plus-none"><span class="pl">+</span><span class="pn">Nobody on the board</span><span class="pa">' + nextArrival() + '</span></span>';
-    return h;
-  }
   function gateText(c) { var d = W.people[c.key], e = E(); return d.name + ' needs reputation ' + d.needRep + ' (you have ' + Math.round(S().rep) + ')'; }
   function nextArrival() {
     var s = S(), e = E(), best = null; Object.keys(W.people).forEach(function (k) { var p = W.people[k]; if (!p.from) return; var d = e.D(p.from); if (d > s.day && (best == null || d < best.d) && !s.team.some(function (x) { return x.key === k; }) && !s.gone.some(function (g) { return g.key === k; })) best = { d: d, p: p }; });
@@ -284,15 +267,26 @@
   }
   function renderTeam() {
     var e = E(), s = S(), st = e.staff();
-    setHTML($('s-team'), '<span class="mini">' + st.map(function (p) { return '<span class="mt' + (p.mood < CFG.moodLow ? ' low' : '') + '">' + initials(p) + '</span>'; }).join('') + (s.cands.length ? '<span class="mt plus">+</span>' : '') + '</span>');
+    setHTML($('s-team'), '<span class="mini">' + st.map(function (p) { return '<span class="mt' + (p.mood < CFG.moodLow ? ' low' : '') + '">' + esc(p.first) + '</span>'; }).join(' ') + '</span>');
     if (!ui.open.team) return;
-    var h = '<div class="tiles">' + tilesHTML(false) + '</div>';
+    var h = '<div class="people">';
+    st.forEach(function (p) {
+      var low = p.mood < CFG.moodLow, wt = clamp(Math.round(380 + p.mood * 3.2), 400, 700);
+      h += '<button type="button" class="pp' + (low ? ' low' : '') + (ui.sel === 'p:' + p.key ? ' sel' : '') + '" data-act="tile" data-sel="p:' + p.key + '" data-k="tile-' + p.key + '" aria-label="' + esc(p.name) + ', ' + W.roles[p.role] + ', morale ' + Math.round(p.mood) + '"><span class="hn" style="font-weight:' + wt + '">' + esc(p.first) + '</span><span class="pr">' + esc(W.roles[p.role]) + '</span><span class="ps">' + money(p.salary) + ' a month</span><span class="pm"><i style="width:' + Math.round(p.mood) + '%"></i></span></button>';
+    });
+    var cands = s.cands.slice().sort(function (a, b) { return a.courtBy - b.courtBy; });
+    cands.forEach(function (c) {
+      var d = W.people[c.key], req = e.candReq(c), left = Math.max(0, c.courtBy - s.day);
+      h += '<button type="button" class="pp cand' + (req ? ' gated' : '') + (ui.sel === 'c:' + c.key ? ' sel' : '') + '" data-act="tile" data-sel="c:' + c.key + '" data-k="plus-' + c.key + '"><span class="hn">+ ' + esc(d.first) + '</span><span class="pr">' + esc(W.roles[d.role]) + '</span><span class="ps">' + (req ? esc(gateText(c)) : 'asks ' + money(e.candAsk(c)) + ' a month') + '</span>' + (req ? '' : '<span class="fz" title="a rival courts ' + esc(d.first) + ' in ' + Math.ceil(left) + ' days"><i style="width:' + clamp(left / CFG.courtDays * 100, 0, 100).toFixed(1) + '%"></i></span>') + '</button>';
+    });
+    if (!cands.length) h += '<span class="pp empty" data-k="plus-none"><span class="hn">+</span><span class="pr">nobody on the board</span><span class="ps">' + esc(nextArrival()) + '</span></span>';
+    h += '</div>';
     var sel = ui.sel;
     if (sel && sel.indexOf('p:') === 0) {
       var p = e.person(sel.slice(2));
       if (p) {
         var low = p.mood < CFG.moodLow, canRaise = s.day - p.lastRaise >= CFG.raiseCooldown, add = Math.round(p.salary * (CFG.raiseMult - 1) / 500) * 500;
-        h += '<div class="card pc" data-k="pc-' + p.key + '"><div class="c1"><b>' + esc(p.name) + '</b><span class="num">' + money(p.salary) + ' a month</span></div>' +
+        h += '<div class="note pc" data-k="pc-' + p.key + '"><div class="c1"><b>' + esc(p.name) + '</b><span class="num">' + money(p.salary) + ' a month</span></div>' +
           '<div class="c2">' + W.roles[p.role] + ' · skill <span class="pips">' + pips(p.skill) + '</span> · morale <span class="mood' + (low ? ' low' : '') + '"><i style="width:' + Math.round(p.mood) + '%"></i></span> <span class="mono' + (low ? ' bad' : '') + '">' + Math.round(p.mood) + '</span>' + (low ? ' <span class="bad">(disengaged: works at skill ' + e.effSkill(p) + ')</span>' : '') + '</div>' +
           '<div class="c2"><b class="mut">Now:</b> ' + esc(assignment(p)) + '</div><div class="c2">' + esc(effectText(p)) + '</div>' +
           '<div class="c3">' + btn('raisepay', 'Give a raise +' + money(add) + ' a month (morale +' + CFG.raiseMood + ')', ' data-id="' + p.key + '"', '', !canRaise || s.phase !== 'play', 'rp-' + p.key) + (!canRaise ? '<span class="dim">again from ' + e.fmtDay(p.lastRaise + CFG.raiseCooldown) + '</span>' : '') + '</div></div>';
@@ -301,17 +295,15 @@
       var c = e.candidate(sel.slice(2));
       if (c) {
         var d = W.people[c.key], ask = e.candAsk(c), req = e.candReq(c), left = Math.ceil(c.courtBy - s.day);
-        h += '<div class="card pc" data-k="cc-' + c.key + '"><div class="c1"><b>' + esc(d.name) + '</b><span class="num">asks ' + money(ask) + ' a month</span></div>' +
-          '<div class="c2">' + W.roles[d.role] + ' · skill <span class="pips">' + pips(d.skill) + '</span> · “' + esc(d.pitch) + '”</div><div class="c2">' + esc(candEffect(d)) + '</div>' +
+        h += '<div class="note pc" data-k="cc-' + c.key + '"><div class="c1"><b>' + esc(d.name) + '</b><span class="num">asks ' + money(ask) + ' a month</span></div>' +
+          '<div class="c2">' + W.roles[d.role] + ' · skill <span class="pips">' + pips(d.skill) + '</span></div><div class="c2 hand-q">“' + esc(d.pitch) + '”</div><div class="c2">' + esc(candEffect(d)) + '</div>' +
           (req ? '<div class="why">' + esc(req) + '</div>' : '') +
           '<div class="c3">' + btn('hire', 'Hire for ' + money(ask) + ' a month · months until broke ' + nice(e.runway()) + ' → ' + nice(s.bank / Math.max(1, e.burn() + ask)), ' data-id="' + c.key + '"', 'pri', !!req || s.phase !== 'play', 'hire-' + c.key) +
           '<span class="dim">' + (left > 0 ? (c.key === 'sunhee' ? 'Halcyon' : 'Kestrel') + ' courts ' + (d.she ? 'her' : 'him') + ' in ' + left + ' days' : 'being courted') + '</span></div></div>';
       }
     }
-    var others = s.cands.slice().sort(function (a, b) { return a.courtBy - b.courtBy; }).slice(1);
-    if (others.length) h += '<div class="sec-l">Also on the board: ' + others.map(function (c) { return '<a href="#" data-act="tile" data-sel="c:' + c.key + '">' + esc(W.people[c.key].name) + '</a>'; }).join(', ') + '</div>';
     var gone = s.team.filter(function (p) { return p.gone; }).map(function (p) { return p.first + ' (' + e.fmtDay(p.goneDay) + (p.goneTo ? ', to ' + p.goneTo : '') + ')'; }).concat(s.gone.map(function (g) { return g.first + ' (never hired, to ' + g.to + ')'; }));
-    if (gone.length) h += '<div class="c2 mut gone">Gone: ' + esc(gone.join(' · ')) + '</div>';
+    if (gone.length) h += '<div class="why gone">Gone: ' + esc(gone.join(' · ')) + '</div>';
     setHTML($('b-team'), h);
   }
 
@@ -323,13 +315,16 @@
     var landed = s.runs.some(function (r) { return r.state === 'landed'; });
     if (!ui.open.money) return;
     var people = b.salaries, cards = b.rent + b.upkeep + b.priority, office = b.base, tot = Math.max(1, people + cards + office);
-    var h = '<div class="blk first"><h4>Spending a month <span class="neg">' + money(gross) + '</span></h4>' +
+    var rw = e.runway(), monthsLeft = Math.max(0.3, (365.9 - s.day) / CFG.daysPerMonth), fillPct = isFinite(rw) ? clamp(rw / monthsLeft * 100, 0, 100) : 100, ticks = '';
+    for (var mt = 1; mt < Math.floor(monthsLeft) + 1; mt++) ticks += '<u style="left:' + (mt / monthsLeft * 100).toFixed(2) + '%"></u>';
+    var h = '<div class="blk first ribbonblk"><h4>The money you hold <span>' + money(s.bank) + '</span></h4><div class="ribbon" role="img" aria-label="Cash against the months left in the year"><i style="width:' + fillPct.toFixed(1) + '%"></i>' + ticks + '<b class="end"></b></div><div class="ribbon-l"><span>today</span><span>' + (!isFinite(rw) || rw >= monthsLeft ? 'lasts past 31 Dec' : 'runs out ' + e.fmtDay(s.day + rw * CFG.daysPerMonth)) + '</span><span>31 Dec</span></div></div>' +
+      '<div class="blk"><h4>Spending a month <span class="neg">' + money(gross) + '</span></h4>' +
       '<div class="spend" role="img" aria-label="People ' + money(people) + ', cards ' + money(cards) + ', office ' + money(office) + '"><i class="p" style="flex:' + people + '"></i><i class="c" style="flex:' + cards + '"></i><i class="o" style="flex:' + office + '"></i></div>' +
       '<div class="spend-l"><span><i class="p"></i>People ' + money(people) + '</span><span><i class="c"></i>Cards ' + money(cards) + '</span><span><i class="o"></i>Office ' + money(office) + '</span></div></div>';
     // this month so far
     var m = s.month, inn = 0, out = 0; Object.keys(m.in).forEach(function (k) { inn += m.in[k]; }); Object.keys(m.out).forEach(function (k) { out += m.out[k]; });
     var income = s.stats.apiRevenue > 0 || s.stats.rentOutRevenue > 0 || e.apiMonthly() > 0;
-    h += '<div class="blk"><h4>This month so far <span>since the 1st</span></h4><div class="inout"><div class="io"><span>Out</span><b class="neg">' + money(out) + '</b></div>' + (income ? '<div class="io"><span>In</span><b class="pos">' + money(inn) + '</b></div>' : '') + '</div>';
+    h += '<div class="blk"><h4>This month so far <span class="pn">since the 1st</span></h4><div class="inout"><div class="io"><span>Out</span><b class="neg">' + money(out) + '</b></div>' + (income ? '<div class="io"><span>In</span><b class="pos">' + money(inn) + '</b></div>' : '') + '</div>';
     if (income) {
       var apiM = e.apiMonthly(), mx = Math.max(gross, apiM, 1);
       h += '<div class="gapbar"><div class="gb out"><i style="width:' + (gross / mx * 100).toFixed(1) + '%"></i></div><div class="gb in"><i style="width:' + (apiM / mx * 100).toFixed(1) + '%"></i></div></div><div class="sub"><b class="pos">' + money(apiM) + ' a month in</b> against <b class="neg">' + money(gross) + ' out</b>. The gap is ' + money(Math.abs(gross - apiM)) + ' a month' + (apiM >= gross ? ', in your favour' : '') + '.</div>';
@@ -339,7 +334,7 @@
     // raise block, after the first plaque
     if (landed) {
       var rb = e.raiseBlock(), ownTxt = pct(s.stake, 0), nextName = rb.next === 'A' ? 'Series A' : rb.next === 'B' ? 'Series B' : 'a bridge note';
-      h += '<div class="blk" id="raise-block"><h4>Raise <span>money from investors, paid for with ownership</span></h4>';
+      h += '<div class="blk" id="raise-block"><h4>Raise <span class="pn">money from investors, paid for with ownership</span></h4>';
       h += '<div class="ownrow"><div class="ob"><span>You own</span><b>' + ownTxt + '</b></div><div class="ob"><span>Last round priced you at</span><b>' + money(rb.lastPost) + '</b></div>' +
         (rb.wouldPay != null ? '<div class="ob dimmed' + (rb.ok ? ' ok' : '') + '"><span>Investors would pay today</span><b>' + money(rb.wouldPay) + '</b></div>' : '') + '</div>';
       if (rb.desp < 0.999) h += '<div class="why">Short of money, so offers shrink: investors smell it. Today’s price is ' + Math.round((1 - rb.desp) * 100) + '% lower than when you are comfortable.</div>';
@@ -367,10 +362,10 @@
     var w = cv.clientWidth, hh = cv.clientHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
     if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(hh * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(hh * dpr); }
     var c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, hh);
-    var css = getComputedStyle(FX.root), acc = css.getPropertyValue('--accent').trim() || '#58e0c2', line = css.getPropertyValue('--line').trim() || '#222', bad = css.getPropertyValue('--danger').trim() || '#f55';
+    var css = getComputedStyle(FX.root), acc = css.getPropertyValue('--ink').trim() || '#15171A', line = css.getPropertyValue('--grid').trim() || '#CCCFCA', bad = css.getPropertyValue('--vermilion').trim() || '#E5482E';
     var hist = s.cashHist.concat([s.bank]), mx = 1; hist.forEach(function (v) { mx = Math.max(mx, v); });
     c.strokeStyle = line; c.beginPath(); c.moveTo(0, hh - 0.5); c.lineTo(w, hh - 0.5); c.stroke();
-    c.strokeStyle = s.bank < 0 ? bad : acc; c.lineWidth = 1.5; c.beginPath();
+    c.strokeStyle = s.bank < 0 ? bad : acc; c.lineWidth = 1.25; c.beginPath();
     hist.forEach(function (v, i) { var x = i / 365 * w, y = hh - 2 - Math.max(0, v) / mx * (hh - 4); if (i) c.lineTo(x, y); else c.moveTo(x, y); });
     c.stroke();
   }
@@ -384,13 +379,13 @@
     function px(v) { return clamp((log10(Math.max(v, 1e9)) - a) / (z - a) * 100, 0, 100); }
     var use = ui.lastDesign ? ui.lastDesign.D : 0;
     var f1 = px(lo / passes), f2 = px(hi / passes), w1 = px(lo), w2 = px(hi);
-    var h = '<div class="blk first"><h4>The data wall <span>' + bigNum(lo) + ' to ' + bigNum(hi) + ' of text</span></h4>' +
+    var h = '<div class="blk first"><h4>The data wall <span class="pn">' + bigNum(lo) + ' to ' + bigNum(hi) + ' of text</span></h4>' +
       '<div class="wallbar" title="fresh, repeated, memorising"><i class="z fresh" style="left:0;width:' + f1 + '%"></i><i class="z fresh u" style="left:' + f1 + '%;width:' + Math.max(0.6, f2 - f1) + '%"></i><i class="z rep" style="left:' + f2 + '%;width:' + Math.max(0, w1 - f2) + '%"></i><i class="z mem u" style="left:' + w1 + '%;width:' + Math.max(0.8, w2 - w1) + '%"></i><i class="z mem" style="left:' + w2 + '%;width:' + Math.max(0, 100 - w2) + '%"></i>' +
       (use ? '<i class="use" style="left:' + px(use) + '%"></i>' : '') + '</div>' +
       '<div class="wl"><span class="f">fresh</span><span class="r">repeated up to ' + passes + ' times, still counted clean</span><span class="m">memorising</span></div>' +
       '<div class="sub">Your plan reads <b>' + bigNum(use || 0) + '</b> of text (the white mark). The hatched part is where the wall could be; the true wall is always inside it. Past it a run proves nothing, because the model just memorises web boilerplate.</div></div>';
     var ds = e.staff().filter(function (p) { return p.role === 'data'; });
-    h += '<div class="blk" id="clean-block"><h4>Clean the crawl <span>' + s.filters + ' done</span></h4>';
+    h += '<div class="blk" id="clean-block"><h4>Clean the crawl <span class="pn">' + s.filters + ' done</span></h4>';
     if (s.filterJob) h += '<div class="card"><div class="c1"><b>Cleaning the crawl</b><span class="num">' + Math.max(0, Math.ceil(s.filterJob.until - s.day)) + ' days left</span></div><div class="c2">Done ' + e.fmtDay(s.filterJob.until) + '. Fresh text +' + Math.round((e.filterMult(s.filters) - 1) * 100) + '%. Runs started before then keep the old data.</div></div>';
     else if (!ds.length) h += '<div class="why">Nobody to do it: you need a data person on the team.</div>';
     else h += '<div class="mkrow"><span class="txt">' + money(e.filterCost()) + ', ' + e.filterDays() + ' days, <b>+' + Math.round((e.filterMult(s.filters) - 1) * 100) + '% fresh text</b> (a bit less each time). Each job costs double the last one. Runs only see the clean data if they start after it finishes.</span>' + btn('filter', 'Clean the crawl', '', 'pri', s.phase !== 'play' || e.filterCost() > s.bank, 'filter-d') + '</div>';
@@ -399,7 +394,7 @@
     if (!s.evidence.length) h += '<div>Nothing yet. Every saved model you read, and every landing your data person checks, narrows the band.</div>';
     s.evidence.slice(0, 5).forEach(function (ev) { h += '<div><span class="d">' + e.fmtDay(ev.day) + '</span>Run ' + ev.run + ': ' + esc(ev.text) + (ev.changed ? ' <span class="chg">→ wall ' + bigNum(ev.lo) + '-' + bigNum(ev.hi) + '</span>' : '') + '</div>'; });
     h += '</div></div>';
-    h += '<div class="blk"><h4>What it can learn <span>the error score each skill needs</span></h4>';
+    h += '<div class="blk"><h4>What it can learn <span class="pn">the error score each skill needs</span></h4>';
     var rows = [];
     s.caps.forEach(function (c) {
       var range = c.fired ? 'learned at ' + c.L.toFixed(2) : 'between ' + e.Lline(c.hi).toFixed(2) + ' and ' + e.Lline(c.lo).toFixed(2);
@@ -419,7 +414,7 @@
     var st = e.standing();
     setText($('s-news'), 'you are #' + st.rank);
     if (!visible || !ui.open.news) return;
-    var h = '<div class="blk first"><h4>Who is ahead <span>by biggest published or saved model</span></h4><div class="league">';
+    var h = '<div class="blk first"><h4>Who is ahead <span class="pn">by biggest published or saved model</span></h4><div class="league">';
     if (st.gpt3) h += '<div class="lg pinned" data-k="lg-gpt3"><span class="nm">GPT-3 <i class="dim">real, 28 May</i></span><span class="sh">1x</span></div>';
     st.rows.forEach(function (r, i) {
       var arrow = r.trend > 0 ? '<i class="up" aria-label="grew since the 1st">▲</i>' : '<i class="flat">–</i>';
@@ -430,7 +425,7 @@
     h += '<div class="trust"><span>Trust <b>' + Math.round(s.rep) + '</b> of 100</span><div class="mb"><i style="width:' + Math.round(s.rep) + '%"></i></div></div></div>';
     // decisions waiting and answered
     if (s.inbox.length || s.decided.length) {
-      h += '<div class="blk inbox"><h4>Decisions <span>' + (s.inbox.length ? s.inbox.length + ' waiting' : 'all answered') + '</span></h4><div class="rows">';
+      h += '<div class="blk inbox"><h4>Decisions <span class="pn">' + (s.inbox.length ? s.inbox.length + ' waiting' : 'all answered') + '</span></h4><div class="rows">';
       s.inbox.forEach(function (d) { h += '<div class="card" data-k="in-' + d.id + '"><div class="c1"><b>' + esc(d.title) + '</b><span class="num">' + e.fmtDay(d.day) + '</span></div><div class="c3">' + btn('openDecision', 'Decide', ' data-id="' + d.id + '"', 'pri', false, 'od-' + d.id) + '</div></div>'; });
       s.decided.slice(0, 4).forEach(function (d) { var o = d.options.filter(function (x) { return x.key === d.answered; })[0]; h += '<div class="c2 mut small"><span class="mono dim">' + e.fmtDay(d.answeredDay) + '</span> ' + esc(d.title) + ' → ' + esc(o ? o.label : d.answered) + '</div>'; });
       h += '</div></div>';
@@ -467,47 +462,12 @@
     return h + '</div>';
   }
   FX.plaqueHTML = function (run, big) {
-    var e = E(), s = S(), newest = s.runs.filter(function (r) { return r.state === 'landed'; }).slice(-1)[0] === run;
+    var e = E(), s = S();
     var tags = []; if (run.published) tags.push('published'); if (run.shipped) tags.push('API'); if (run.kept) tags.push('private'); if (run.pending) tags.push(esc(run.pending)); if (run.scandal) tags.push('scandal');
-    if (run.copied) tags.push(esc(run.copied.by) + ' reproduced it in ' + weeks(run.copied.day - run.landDay));
-    var h = (big ? '<div class="plaque big thunk newest">' : '<button type="button" class="plaque' + (newest ? ' newest' : '') + (ui.thunkRun === run.id ? ' thunk' : '') + (run.clean ? '' : ' junk') + '" data-act="card" data-id="' + run.id + '" data-k="pl' + run.id + '">') +
-      '<span class="pl-l"><span class="pl-name">' + esc(e.modelName(run)) + '</span><span class="pl-meta">' + e.fmtDay(run.landDay) + ' · ' + bigNum(run.N) + ' parameters · read ' + bigNum(run.Dland) + '</span>' +
-      '<span class="pl-line">' + esc(e.modelLine(run)) + '</span>' +
-      (run.clean ? '<span class="pl-sh">' + e.shortFmt(e.shortOf(run.Cland)) + ' short of GPT-3</span>' : '<span class="pl-sh bad">proves nothing</span>') + '</span>' +
-      '<span class="pl-r">' + ((newest || big) && run.evals ? testsHTML(run, big) : '') + (tags.length ? '<span class="pl-tags">' + tags.map(function (t) { return '<em>' + t + '</em>'; }).join('') + '</span>' : '') + '</span>' + (big ? '</div>' : '</button>');
-    return h;
+    return '<div class="plaque big thunk newest"><span class="pl-name">' + esc(e.modelName(run)) + '</span><span class="pl-meta">' + e.fmtDay(run.landDay) + ' · ' + bigNum(run.N) + ' parameters · read ' + bigNum(run.Dland) + '</span>' +
+      '<span class="pl-line">' + esc(e.modelLine(run)) + '</span>' + (run.clean ? '<span class="pl-sh">error ' + run.loss.toFixed(2) + ' · ' + e.shortFmt(e.shortOf(run.Cland)) + ' short of GPT-3</span>' : '<span class="pl-sh bad">error ' + run.loss.toFixed(2) + ' · proves nothing</span>') +
+      (run.evals ? testsHTML(run, true) : '') + (tags.length ? '<span class="pl-tags">' + tags.map(function (t) { return '<em>' + t + '</em>'; }).join('') + '</span>' : '') + '</div>';
   };
-  function apiHTML() {
-    var e = E(), s = S(), m = e.apiMeter(), h = '';
-    if (m) {
-      var apps = ['a writing helper', 'a search box', 'a support bot', 'a code explainer', 'a story game', 'a quiz maker', 'a translator', 'a note summariser'];
-      var tiles = ''; for (var i = 0; i < m.apps; i++) tiles += '<i title="' + apps[i % apps.length] + '"></i>';
-      var rn = e.runById(m.runId);
-      h += '<div class="api"><div class="ah"><b>' + (rn ? esc(e.modelName(rn)) + ' API' : 'API') + '</b><span>live since ' + e.fmtDay(m.since) + ' · ' + money(m.rev) + ' a month</span></div>' +
-        '<div class="am"><span class="w"><b>' + m.waiting.toLocaleString('en-US') + '</b> waiting</span><span><b>' + m.developers.toLocaleString('en-US') + '</b> developers in</span><span><b>' + m.wordsDay.toLocaleString('en-US') + '</b> words a day</span></div>' +
-        '<div class="apps" aria-label="' + m.apps + ' apps built on it">' + tiles + '</div></div>';
-    }
-    var om = e.openMeter();
-    if (om) h += '<div class="api open"><div class="ah"><b>Open weights</b><span>out for ' + Math.round(om.days) + ' days · no revenue</span></div><div class="am"><span><b>' + om.downloads.toLocaleString('en-US') + '</b> downloads</span><span><b>' + om.tunes.toLocaleString('en-US') + '</b> fine-tunes</span></div></div>';
-    return h;
-  }
-  function renderModels() {
-    var e = E(), s = S(), landed = s.runs.filter(function (r) { return r.state === 'landed'; });
-    var n = landed.length;
-    setText($('s-models'), n === 0 ? 'no saved models yet' : n + ' saved model' + (n === 1 ? '' : 's'));
-    var fg = e.forgotten();
-    var h = '';
-    var list = FX.wide() ? landed.slice() : landed.slice().reverse();
-    h += '<div class="mdl"><div class="shelfcol"><div class="shelf' + (FX.wide() ? ' wide' : '') + '">';
-    if (!n) h += '<div class="plaque empty" data-k="pl-empty"><span class="pl-name">Your first saved model goes here</span><span class="pl-meta">Every model you finish stands on this shelf.</span></div>';
-    list.forEach(function (r) { h += FX.plaqueHTML(r); });
-    h += '</div></div><div class="mside">';
-    h += apiHTML();
-    h += '<div class="forget' + (fg.left < 21 ? ' bad' : fg.left < 45 ? ' cau' : '') + '">The world forgets you in <b>' + Math.max(0, Math.ceil(fg.left)) + ' days</b> unless you publish or ship a model about <b>' + (fg.days ? (fg.days < 1 ? 'a day' : Math.round(fg.days) + ' days') : 'some days') + '</b> of your cluster’s work. <button type="button" class="lnk" data-act="forgdet" aria-expanded="' + !!ui.forgDet + '">' + (ui.forgDet ? 'hide' : 'the number') + '</button>' + (ui.forgDet ? '<span class="det"> ' + sci(fg.need) + ' FLOPs, a hundredth of the biggest result anyone has published (' + sci(e.frontier()) + ').</span>' : '') + '</div></div></div>';
-    setHTML($('b-models'), h);
-    if (FX.wide() && ui.shelfCount !== n) { ui.shelfCount = n; var sf = document.querySelector('#b-models .shelf'); if (sf) sf.scrollLeft = sf.scrollWidth; }
-    var fr = $('row-models'); if (n === 1) revealOnce('models', fr);
-  }
   // the model card: one tap down from a plaque or a dot
   FX.openCard = function (id) {
     var e = E(), s = S(), run = e.runById(id); if (!run || run.state !== 'landed') return;
@@ -537,14 +497,14 @@
   /* ================= everything, in one pass ================= */
   FX.renderPanels = function () {
     var s = S(); if (!s) return;
-    FX.renderLadder(); renderDesigner(); renderRuns(); renderCluster(); renderTeam(); renderMoney(); renderData(); renderNews(); renderModels();
-    for (var k in ui.open) { var row = $('row-' + k); if (row) { FX.setClass(row, 'open', !!ui.open[k]); var b = row.querySelector('.rh'); if (b) b.setAttribute('aria-expanded', String(!!ui.open[k])); } }
-    ['cluster', 'team', 'money', 'data', 'news', 'models'].forEach(function (k) { if (!ui.open[k]) { var row = $('row-' + k); if (row) { FX.setClass(row, 'open', false); var b = row.querySelector('.rh'); if (b) b.setAttribute('aria-expanded', 'false'); } } });
+    FX.renderLadder(); renderDesigner(); renderRuns(); renderCluster(); renderTeam(); renderMoney(); renderData(); renderNews();
+    FX.renderOptions(); FX.renderShelf(); FX.renderMargin();
+    ['cluster', 'team', 'money', 'data', 'news'].forEach(function (k) { var row = $('row-' + k); if (row) { FX.setClass(row, 'open', !!ui.open[k]); var b = row.querySelector('.rh'); if (b) b.setAttribute('aria-expanded', String(!!ui.open[k])); } });
     if (!$('card').hidden) renderCard();
     // intro pulse: the clock has run 15 seconds with no run
     var intro = !s.runs.length && ui.runClock > 15; if (intro !== ui.introPulse) { ui.introPulse = intro; }
   };
-  FX.renderAll = function () { FX.renderStrip(0); FX.renderPanels(); FX.drawChart(); };
+  FX.renderAll = function () { FX.renderStrip(0); FX.renderPanels(); FX.drawChart(); FX.drawCells(performance.now()); };
 
   /* ================= taps and clicks ================= */
   FX.scrollToEl = function (el) { if (!el) return; requestAnimationFrame(function () { try { el.scrollIntoView({ behavior: FX.reduced() ? 'auto' : 'smooth', block: 'start' }); } catch (x) { el.scrollIntoView(); } }); };
@@ -564,7 +524,7 @@
     if (id === 'start') { var r = quickStart(); return; }
     if (id === 'land') { FX.scrollToEl($('curve')); return; }
     if (id === 'seriesA' || id === 'seriesB') { focusVerb('raise'); return; }
-    if (id === 'api') { openRow('models'); FX.scrollToEl($('row-models')); return; }
+    if (id === 'api') { FX.focusShelf(); return; }
     // the rest are about compute: set the designer to reach the target and show it
     var rg = e.ladder().rungs.filter(function (x) { return x.id === id; })[0];
     var tgt = null;
@@ -580,11 +540,12 @@
       case 'speed': FX.setSpeed(+t.getAttribute('data-x')); break;
       case 'mute': AU.setMuted(!AU.muted); FX.syncMute(); break;
       case 'ledger': FX.toggleLedger(); break;
-      case 'goto': { var to = t.getAttribute('data-to'); if (to === 'curve') FX.scrollToEl($('curve')); else { openRow(to); FX.scrollToEl($('row-' + to)); } break; }
+      case 'goto': { var to = t.getAttribute('data-to'); if (to === 'curve') FX.scrollToEl($('curve')); else if (to === 'models') FX.focusShelf(); else { openRow(to); FX.scrollToEl($('row-' + to)); } break; }
+      case 'optmore': { var orow = t.getAttribute('data-row'), osel = t.getAttribute('data-sel'), oto = t.getAttribute('data-to'); if (osel) ui.sel = osel; openRow(orow); FX.scrollToEl((oto && $(oto)) || $('row-' + orow)); break; }
       case 'fold': { var k = t.getAttribute('data-row'); ui.open[k] = !ui.open[k]; break; }
       case 'verb': focusVerb(t.getAttribute('data-v')); break;
       case 'rung': rungGo(t.getAttribute('data-r')); break;
-      case 'tile': { ev && ev.preventDefault && ev.preventDefault(); var sel = t.getAttribute('data-sel'); ui.sel = ui.sel === sel ? null : sel; break; }
+      case 'tile': { ev && ev.preventDefault && ev.preventDefault(); var sel = t.getAttribute('data-sel'), tg = t.getAttribute('data-goto'); ui.sel = ui.sel === sel && !tg ? null : sel; if (tg) { openRow(tg); FX.scrollToEl($('row-' + tg)); } break; }
       case 'card': FX.openCard(+t.getAttribute('data-id')); break;
       case 'closecard': $('card').hidden = true; break;
       case 'forgdet': ui.forgDet = !ui.forgDet; break;
@@ -599,9 +560,9 @@
       case 'hire': FX.doAct('hire', { id: t.getAttribute('data-id') }, t); break;
       case 'filter': FX.doAct('filter', {}, t); break;
       case 'step': { var sk = t.getAttribute('data-s'), dd = +t.getAttribute('data-d'); if (sk === 'rent') ui.rentN = Math.max(8, ui.rentN + dd); else ui.buy[sk] = clamp(ui.buy[sk] + dd, 1, CFG.buyMaxUnits); AU.tick(dd > 0); break; }
-      case 'rent': FX.doAct('rent', { gpus: ui.rentN }, t); AU.tick(false); break;
+      case 'rent': FX.doAct('rent', { gpus: +t.getAttribute('data-gpus') || ui.rentN }, t); AU.tick(false); break;
       case 'cancelRent': e.act('cancelRent', { id: t.getAttribute('data-id') }); break;
-      case 'buy': FX.doAct('buy', { item: t.getAttribute('data-item'), units: ui.buy[t.getAttribute('data-item')] }, t); break;
+      case 'buy': FX.doAct('buy', { item: t.getAttribute('data-item'), units: +t.getAttribute('data-units') || ui.buy[t.getAttribute('data-item')] }, t); break;
       case 'rentOut': FX.doAct('rentOut', { pool: e.poolFree('office') > 0 ? 'office' : 'a100' }, t); break;
       case 'pitch': FX.doAct('raise', { round: t.getAttribute('data-round') }, t); break;
       case 'priority': e.act('priority', {}); break;

@@ -11,7 +11,7 @@
   FX.E = null; FX.S = null;
   var mqReduce = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
   FX.reduced = function () { return !!(mqReduce && mqReduce.matches); };
-  FX.laptop = function () { return window.innerWidth >= 1100 && window.innerHeight >= 600; };
+  FX.laptop = function () { return window.innerWidth >= 1000 && window.innerHeight >= 561; };
   FX.wide = function () { return window.innerWidth >= 760; };
   FX.esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   FX.store = function (k, v) { try { if (v === undefined) return window.localStorage.getItem(k); window.localStorage.setItem(k, v); } catch (e) { return null; } return null; };
@@ -75,7 +75,7 @@
     E.advance(0);
     ui.speed = 0; ui.everStarted = false; ui.runClock = 0; ui.endShown = false; ui.endClosed = false; ui.modalId = null; ui.cashShown = S.bank; ui.runwayShown = null;
     ui.seen = {}; ui.sel = null; ui.slipUntil = 0; ui.ledgerOpen = false; ui.newSlip = false; ui.flash = {}; ui.cardRun = null; ui.lastSlipN = 0; ui.lastBank = S.bank; ui.pulseSince = 0; ui.introPulse = false;
-    ui.open = FX.laptop() ? { cluster: true, money: true, models: true } : { models: false };
+    ui.open = FX.laptop() ? { cluster: true, money: true } : {};
     ui.des = { pool: 'office', gpus: 8, gpusMax: true, N: 1e9, D: 2e10, recipe: true };
     var r = E.recipeForN(1e8); ui.des.N = r.N; ui.des.D = r.D;
     $('end').hidden = true; $('modal').hidden = true; $('card').hidden = true; $('ledger').hidden = true; $('slip').hidden = true; root.classList.remove('over');
@@ -93,11 +93,11 @@
       case 'cash': if (d.delta > 0) { AU.cashIn(); flashFig('cash', 'in'); } else { AU.tick(false); flashFig('cash', 'out'); } break;
       case 'hang': AU.hang(); break;
       case 'nan': AU.nan(); break;
-      case 'land': AU.land(d.clean); AU.thunk(); ui.thunkRun = d.id; if (!ui.open.models && !FX.laptop()) ui.open.models = true; break;
+      case 'land': AU.land(d.clean); AU.thunk(); ui.thunkRun = d.id; ui.shelfScroll = true; break;
       case 'decision': AU.knock(); break;
       case 'scandal': AU.bad(); break;
       case 'slip': ui.newSlip = true; ui.slipUntil = performance.now() + 10000; ui.slipShown = false; ui.lastSlipN = d.n; AU.slip(); break;
-      case 'launch': ui.pulseSince = 0; break;
+      case 'launch': ui.pulseSince = 0; if (FX.cellSweep) FX.cellSweep(); break;
       case 'end': AU.hum(0, false); break;
     }
   }
@@ -132,6 +132,7 @@
     if (S && S.phase === 'over' && !ui.endShown) showEnd();
     FX.renderStrip(dt);
     if (t - ui.lastChart > 30 || ui.chartDirty) { ui.lastChart = t; ui.chartDirty = false; FX.drawChart(); }
+    if (FX.drawCells && t - (ui.lastCells || 0) > 30) { ui.lastCells = t; FX.drawCells(t); }
     if (ui.dirty || t - ui.lastPanels > 250) { ui.lastPanels = t; ui.dirty = false; FX.renderPanels(); }
     tickSlip(t);
     try { var bu = E.busyUseful(); AU.hum(bu.total ? bu.useful / bu.mfu : 0, S.phase === 'play' && ui.speed > 0 && !held && E.activeRuns().length > 0); } catch (e) {}
@@ -150,9 +151,8 @@
     var E = FX.E, S = FX.S; if (!S) return;
     var snap = S.snap, mi = E.monthIdx(S.day);
     FX.setText($('t-mo'), 'month ' + (mi + 1) + ' of 12');
-    var narrow = window.innerWidth < 460, over = S.phase === 'over';
-    var dtxt = over ? 'year over' : narrow ? E.fmtDay(S.day) : E.fmtLong(S.day);
-    FX.setText($('t-date'), dtxt);
+    var over = S.phase === 'over';
+    FX.setText($('t-date'), over ? 'YEAR OVER' : E.fmtLong(Math.min(S.day, 365)).slice(4));
     // cash ticks live; green when money comes in, red when it goes out
     var target = S.bank;
     if (ui.cashShown == null || FX.reduced()) ui.cashShown = target; else ui.cashShown += (target - ui.cashShown) * Math.min(1, dt * 10);
@@ -160,7 +160,7 @@
     FX.setText($('t-cash'), FX.money(ui.cashShown));
     FX.setClass($('t-cash'), 'neg', S.bank < 0);
     var dBank = S.bank - snap.bank;
-    tag($('g-cash'), Math.abs(dBank) < 500 ? 'flat|' : (dBank > 0 ? '+' : '−') + FX.money(Math.abs(dBank)).replace('−', '') + '|', Math.abs(dBank) < 500 ? '' : dBank > 0 ? 'good' : 'bad');
+    tag($('g-cash'), Math.abs(dBank) < 500 ? 'flat this month' : (dBank > 0 ? '\u25B2 +' : '\u25BC \u2212') + FX.money(Math.abs(dBank)).replace('−', '') + '|', Math.abs(dBank) < 500 ? '' : dBank > 0 ? 'good' : 'bad');
     // months until broke
     var rw = E.runway(), rwEl = $('t-runway');
     if (!isFinite(rw)) { ui.runwayShown = null; FX.setText(rwEl, 'no limit'); tag($('g-runway'), 'income covers spending', 'good'); }
@@ -169,7 +169,7 @@
       if (Math.abs(ui.runwayShown - rw) < 0.04) ui.runwayShown = rw;
       FX.setText(rwEl, FX.fmtRunway(ui.runwayShown));
       var was = snap.runway, wasTxt = isFinite(was) ? Math.floor(was) : 'no limit';
-      tag($('g-runway'), (Math.floor(rw) === Math.floor(was) ? 'flat' : 'was ' + wasTxt), Math.floor(rw) === Math.floor(was) ? '' : rw > was ? 'good' : 'bad');
+      tag($('g-runway'), (Math.floor(rw) === Math.floor(was) ? '' : (rw > was ? '\u25B2 ' : '\u25BC ') + 'was ' + wasTxt), Math.floor(rw) === Math.floor(was) ? '' : rw > was ? 'good' : 'bad');
     }
     FX.setClass(rwEl, 'bad', isFinite(rw) && rw < 3); FX.setClass(rwEl, 'cau', isFinite(rw) && rw >= 3 && rw < 6);
     // short of GPT-3
@@ -182,18 +182,17 @@
         FX.setClass(shEl, 'passed', false); FX.setText(shEl, E.shortFmt(sh));
         var was2 = snap.far ? CFG.gpt3.C / snap.far : null;
         if (!was2) tag($('g-short'), 'first model', 'good');
-        else if (Math.abs(was2 / sh - 1) < 0.005) tag($('g-short'), 'flat', '');
-        else tag($('g-short'), 'was ' + E.shortFmt(was2), sh < was2 ? 'good' : 'bad');
+        else if (Math.abs(was2 / sh - 1) < 0.005) tag($('g-short'), '', '');
+        else tag($('g-short'), (sh < was2 ? '\u25BC ' : '\u25B2 ') + 'was ' + E.shortFmt(was2), sh < was2 ? 'good' : 'bad');
       }
     }
     // the green number that only climbs
     var lab = E.lab(), dLab = lab - snap.lab;
     FX.setText($('t-lab'), FX.money(lab));
-    tag($('g-lab'), '+' + FX.money(dLab).replace('+', '') + '|', dLab > 0 ? 'good' : '');
+    tag($('g-lab'), (dLab > 0 ? '\u25B2 ' : '') + '+' + FX.money(dLab).replace('+', '') + '|', dLab > 0 ? 'good' : '');
   };
 
   /* ---------------- the ladder and the four verbs ---------------- */
-  var VERBS = ['hire', 'rent', 'data', 'raise'];
   function pulseVerb() {
     var E = FX.E, S = FX.S, rb = E.raiseBlock();
     if (rb.ok && (rb.next === 'A' || rb.next === 'B')) return 'raise';
@@ -222,19 +221,13 @@
     if (fill.__w !== ps) { fill.style.width = ps; fill.__w = ps; }
     var sub = lit ? (lit.left || '') : 'every rung climbed';
     var fg = E.forgotten(), chip = '';
-    if (fg.left < 45 && S.phase === 'play') chip = '<span class="chip ' + (fg.left < 21 ? 'bad' : 'cau') + '">Forgotten in ' + Math.max(0, Math.ceil(fg.left)) + ' days</span>';
+    if (S.phase === 'play') chip = '<span class="chip ' + (fg.left < 21 ? 'bad' : fg.left < 45 ? 'cau' : '') + '"><button type="button" class="lnk-p" data-act="forgdet" aria-expanded="' + !!ui.forgDet + '" data-k="forg">forgotten in ' + Math.max(0, Math.ceil(fg.left)) + ' days</button></span>';
     FX.setHTML($('ld-sub'), '<span class="sb">' + FX.esc(sub) + '</span>' + chip);
-    // verbs: one pulses; Raise is grey until legal and says why
-    var pv = pulseVerb(), rb = E.raiseBlock();
-    VERBS.forEach(function (v) {
-      var el = $('v-' + v); if (!el) return;
-      FX.setClass(el, 'pulse', pv === v);
-      var grey = v === 'raise' && !rb.ok;
-      FX.setClass(el, 'grey', grey);
-      el.setAttribute('aria-disabled', grey ? 'true' : 'false');
-    });
+    var rb = E.raiseBlock();
+    var fgd = ui.forgDet && S.phase === 'play' ? 'The world forgets you in ' + Math.max(0, Math.ceil(fg.left)) + ' days unless you publish or ship a model of at least ' + sci(fg.need) + ' (about ' + (fg.days ? (fg.days < 1 ? 'a day' : Math.round(fg.days) + ' days') : 'some days') + ' of your cluster). A hundredth of the biggest result anyone has published (' + sci(E.frontier()) + ').' : '';
     var why = $('ld-why'), litRaise = lit && (lit.id === 'seriesA' || lit.id === 'seriesB');
-    if (litRaise && !rb.ok && rb.why[0] && rb.why[0] !== 'Raised.') { why.hidden = false; FX.setText(why, 'Raise: ' + rb.why[0]); } else why.hidden = true;
+    var whyTxt = fgd;
+    if (whyTxt) { why.hidden = false; FX.setText(why, whyTxt); } else why.hidden = true;
   };
 
   /* ---------------- floating costs: every spend floats off the pressed button ---------------- */
@@ -300,11 +293,11 @@
     else { ms.innerHTML = ''; ms.className = 'm-sample'; }
     var h = '';
     d.options.forEach(function (o, i) {
-      h += '<button type="button" class="opt' + (i === 0 && !o.disabled ? ' primary' : '') + '" data-act="answer" data-id="' + d.id + '" data-choice="' + o.key + '"' + (o.disabled ? ' disabled' : '') + '><b>' + FX.esc(o.label) + '</b><span' + (o.disabled ? ' class="no"' : '') + '>' + FX.esc(o.disabled ? (o.why || o.detail) : o.detail) + '</span></button>';
+      h += '<button type="button" class="opt-btn' + (i === 0 && !o.disabled ? ' primary' : '') + '" data-act="answer" data-id="' + d.id + '" data-choice="' + o.key + '"' + (o.disabled ? ' disabled' : '') + '><b>' + FX.esc(o.label) + '</b><span' + (o.disabled ? ' class="no"' : '') + '>' + FX.esc(o.disabled ? (o.why || o.detail) : o.detail) + '</span></button>';
     });
     $('m-opts').innerHTML = h;
     m.hidden = false;
-    var first = m.querySelector('.opt:not(:disabled)'); if (first) { try { first.focus({ preventScroll: true }); } catch (e) {} }
+    var first = m.querySelector('.opt-btn:not(:disabled)'); if (first) { try { first.focus({ preventScroll: true }); } catch (e) {} }
     m.querySelector('.sheet').scrollTop = 0;
   }
   function showEnd() {
@@ -320,7 +313,7 @@
     $('e-score').innerHTML = '<span>Best model: ' + FX.esc(sc.best) + '</span><span class="r">' + sc.model + '</span><span>Trust ' + Math.round(S.rep) + ' x' + CFG.score.repMult + '</span><span class="r">' + sc.rep + '</span><span>API revenue ' + FX.money(S.stats.apiRevenue) + '</span><span class="r">' + sc.revenue + '</span><span>People kept: ' + E.staff().length + '</span><span class="r">' + sc.people + '</span>' +
       '<span class="tot">' + (e.kind === 'survived' ? 'Score' : 'Score (did not survive: shown for reference)') + '</span><span class="r tot">' + sc.total + (sc.miracle ? ' · MIRACLE' : '') + '</span>';
     el.hidden = false; $('modal').hidden = true; root.classList.add('over');
-    var b = el.querySelector('.opt'); if (b) try { b.focus({ preventScroll: true }); } catch (x) {}
+    var b = el.querySelector('.opt-btn'); if (b) try { b.focus({ preventScroll: true }); } catch (x) {}
     FX.store('frontier-a-last', JSON.stringify({ kind: e.kind, score: sc.total }));
   }
 
@@ -333,7 +326,7 @@
     var a = t.getAttribute('data-act'); if (t.disabled) return;
     FX.handle(a, t, e);
   });
-  FX.syncMute = function () { var m = $('mute'); m.setAttribute('aria-pressed', String(AU.muted)); m.setAttribute('aria-label', AU.muted ? 'Sound is off. Press to unmute (M)' : 'Sound is on. Press to mute (M)'); };
+  FX.syncMute = function () { var m = $('mute'); FX.setText($('mute-tx'), AU.muted ? 'SOUND OFF' : 'SOUND ON'); m.setAttribute('aria-pressed', String(AU.muted)); m.setAttribute('aria-label', AU.muted ? 'Sound is off. Press to unmute (M)' : 'Sound is on. Press to mute (M)'); };
   FX.togglePause = togglePause;
 
   document.addEventListener('keydown', function (e) {

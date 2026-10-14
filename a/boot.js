@@ -22,7 +22,9 @@
       raise: { aDone: S.raise.aDone, bDone: S.raise.bDone, diligence: S.raise.diligence ? S.raise.diligence.round : null, block: E.raiseBlock() },
       standing: { rank: st.rank, rows: st.rows.map(function (r) { return { name: r.name, short: r.short ? +r.short.toFixed(1) : null }; }) },
       best: E.bestRun() ? { C: E.bestRun().Cland, loss: E.bestRun().loss } : null, log: S.log.slice(-60).map(function (l) { return E.fmtDay(l.day) + ' ' + l.text; }), news: S.news.length, caps: S.caps.filter(function (c) { return c.fired; }).map(function (c) { return c.id; }),
-      api: E.apiMeter(), openRows: Object.keys(ui.open).filter(function (k) { return ui.open[k]; })
+      api: E.apiMeter(), openRows: Object.keys(ui.open).filter(function (k) { return ui.open[k]; }),
+      options: (ui.options || []).map(function (o) { return { key: o.key, title: o.title, price: o.price || '', effect: o.effect || '', locked: !!o.lock, pulse: !!o.pulse }; }),
+      shelf: S.runs.filter(function (r) { return r.state === 'landed' || r.state === 'train'; }).map(function (r) { return { id: r.id, name: E.modelName(r), state: r.state }; })
     };
   }
   window.__frontier = {
@@ -37,6 +39,7 @@
       else if (name === 'quickstart') { r = FX.quickStart(); }
       else if (name === 'suggest') { var sg = E.suggest(p); r = sg ? { ok: sg.ok, N: sg.N, D: sg.D, C: sg.C, cards: sg.cards, pool: sg.pool, days: sg.daysAll, land: sg.land } : { ok: false }; }
       else if (name === 'autolaunch') { var sg2 = E.suggest(p); r = sg2 && sg2.ok ? E.act('launch', { pool: sg2.pool, gpus: sg2.cards, params: sg2.N, tokens: sg2.D }) : { ok: false, msg: 'nothing fits' }; if (r.ok && FX.ui.speed === 0 && p.go) FX.setSpeed(1); }
+      else if (name === 'option') { var ob = document.querySelector('[data-k="ob-' + p.key + '"]'); if (ob && !ob.disabled) { ob.click(); r = { ok: true }; } else r = { ok: false, msg: 'option locked or missing' }; }
       else if (name === 'open') { ui.open[p.row] = p.on == null ? true : !!p.on; r = { ok: true }; }
       else { r = E.act(name, p); }
       ui.dirty = true; ui.modalId = null; FX.renderPanels();
